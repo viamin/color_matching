@@ -9,7 +9,9 @@
       "Bash(mix sobelow:*)",
       "Bash(mix dialyzer:*)",
       "Bash(mix coveralls:*)",
-      "Bash(mix help:*)"
+      "Bash(mix help:*)",
+      "Bash(mix format)",
+      "Bash(mix format:*)"
     ],
     "deny": []
   }

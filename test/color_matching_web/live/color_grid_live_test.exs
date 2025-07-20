@@ -362,7 +362,7 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
 
       html = render(view)
       assert html =~ "Grid Size: 7×7"
-      
+
       # Should now have 7 colors (6 original + 1 random)
       color_count = (html |> String.split("phx-value-index=") |> length()) - 1
       assert color_count == 7
