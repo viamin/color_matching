@@ -40,6 +40,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-build-
 
+      - name: Cache PLT files
+        uses: actions/cache@v4
+        with:
+          path: priv/plts
+          key: ${{ runner.os }}-plt-${{ hashFiles('**/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-plt-
+
       - name: Install dependencies
         run: mix deps.get
 
@@ -55,17 +63,11 @@ jobs:
       - name: Check code formatting
         run: mix format --check-formatted
 
-      - name: Run tests
-        run: mix test
+      - name: Run tests with coverage
+        run: mix coveralls
 
-      - name: Run type checking (if Dialyzer is configured)
-        run: |
-          if grep -q "dialyxir" mix.exs; then
-            mix dialyzer
-          else
-            echo "Dialyzer not configured, skipping type checking"
-          fi
-        continue-on-error: true
+      - name: Run type checking with Dialyzer
+        run: mix dialyzer
 
   quality:
     name: Code Quality
@@ -89,6 +91,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-mix-
 
+      - name: Cache _build
+        uses: actions/cache@v4
+        with:
+          path: _build
+          key: ${{ runner.os }}-build-${{ hashFiles('**/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-build-
+
       - name: Install dependencies
         run: mix deps.get
 
@@ -101,11 +111,8 @@ jobs:
       - name: Check code compilation
         run: mix compile --warnings-as-errors
 
-      - name: Run Credo (if configured)
-        run: |
-          if grep -q "credo" mix.exs; then
-            mix credo --strict
-          else
-            echo "Credo not configured, skipping code analysis"
-          fi
-        continue-on-error: true
+      - name: Run Credo code analysis
+        run: mix credo --strict
+
+      - name: Run Sobelow security analysis
+        run: mix sobelow --config

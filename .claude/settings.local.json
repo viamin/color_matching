@@ -4,7 +4,12 @@
       "Bash(mix test)",
       "Bash(mix test:*)",
       "Bash(find:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(mix credo:*)",
+      "Bash(mix sobelow:*)",
+      "Bash(mix dialyzer:*)",
+      "Bash(mix coveralls:*)",
+      "Bash(mix help:*)"
     ],
     "deny": []
   }

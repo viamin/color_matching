@@ -335,13 +335,20 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
     test "handles color input with 'value' parameter", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
 
-      # Add color using 'value' parameter (color picker)
+      # First update the color picker value to enable the button
+      view
+      |> element("form[phx-change='update_color_input']")
+      |> render_change(%{"value" => "#ABCDEF"})
+
+      # Then submit the form to add the color
       view
       |> element("form[phx-submit='add_color']")
       |> render_submit(%{"value" => "#ABCDEF"})
 
       html = render(view)
-      assert html =~ "#ABCDEF"
+      # Should now have 7 colors (6 original + 1 added)
+      color_count = (html |> String.split("phx-value-index=") |> length()) - 1
+      assert color_count == 7
       assert html =~ "Grid Size: 7×7"
     end
 
