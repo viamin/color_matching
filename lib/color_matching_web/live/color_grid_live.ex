@@ -204,9 +204,27 @@ defmodule ColorMatchingWeb.ColorGridLive do
     <div class="max-w-6xl mx-auto p-6" phx-hook="PaletteStorage" id="palette-storage">
       <h1 class="text-3xl font-bold text-gray-900 mb-4 no-print">Color Matching Grid</h1>
       <p class="text-gray-600 mb-8 no-print">
-        Each square shows two triangles: the top-left uses colors from your palette (by row), 
-        and the bottom-right uses colors from your palette (by column), creating all possible combinations.
+        This grid shows all unique color combinations from your palette, split by the main diagonal:
       </p>
+      <div class="mb-6 text-sm text-gray-600 bg-blue-50 p-4 rounded-lg no-print">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <h3 class="font-semibold text-blue-800 mb-2">Below Main Diagonal (\)</h3>
+            <p>Top-left triangle: Palette color by row</p>
+            <p>Bottom-right triangle: Palette color by column</p>
+            <p class="text-xs mt-1 italic">Shows original color combinations</p>
+          </div>
+          <div>
+            <h3 class="font-semibold text-blue-800 mb-2">Above Main Diagonal (\)</h3>
+            <p>Top-left triangle: Palette color by row</p>
+            <p>Bottom-right triangle: <strong>Inverted</strong> color by column</p>
+            <p class="text-xs mt-1 italic">Shows high-contrast combinations for maximum difference</p>
+          </div>
+        </div>
+        <div class="mt-3 pt-3 border-t border-blue-200">
+          <p class="text-xs"><strong>On the diagonal:</strong> Squares show the same color split—original below the diagonal, inverted above.</p>
+        </div>
+      </div>
       
       <!-- Color Management -->
       <div class="mb-8 p-4 bg-gray-50 rounded-lg no-print">
@@ -244,6 +262,10 @@ defmodule ColorMatchingWeb.ColorGridLive do
           </div>
         </div>
         
+        <p class="text-sm text-gray-600 mb-3">
+          Each color shows its hex code and inverted hex code below. Inverted colors appear in the upper portion of the grid for high-contrast combinations.
+        </p>
+        
         <!-- Current Colors -->
         <div class="flex flex-wrap gap-2 mb-4">
           <%= for {color, index} <- Enum.with_index(@colors) do %>
@@ -253,7 +275,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
                 <div class="w-8 h-8 rounded border border-gray-300 mr-3" style={"background-color: #{color}"}></div>
                 <div class="flex flex-col">
                   <span class="text-sm font-mono"><%= color %></span>
-                  <span class="text-xs text-gray-500">Palette color</span>
+                  <span class="text-xs text-gray-500 font-mono"><%= ColorUtils.invert_color(color) %></span>
                 </div>
               </div>
               
@@ -364,11 +386,19 @@ defmodule ColorMatchingWeb.ColorGridLive do
                 >
                 </div>
                 <!-- Bottom-right triangle -->
-                <div 
-                  class="absolute inset-0 triangle-bottom-right"
-                  style={"background-color: #{cell.bottom_right_color}"}
-                >
-                </div>
+                <%= if cell.is_diagonal do %>
+                  <!-- On diagonal: split the bottom-right triangle -->
+                  <!-- First layer: inverted color covering the whole bottom-right area -->
+                  <div class="absolute inset-0 triangle-bottom-right" style={"background-color: #{ColorUtils.invert_color(cell.bottom_right_color)}"}>
+                  </div>
+                  <!-- Second layer: original color covering only the lower portion -->
+                  <div class="absolute inset-0 triangle-diagonal-split" style={"background-color: #{cell.bottom_right_color}"}>
+                  </div>
+                <% else %>
+                  <!-- Off diagonal: normal bottom-right triangle -->
+                  <div class="absolute inset-0 triangle-bottom-right" style={"background-color: #{cell.bottom_right_color}"}>
+                  </div>
+                <% end %>
               </div>
             <% end %>
           <% end %>

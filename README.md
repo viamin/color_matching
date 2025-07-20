@@ -4,12 +4,23 @@ An interactive Elixir Phoenix LiveView application for exploring color combinati
 
 ## What it does
 
-The Color Matching Grid creates a visual matrix where each square is split diagonally into two triangles:
+The Color Matching Grid creates a visual matrix where each square is split diagonally into two triangles, with the grid divided by the main diagonal to eliminate duplicate combinations:
 
-- **Top-left triangles** display colors from your palette (by row)
-- **Bottom-right triangles** display colors from your palette (by column)
-- Each row shares the same top-left color, each column shares the same bottom-right color
-- This creates a grid showing **all possible combinations** within your selected color palette
+### Below the Main Diagonal (\)
+- **Top-left triangles**: Colors from your palette (by row)
+- **Bottom-right triangles**: Colors from your palette (by column)
+- Shows all unique **original color combinations**
+
+### Above the Main Diagonal (\)  
+- **Top-left triangles**: Colors from your palette (by row)
+- **Bottom-right triangles**: **Inverted** colors from your palette (by column)
+- Shows **high-contrast combinations** for maximum visual difference
+
+### On the Main Diagonal
+- **Top-left triangles**: Original palette colors
+- **Bottom-right triangles**: Split diagonally - original color below, inverted color above
+
+This design eliminates duplicate combinations while providing both subtle (original) and high-contrast (inverted) color pairings in a systematic layout.
 
 ### Key Features
 

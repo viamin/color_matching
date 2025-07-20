@@ -13,6 +13,11 @@
   clip-path: polygon(100% 0, 100% 100%, 0 100%);
 }
 
+/* Diagonal split triangle for main diagonal cells - lower portion of bottom-right triangle below main diagonal */
+.triangle-diagonal-split {
+  clip-path: polygon(100% 100%, 0 100%, 0 0);
+}
+
 /* Hide print area on screen */
 .print-area {
   display: none;

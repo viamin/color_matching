@@ -21,12 +21,15 @@ defmodule ColorMatching.GridTest do
       assert length(grid.grid) == 5
     end
 
-    test "uses original colors for both triangles" do
+    test "creates diagonal split pattern correctly" do
       colors = ["#FF0000", "#00FF00"]
       grid = Grid.new(colors, 2)
 
-      # No more inverse_colors field - both triangles use original colors
-      refute Map.has_key?(grid, :inverse_colors)
+      # Grid should have cells with diagonal split logic
+      # Check that cells have the new fields
+      cell = grid.grid |> Enum.at(0) |> Enum.at(0)
+      assert Map.has_key?(cell, :is_diagonal)
+      assert Map.has_key?(cell, :use_inverted)
     end
 
     test "grid cells have correct structure" do
@@ -39,7 +42,8 @@ defmodule ColorMatching.GridTest do
       assert cell.col == 0
       assert cell.top_left_color == "#FF0000"
       assert cell.bottom_right_color == "#FF0000"
-      refute Map.has_key?(cell, :original_bottom_right)
+      assert cell.is_diagonal == true
+      assert cell.use_inverted == false
     end
 
     test "each row uses the same top-left color" do
@@ -55,17 +59,24 @@ defmodule ColorMatching.GridTest do
       assert Enum.all?(second_row, fn cell -> cell.top_left_color == "#00FF00" end)
     end
 
-    test "each column uses the same bottom-right color" do
+    test "diagonal split creates correct color patterns" do
       colors = ["#FF0000", "#00FF00", "#0000FF"]
       grid = Grid.new(colors, 3)
 
-      # Check first column - should use first color from palette
-      first_col_cells = Enum.map(grid.grid, fn row -> Enum.at(row, 0) end)
-      assert Enum.all?(first_col_cells, fn cell -> cell.bottom_right_color == "#FF0000" end)
+      # Check pattern: above diagonal should use inverted colors
+      cell_0_1 = grid.grid |> Enum.at(0) |> Enum.at(1)  # row 0, col 1
+      assert cell_0_1.bottom_right_color == "#FF00FF"  # inverted #00FF00
+      assert cell_0_1.use_inverted == true
 
-      # Check second column - should use second color from palette
-      second_col_cells = Enum.map(grid.grid, fn row -> Enum.at(row, 1) end)
-      assert Enum.all?(second_col_cells, fn cell -> cell.bottom_right_color == "#00FF00" end)
+      # Check pattern: below diagonal should use original colors  
+      cell_1_0 = grid.grid |> Enum.at(1) |> Enum.at(0)  # row 1, col 0
+      assert cell_1_0.bottom_right_color == "#FF0000"   # original
+      assert cell_1_0.use_inverted == false
+
+      # Check pattern: on diagonal should use original colors
+      cell_1_1 = grid.grid |> Enum.at(1) |> Enum.at(1)  # row 1, col 1
+      assert cell_1_1.bottom_right_color == "#00FF00"   # original
+      assert cell_1_1.is_diagonal == true
     end
 
     test "handles single color" do
@@ -79,6 +90,7 @@ defmodule ColorMatching.GridTest do
       cell = grid.grid |> Enum.at(0) |> Enum.at(0)
       assert cell.top_left_color == "#FF0000"
       assert cell.bottom_right_color == "#FF0000"
+      assert cell.is_diagonal == true
     end
 
     test "handles small size" do
