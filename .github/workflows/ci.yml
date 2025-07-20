@@ -40,14 +40,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-build-1.16-26-
 
-      - name: Cache PLT files
-        uses: actions/cache@v4
-        with:
-          path: priv/plts
-          key: ${{ runner.os }}-plt-1.16-26-${{ hashFiles('**/mix.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-plt-1.16-26-
-
       - name: Install dependencies
         run: mix deps.get
 
@@ -66,14 +58,11 @@ jobs:
       - name: Run tests with coverage
         run: mix coveralls
 
-      - name: Create PLT directory
-        run: mkdir -p priv/plts
-
-      - name: Compile for Dialyzer
-        run: MIX_ENV=dev mix compile
-
       - name: Run type checking with Dialyzer
-        run: MIX_ENV=dev mix dialyzer
+        run: |
+          MIX_ENV=dev mix deps.compile
+          MIX_ENV=dev mix compile
+          MIX_ENV=dev mix dialyzer
 
   quality:
     name: Code Quality

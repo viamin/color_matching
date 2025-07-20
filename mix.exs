@@ -19,7 +19,6 @@ defmodule ColorMatching.MixProject do
       ],
       # Dialyzer configuration
       dialyzer: [
-        plt_file: {:no_warn, "priv/plts/dialyzer.plt"},
         plt_add_apps: [:mix]
       ]
     ]
