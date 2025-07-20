@@ -1,0 +1,65 @@
+#!/bin/bash
+#
+# Setup git hooks for the project
+#
+
+set -e
+
+echo "Setting up git hooks..."
+
+# Create the pre-commit hook
+cat > .git/hooks/pre-commit << 'EOF'
+#!/bin/sh
+#
+# Pre-commit hook to run mix format
+# Called by "git commit" with no arguments.  The hook should
+# exit with non-zero status after issuing an appropriate message if
+# it wants to stop the commit.
+
+# Check if mix is available
+if ! command -v mix &> /dev/null; then
+    echo "Error: mix command not found. Please ensure Elixir is installed."
+    exit 1
+fi
+
+# Run mix format on staged files
+echo "Running mix format on staged files..."
+
+# Get list of staged .ex and .exs files
+staged_files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ex|exs)$')
+
+if [ -n "$staged_files" ]; then
+    # Format the staged files
+    echo "Formatting files: $staged_files"
+    echo "$staged_files" | xargs mix format
+    
+    # Add the formatted files back to staging
+    echo "$staged_files" | xargs git add
+    
+    echo "✅ Code formatting complete"
+else
+    echo "No Elixir files to format"
+fi
+
+# Optional: Run mix format --check-formatted to ensure all files are formatted
+echo "Checking if all files are properly formatted..."
+if ! mix format --check-formatted; then
+    echo "❌ Some files are not properly formatted. Please run 'mix format' and try again."
+    exit 1
+fi
+
+echo "✅ All files are properly formatted"
+exit 0
+EOF
+
+# Make the hook executable
+chmod +x .git/hooks/pre-commit
+
+echo "✅ Git hooks installed successfully!"
+echo ""
+echo "The pre-commit hook will now:"
+echo "  • Run 'mix format' on staged Elixir files before each commit"
+echo "  • Ensure all files are properly formatted"
+echo "  • Automatically stage formatted files"
+echo ""
+echo "To bypass the hook (not recommended), use: git commit --no-verify"

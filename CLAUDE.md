@@ -5,6 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Development Commands
 
 - **Setup**: `mix setup` - Install dependencies and setup assets
+- **Setup git hooks**: `bin/setup-git-hooks` - Install pre-commit formatting hooks
 - **Start server**: `mix phx.server` or `iex -S mix phx.server` (with interactive shell)
 - **Compile**: `mix compile`
 - **Run tests**: `mix test`
@@ -12,6 +13,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Asset commands**:
   - `mix assets.build` - Build CSS/JS assets
   - `mix assets.deploy` - Build and minify assets for production
+
+## Code Quality Tools
+
+- **Format code**: `mix format` - Auto-format Elixir code
+- **Static analysis**: `mix credo` - Code quality and style analysis
+- **Type checking**: `mix dialyzer` - Static type analysis
+- **Security scan**: `mix sobelow --config` - Security vulnerability scanning
+- **Test coverage**: `mix coveralls` - Generate test coverage report
+- **Test coverage HTML**: `mix coveralls.html` - Generate HTML coverage report
 
 ## Application Architecture
 

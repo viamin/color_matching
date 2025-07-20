@@ -28,25 +28,25 @@ jobs:
         uses: actions/cache@v4
         with:
           path: deps
-          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+          key: ${{ runner.os }}-mix-1.16-26-${{ hashFiles('**/mix.lock') }}
           restore-keys: |
-            ${{ runner.os }}-mix-
+            ${{ runner.os }}-mix-1.16-26-
 
       - name: Cache _build
         uses: actions/cache@v4
         with:
           path: _build
-          key: ${{ runner.os }}-build-${{ hashFiles('**/mix.lock') }}
+          key: ${{ runner.os }}-build-1.16-26-${{ hashFiles('**/mix.lock') }}
           restore-keys: |
-            ${{ runner.os }}-build-
+            ${{ runner.os }}-build-1.16-26-
 
       - name: Cache PLT files
         uses: actions/cache@v4
         with:
           path: priv/plts
-          key: ${{ runner.os }}-plt-${{ hashFiles('**/mix.lock') }}
+          key: ${{ runner.os }}-plt-1.16-26-${{ hashFiles('**/mix.lock') }}
           restore-keys: |
-            ${{ runner.os }}-plt-
+            ${{ runner.os }}-plt-1.16-26-
 
       - name: Install dependencies
         run: mix deps.get
@@ -66,8 +66,14 @@ jobs:
       - name: Run tests with coverage
         run: mix coveralls
 
+      - name: Create PLT directory
+        run: mkdir -p priv/plts
+
+      - name: Compile for Dialyzer
+        run: MIX_ENV=dev mix compile
+
       - name: Run type checking with Dialyzer
-        run: mix dialyzer
+        run: MIX_ENV=dev mix dialyzer
 
   quality:
     name: Code Quality
@@ -87,17 +93,17 @@ jobs:
         uses: actions/cache@v4
         with:
           path: deps
-          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+          key: ${{ runner.os }}-mix-1.16-26-${{ hashFiles('**/mix.lock') }}
           restore-keys: |
-            ${{ runner.os }}-mix-
+            ${{ runner.os }}-mix-1.16-26-
 
       - name: Cache _build
         uses: actions/cache@v4
         with:
           path: _build
-          key: ${{ runner.os }}-build-${{ hashFiles('**/mix.lock') }}
+          key: ${{ runner.os }}-build-1.16-26-${{ hashFiles('**/mix.lock') }}
           restore-keys: |
-            ${{ runner.os }}-build-
+            ${{ runner.os }}-build-1.16-26-
 
       - name: Install dependencies
         run: mix deps.get

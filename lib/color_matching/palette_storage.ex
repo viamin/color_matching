@@ -215,7 +215,7 @@ defmodule ColorMatching.PaletteStorage do
     Map.get(@preset_palettes, name)
   end
 
-  # Note: Actual localStorage operations will be handled in the LiveView 
+  # Note: Actual localStorage operations will be handled in the LiveView
   # using JavaScript hooks since Elixir runs server-side
   @spec encode_palette(String.t(), [String.t()]) :: String.t()
   def encode_palette(name, colors) do

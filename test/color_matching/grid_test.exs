@@ -70,7 +70,7 @@ defmodule ColorMatching.GridTest do
       assert cell_0_1.bottom_right_color == "#FF00FF"
       assert cell_0_1.use_inverted == true
 
-      # Check pattern: below diagonal should use original colors  
+      # Check pattern: below diagonal should use original colors
       # row 1, col 0
       cell_1_0 = grid.grid |> Enum.at(1) |> Enum.at(0)
       # original

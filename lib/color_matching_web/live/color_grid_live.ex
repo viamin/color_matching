@@ -1,6 +1,6 @@
 defmodule ColorMatchingWeb.ColorGridLive do
   use ColorMatchingWeb, :live_view
-  alias ColorMatching.{Grid, ColorUtils, PaletteStorage}
+  alias ColorMatching.{ColorUtils, Grid, PaletteStorage}
 
   @default_colors ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#FD79A8"]
 
