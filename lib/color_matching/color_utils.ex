@@ -10,7 +10,7 @@ defmodule ColorMatching.ColorUtils do
 
       iex> ColorMatching.ColorUtils.invert_color("#FF0000")
       "#00FFFF"
-      
+
       iex> ColorMatching.ColorUtils.invert_color("#000000")
       "#FFFFFF"
   """
