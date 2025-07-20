@@ -13,7 +13,13 @@ defmodule ColorMatching.PaletteStorage do
     "Vibrant" => ["#E74C3C", "#9B59B6", "#3498DB", "#1ABC9C", "#F1C40F", "#E67E22", "#95A5A6", "#34495E", "#F39C12", "#8E44AD"],
     "Neon" => ["#FF073A", "#39FF14", "#FF0080", "#00FFFF", "#FFFF00", "#FF8C00", "#9400D3", "#00FF7F", "#FF1493", "#00BFFF"],
     "Sodium Metamers A" => ["#FF4444", "#44AA44", "#4444FF", "#FFAA00", "#AA44AA", "#44AAAA", "#FF6666", "#66CC66", "#6666FF", "#FFCC22"],
-    "Sodium Metamers B" => ["#CC6666", "#669966", "#6666CC", "#CCAA33", "#AA66AA", "#66AAAA", "#EE4444", "#44CC44", "#4444EE", "#EEAA11"]
+    "Sodium Metamers B" => ["#CC6666", "#669966", "#6666CC", "#CCAA33", "#AA66AA", "#66AAAA", "#EE4444", "#44CC44", "#4444EE", "#EEAA11"],
+    "LPS Street Light" => ["#D4AA00", "#C49C00", "#B48E00", "#FFDD33", "#FFE066", "#DDBB22", "#CCAA11", "#BB9900", "#AA8800", "#997700"],
+    "Sodium Industrial" => ["#FF9933", "#DD7711", "#BB5500", "#FFB844", "#FFCC55", "#EE9922", "#CC7700", "#AA5500", "#884400", "#663300"],
+    "Yellow Metamers" => ["#FFFF00", "#DDDD00", "#BBBB00", "#FFF033", "#FFE022", "#DDD011", "#CCC000", "#BBB000", "#AAA000", "#999000"],
+    "Orange Sodium" => ["#FF8C00", "#FF7F00", "#FF6600", "#FFB366", "#FFAA55", "#DD6622", "#CC5511", "#BB4400", "#AA3300", "#992200"],
+    "Warm Metamers" => ["#FFB347", "#FFAA33", "#FF9922", "#FFCC77", "#FFBB66", "#EE8833", "#DD7722", "#CC6611", "#BB5500", "#AA4400"],
+    "Sodium Variants" => ["#FFA500", "#FFB300", "#FFC100", "#FFCF00", "#FFDD00", "#FFEB00", "#FFF900", "#F0E600", "#E1D300", "#D2C000"]
   }
 
   def get_preset_palettes do
