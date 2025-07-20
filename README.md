@@ -1,23 +1,30 @@
 # Color Matching Grid
 
-An interactive Elixir Phoenix LiveView application for exploring color combinations through a dynamic triangular grid system.
+An interactive Elixir Phoenix LiveView application for exploring color combinations through a dynamic triangular grid system. Perfect for color theory experiments, metamerism studies, and finding color pairings that behave differently under various lighting conditions.
 
 ## What it does
 
 The Color Matching Grid creates a visual matrix where each square is split diagonally into two triangles:
 
-- **Top-left triangles** display your selected colors
-- **Bottom-right triangles** display the mathematical inverse of those colors
+- **Top-left triangles** display colors from your palette (by row)
+- **Bottom-right triangles** display colors from your palette (by column)
 - Each row shares the same top-left color, each column shares the same bottom-right color
-- This creates a grid showing how every color pairs with the inverse of every other color
+- This creates a grid showing **all possible combinations** within your selected color palette
 
 ### Key Features
 
 - **Interactive color management**: Add colors via color picker or hex input, remove unwanted colors
-- **Dynamic grid sizing**: Adjust from 3×3 to 10×10 grids with a slider
+- **Dynamic grid sizing**: Adjust from 6×6 to 12×12 grids with a slider
 - **Smart expansion**: When you increase grid size, random colors are automatically added as needed
-- **Real-time preview**: See both original and inverse colors side-by-side before they appear in the grid
-- **Maximum contrast combinations**: By using color inversions, you get high-contrast pairings and double the unique combinations
+- **Palette presets**: Includes specialized palettes like "Sodium Metamers" for low-pressure sodium lamp experiments
+- **All combinations**: See every possible pairing within your color selection
+- **Print-friendly**: Optimized layouts for physical reference prints
+
+### Special Use Cases
+
+- **Sodium Lamp Experiments**: Use the "Sodium Metamers A/B" presets to find colors that look different in normal light but appear similar under 589nm monochromatic sodium lighting
+- **Color Theory Studies**: Explore how different color combinations interact visually
+- **Design Work**: Find harmonious or contrasting color pairings within a specific palette
 
 ## Getting Started
 

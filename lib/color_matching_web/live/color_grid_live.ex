@@ -204,8 +204,8 @@ defmodule ColorMatchingWeb.ColorGridLive do
     <div class="max-w-6xl mx-auto p-6" phx-hook="PaletteStorage" id="palette-storage">
       <h1 class="text-3xl font-bold text-gray-900 mb-4 no-print">Color Matching Grid</h1>
       <p class="text-gray-600 mb-8 no-print">
-        Each square shows two triangles: the top-left uses your selected colors, 
-        and the bottom-right uses their inverse colors for maximum contrast and double the combinations.
+        Each square shows two triangles: the top-left uses colors from your palette (by row), 
+        and the bottom-right uses colors from your palette (by column), creating all possible combinations.
       </p>
       
       <!-- Color Management -->
@@ -248,26 +248,13 @@ defmodule ColorMatchingWeb.ColorGridLive do
         <div class="flex flex-wrap gap-2 mb-4">
           <%= for {color, index} <- Enum.with_index(@colors) do %>
             <div class="flex items-center bg-white border rounded-lg p-3">
-              <!-- Original Color (Top-left triangle shape) -->
-              <div class="flex flex-col items-center mr-3">
-                <div class="relative w-6 h-6 mb-1">
-                  <div class="absolute inset-0 triangle-top-left border border-gray-300" style={"background-color: #{color}"}></div>
+              <!-- Color Preview -->
+              <div class="flex items-center mr-3">
+                <div class="w-8 h-8 rounded border border-gray-300 mr-3" style={"background-color: #{color}"}></div>
+                <div class="flex flex-col">
+                  <span class="text-sm font-mono"><%= color %></span>
+                  <span class="text-xs text-gray-500">Palette color</span>
                 </div>
-                <span class="text-xs text-gray-600">Top-left</span>
-              </div>
-              
-              <!-- Inverse Color (Bottom-right triangle shape) -->
-              <div class="flex flex-col items-center mr-3">
-                <div class="relative w-6 h-6 mb-1">
-                  <div class="absolute inset-0 triangle-bottom-right border border-gray-300" style={"background-color: #{ColorUtils.invert_color(color)}"}></div>
-                </div>
-                <span class="text-xs text-gray-600">Bottom-right</span>
-              </div>
-              
-              <!-- Color Values -->
-              <div class="flex flex-col mr-2">
-                <span class="text-sm font-mono"><%= color %></span>
-                <span class="text-xs font-mono text-gray-500"><%= ColorUtils.invert_color(color) %></span>
               </div>
               
               <button 
@@ -357,8 +344,8 @@ defmodule ColorMatchingWeb.ColorGridLive do
                   <span class="print-legend-text"><%= color %> (Row <%= index + 1 %>)</span>
                 </div>
                 <div class="print-legend-item">
-                  <div class="print-color-preview triangle-bottom-right" style={"background-color: #{ColorUtils.invert_color(color)}"}></div>
-                  <span class="print-legend-text"><%= ColorUtils.invert_color(color) %> (Col <%= index + 1 %>)</span>
+                  <div class="print-color-preview triangle-bottom-right" style={"background-color: #{color}"}></div>
+                  <span class="print-legend-text"><%= color %> (Col <%= index + 1 %>)</span>
                 </div>
               <% end %>
             </div>

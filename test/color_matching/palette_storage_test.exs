@@ -7,7 +7,7 @@ defmodule ColorMatching.PaletteStorageTest do
       palettes = PaletteStorage.get_preset_palettes()
       
       assert is_list(palettes)
-      assert length(palettes) == 8
+      assert length(palettes) == 10
       
       # Check that each palette has the correct structure
       Enum.each(palettes, fn palette ->
@@ -25,7 +25,8 @@ defmodule ColorMatching.PaletteStorageTest do
       names = Enum.map(palettes, & &1.name)
       
       expected_names = ["Warm", "Cool", "Monochrome", "High Contrast", 
-                       "Earth Tones", "Pastels", "Vibrant", "Neon"]
+                       "Earth Tones", "Pastels", "Vibrant", "Neon",
+                       "Sodium Metamers A", "Sodium Metamers B"]
       
       assert Enum.sort(names) == Enum.sort(expected_names)
     end

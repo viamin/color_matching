@@ -11,7 +11,9 @@ defmodule ColorMatching.PaletteStorage do
     "Earth Tones" => ["#8B4513", "#D2B48C", "#DEB887", "#F4A460", "#CD853F", "#A0522D", "#BC8F8F", "#F5DEB3", "#D2691E", "#B22222"],
     "Pastels" => ["#FFB3BA", "#FFDFBA", "#FFFFBA", "#BAFFC9", "#BAE1FF", "#E1BAFF", "#FFBAE1", "#C9FFBA", "#BAFFE1", "#E1FFBA"],
     "Vibrant" => ["#E74C3C", "#9B59B6", "#3498DB", "#1ABC9C", "#F1C40F", "#E67E22", "#95A5A6", "#34495E", "#F39C12", "#8E44AD"],
-    "Neon" => ["#FF073A", "#39FF14", "#FF0080", "#00FFFF", "#FFFF00", "#FF8C00", "#9400D3", "#00FF7F", "#FF1493", "#00BFFF"]
+    "Neon" => ["#FF073A", "#39FF14", "#FF0080", "#00FFFF", "#FFFF00", "#FF8C00", "#9400D3", "#00FF7F", "#FF1493", "#00BFFF"],
+    "Sodium Metamers A" => ["#FF4444", "#44AA44", "#4444FF", "#FFAA00", "#AA44AA", "#44AAAA", "#FF6666", "#66CC66", "#6666FF", "#FFCC22"],
+    "Sodium Metamers B" => ["#CC6666", "#669966", "#6666CC", "#CCAA33", "#AA66AA", "#66AAAA", "#EE4444", "#44CC44", "#4444EE", "#EEAA11"]
   }
 
   def get_preset_palettes do
