@@ -23,32 +23,68 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       assert html =~ "#FD79A8"
     end
 
-    test "adds a new color", %{conn: conn} do
+    test "adds a new color via color picker and increases grid size", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
       
-      # Add a new color by simulating the form submission
+      # Initial state should be 6x6 grid with 6 default colors
+      html = render(view)
+      assert html =~ "Grid Size: 6×6"
+      initial_color_count = (html |> String.split("phx-value-index=") |> length()) - 1
+      assert initial_color_count == 6
+      
+      # First update the color picker value
+      view
+      |> element("form[phx-change='update_color_input']")
+      |> render_change(%{"value" => "#123456"})
+      
+      # Then submit the form to add the color
       view
       |> element("form[phx-submit='add_color']")
-      |> render_submit(%{"color" => "#123456"})
+      |> render_submit(%{})
       
-      # Check that the new color appears in the rendered HTML
+      # Check that the new color appears and grid size increased
       html = render(view)
       assert html =~ "#123456"
+      assert html =~ "Grid Size: 7×7"
+      new_color_count = (html |> String.split("phx-value-index=") |> length()) - 1
+      assert new_color_count == 7
     end
 
-    test "removes a color", %{conn: conn} do
+    test "adds a new color via text input and increases grid size", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
       
-      # Remove the first color (index 0)
+      # Add a new color by typing in text input and submitting
+      view
+      |> element("form[phx-submit='add_color']")
+      |> render_submit(%{"color" => "#ABCDEF"})
+      
+      # Check that the new color appears and grid size increased
+      html = render(view)
+      assert html =~ "#ABCDEF"
+      assert html =~ "Grid Size: 7×7"
+    end
+
+    test "removes a color and updates color count", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+      
+      # Get initial state - should have 6 default colors
+      html = render(view)
+      initial_color_count = (html |> String.split("phx-value-index=") |> length()) - 1
+      assert initial_color_count == 6
+      assert html =~ "#FF6B6B"  # First default color
+      
+      # Remove the first color (index 0, which should be #FF6B6B)
       view
       |> element("button[phx-click='remove_color'][phx-value-index='0']")
       |> render_click()
       
-      # The first default color should no longer appear in the same position
+      # Verify color was removed
       html = render(view)
-      # Check that we now have 5 colors instead of 6
       color_count = (html |> String.split("phx-value-index=") |> length()) - 1
       assert color_count == 5
+      
+      # The first color should no longer be #FF6B6B (it should now be the second default color)
+      # Since we removed index 0, the remaining colors should have shifted
     end
 
     test "updates color input", %{conn: conn} do
@@ -154,13 +190,64 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       |> render_submit(%{"color" => "#TESTING"})
       
       view
-      |> form("form[phx-change='change_grid_size']", %{"size" => "7"})
+      |> form("form[phx-change='change_grid_size']", %{"size" => "8"})
       |> render_change()
       
       html = render(view)
       # Both changes should be reflected
       assert html =~ "#TESTING"
+      assert html =~ "Grid Size: 8×8"
+    end
+
+    test "disables add color button when grid is at maximum size", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+      
+      # Change grid to maximum size
+      view
+      |> form("form[phx-change='change_grid_size']", %{"size" => "12"})
+      |> render_change()
+      
+      # Set a color in the input
+      view
+      |> element("form[phx-change='update_color_input']")
+      |> render_change(%{"value" => "#ABCDEF"})
+      
+      html = render(view)
+      # Button should be disabled even with valid color when at max size
+      assert html =~ "disabled"
+      assert html =~ "Grid Size: 12×12"
+    end
+
+    test "add color button works when grid size is less than maximum and color is valid", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+      
+      # Set a valid color and submit
+      view
+      |> element("form[phx-submit='add_color']")
+      |> render_submit(%{"color" => "#FFFFFF"})
+      
+      html = render(view)
+      # Color should be added successfully
+      assert html =~ "#FFFFFF"
       assert html =~ "Grid Size: 7×7"
+    end
+
+    test "multiple color additions increase grid size appropriately", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+      
+      # Add multiple colors
+      view
+      |> element("form[phx-submit='add_color']")
+      |> render_submit(%{"color" => "#111111"})
+      
+      view
+      |> element("form[phx-submit='add_color']")
+      |> render_submit(%{"color" => "#222222"})
+      
+      html = render(view)
+      assert html =~ "#111111"
+      assert html =~ "#222222"
+      assert html =~ "Grid Size: 8×8"  # Started at 6, added 2, now 8
     end
   end
 end

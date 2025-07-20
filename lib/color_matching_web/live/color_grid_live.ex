@@ -24,28 +24,44 @@ defmodule ColorMatchingWeb.ColorGridLive do
      |> assign_grid()}
   end
 
-  def handle_event("add_color", %{"color" => color}, socket) do
-    colors = socket.assigns.colors ++ [color]
+  def handle_event("add_color", params, socket) do
+    # Get color from either 'color' or 'value' parameter
+    color = params["color"] || params["value"] || socket.assigns.new_color
     
-    {:noreply,
-     socket
-     |> assign(:colors, colors)
-     |> assign(:new_color, "")
-     |> assign_grid()}
+    if color && color != "" do
+      current_size = socket.assigns.grid_size
+      max_size = 12
+      colors = socket.assigns.colors ++ [color]
+      new_size = min(max(length(colors), current_size + 1), max_size)
+      
+      {:noreply,
+       socket
+       |> assign(:colors, colors)
+       |> assign(:grid_size, new_size)
+       |> assign(:new_color, "")
+       |> assign_grid()}
+    else
+      {:noreply, socket}
+    end
   end
 
   def handle_event("remove_color", %{"index" => index_str}, socket) do
     index = String.to_integer(index_str)
     colors = List.delete_at(socket.assigns.colors, index)
+    min_size = 6
+    new_grid_size = max(length(colors), min_size)
     
     {:noreply,
      socket
      |> assign(:colors, colors)
+     |> assign(:grid_size, new_grid_size)
      |> assign_grid()}
   end
 
-  def handle_event("update_color_input", %{"value" => value}, socket) do
-    {:noreply, assign(socket, :new_color, value)}
+  def handle_event("update_color_input", params, socket) do
+    # Get color from either input
+    color = params["value"] || params["color"] || ""
+    {:noreply, assign(socket, :new_color, color)}
   end
 
   def handle_event("change_grid_size", %{"size" => size_str}, socket) do
@@ -307,7 +323,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
           />
           <button 
             type="submit"
-            disabled={@new_color == ""}
+            disabled={@new_color == "" || @grid_size >= 12}
             class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
           >
             Add Color
