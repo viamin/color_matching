@@ -12,3 +12,140 @@
 .triangle-bottom-right {
   clip-path: polygon(100% 0, 100% 100%, 0 100%);
 }
+
+/* Hide print area on screen */
+.print-area {
+  display: none;
+}
+
+/* Print styles */
+@media print {
+  /* Hide everything except the grid and legend */
+  body * {
+    visibility: hidden;
+  }
+  
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  
+  .print-area {
+    display: flex !important;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100vh;
+    flex-direction: column;
+    page-break-inside: avoid;
+  }
+  
+  /* Hide non-essential elements */
+  .no-print {
+    display: none !important;
+  }
+  
+  /* Grid takes most of the page */
+  .print-grid {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 1cm;
+  }
+  
+  .print-grid-container {
+    width: 16.2cm;
+    height: 16.2cm;
+    max-width: 100%;
+    max-height: 100%;
+  }
+  
+  /* Legend at bottom */
+  .print-legend {
+    padding: 0.5cm;
+    border-top: 1px solid #000;
+    background: white;
+    font-size: 10pt;
+    line-height: 1.2;
+  }
+  
+  .print-legend h3 {
+    margin: 0 0 0.5em 0;
+    font-size: 12pt;
+    font-weight: bold;
+  }
+  
+  .print-legend-colors {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3em;
+  }
+  
+  .print-legend-item {
+    display: flex;
+    align-items: center;
+    margin-right: 1em;
+    margin-bottom: 0.2em;
+  }
+  
+  .print-color-preview {
+    width: 12px;
+    height: 12px;
+    margin-right: 0.3em;
+    border: 0.5px solid #000;
+  }
+  
+  .print-legend-text {
+    font-size: 9pt;
+    font-family: monospace;
+  }
+  
+  /* Ensure grid squares print with proper borders and sizing */
+  .print-grid .relative {
+    border: 0.5px solid #666 !important;
+    min-height: 1cm;
+    aspect-ratio: 1;
+  }
+  
+  /* Make sure the print grid uses all available space */
+  .print-grid .grid {
+    width: 100%;
+    height: 100%;
+    gap: 1px;
+  }
+  
+  /* Override any inherited sizing for print squares */
+  .print-grid .grid > .relative {
+    width: auto;
+    height: auto;
+  }
+  
+  /* Ensure print cells display colors properly */
+  .print-cell {
+    -webkit-print-color-adjust: exact;
+    color-adjust: exact;
+    print-color-adjust: exact;
+    background-size: 100% 100% !important;
+    background-repeat: no-repeat !important;
+  }
+  
+  /* Alternative approach using pseudo-elements for better print support */
+  .print-cell::before,
+  .print-cell::after {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 0;
+  }
+  
+  /* Title styling for print */
+  .print-title {
+    text-align: center;
+    font-size: 14pt;
+    font-weight: bold;
+    margin-bottom: 0.5cm;
+    color: #000;
+  }
+}

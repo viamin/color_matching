@@ -202,14 +202,14 @@ defmodule ColorMatchingWeb.ColorGridLive do
   def render(assigns) do
     ~H"""
     <div class="max-w-6xl mx-auto p-6" phx-hook="PaletteStorage" id="palette-storage">
-      <h1 class="text-3xl font-bold text-gray-900 mb-4">Color Matching Grid</h1>
-      <p class="text-gray-600 mb-8">
+      <h1 class="text-3xl font-bold text-gray-900 mb-4 no-print">Color Matching Grid</h1>
+      <p class="text-gray-600 mb-8 no-print">
         Each square shows two triangles: the top-left uses your selected colors, 
         and the bottom-right uses their inverse colors for maximum contrast and double the combinations.
       </p>
       
       <!-- Color Management -->
-      <div class="mb-8 p-4 bg-gray-50 rounded-lg">
+      <div class="mb-8 p-4 bg-gray-50 rounded-lg no-print">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-xl font-semibold">Manage Colors</h2>
           <div class="relative">
@@ -307,7 +307,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
       </div>
 
       <!-- Grid Size Control -->
-      <div class="mb-6">
+      <div class="mb-6 no-print">
         <label class="block text-sm font-medium text-gray-700 mb-2">
           Grid Size: <%= @grid_size %>×<%= @grid_size %>
         </label>
@@ -328,7 +328,45 @@ defmodule ColorMatchingWeb.ColorGridLive do
 
       <!-- Color Grid -->
       <%= if length(@colors) >= @grid_size do %>
-        <div class="grid gap-1" style={"grid-template-columns: repeat(#{@grid_size}, 1fr); max-width: 600px;"}>
+        <!-- Print Area (hidden on screen, visible when printing) -->
+        <div class="print-area">
+          <div class="print-title">Color Matching Grid (<%= @grid_size %>×<%= @grid_size %>)</div>
+          <div class="print-grid">
+            <div class="print-grid-container">
+              <div class="grid gap-1 w-full h-full" style={"grid-template-columns: repeat(#{@grid_size}, 1fr);"}>
+                <%= for row <- @grid.grid do %>
+                  <%= for cell <- row do %>
+                    <div 
+                      class="relative border border-gray-300 print-cell"
+                      style={"background: linear-gradient(to bottom right, #{cell.top_left_color} 0%, #{cell.top_left_color} 50%, #{cell.bottom_right_color} 50%, #{cell.bottom_right_color} 100%)"}
+                    >
+                    </div>
+                  <% end %>
+                <% end %>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Print Legend -->
+          <div class="print-legend">
+            <h3>Color Legend</h3>
+            <div class="print-legend-colors">
+              <%= for {color, index} <- Enum.with_index(@colors) do %>
+                <div class="print-legend-item">
+                  <div class="print-color-preview triangle-top-left" style={"background-color: #{color}"}></div>
+                  <span class="print-legend-text"><%= color %> (Row <%= index + 1 %>)</span>
+                </div>
+                <div class="print-legend-item">
+                  <div class="print-color-preview triangle-bottom-right" style={"background-color: #{ColorUtils.invert_color(color)}"}></div>
+                  <span class="print-legend-text"><%= ColorUtils.invert_color(color) %> (Col <%= index + 1 %>)</span>
+                </div>
+              <% end %>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Screen Display (visible on screen, hidden when printing) -->
+        <div class="grid gap-1 no-print" style={"grid-template-columns: repeat(#{@grid_size}, 1fr); max-width: 600px;"}>
           <%= for row <- @grid.grid do %>
             <%= for cell <- row do %>
               <div class="relative w-16 h-16 border border-gray-300">
@@ -349,14 +387,14 @@ defmodule ColorMatchingWeb.ColorGridLive do
           <% end %>
         </div>
       <% else %>
-        <div class="text-gray-500 italic">
+        <div class="text-gray-500 italic no-print">
           Add at least <%= @grid_size %> colors to generate the grid.
         </div>
       <% end %>
 
       <!-- Save Palette Modal -->
       <%= if @show_save_modal do %>
-        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 no-print">
           <div class="bg-white rounded-lg p-6 w-96">
             <h3 class="text-lg font-semibold mb-4">Save Color Palette</h3>
             <form phx-submit="save_palette">
@@ -391,7 +429,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
 
       <!-- Load Palette Modal -->
       <%= if @show_load_modal do %>
-        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 no-print">
           <div class="bg-white rounded-lg p-6 w-96 max-h-96 overflow-y-auto">
             <h3 class="text-lg font-semibold mb-4">Load Color Palette</h3>
             
@@ -479,7 +517,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
 
       <!-- Rename Palette Modal -->
       <%= if @show_rename_modal do %>
-        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 no-print">
           <div class="bg-white rounded-lg p-6 w-96">
             <h3 class="text-lg font-semibold mb-4">Rename Palette</h3>
             <form phx-submit="rename_palette" phx-value-old_name={@selected_palette && @selected_palette.name}>
@@ -514,7 +552,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
 
       <!-- Confirm Load Modal -->
       <%= if @show_confirm_load do %>
-        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 no-print">
           <div class="bg-white rounded-lg p-6 w-96">
             <h3 class="text-lg font-semibold mb-4">Confirm Load Palette</h3>
             <p class="mb-4 text-gray-600">
