@@ -1,0 +1,14 @@
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
+
+/* This file is for your main application CSS */
+
+/* Triangle styles for color grid */
+.triangle-top-left {
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+}
+
+.triangle-bottom-right {
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+}
