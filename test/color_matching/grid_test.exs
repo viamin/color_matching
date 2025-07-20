@@ -37,7 +37,7 @@ defmodule ColorMatching.GridTest do
       grid = Grid.new(colors, 2)
 
       cell = grid.grid |> Enum.at(0) |> Enum.at(0)
-      
+
       assert cell.row == 0
       assert cell.col == 0
       assert cell.top_left_color == "#FF0000"
@@ -64,18 +64,24 @@ defmodule ColorMatching.GridTest do
       grid = Grid.new(colors, 3)
 
       # Check pattern: above diagonal should use inverted colors
-      cell_0_1 = grid.grid |> Enum.at(0) |> Enum.at(1)  # row 0, col 1
-      assert cell_0_1.bottom_right_color == "#FF00FF"  # inverted #00FF00
+      # row 0, col 1
+      cell_0_1 = grid.grid |> Enum.at(0) |> Enum.at(1)
+      # inverted #00FF00
+      assert cell_0_1.bottom_right_color == "#FF00FF"
       assert cell_0_1.use_inverted == true
 
       # Check pattern: below diagonal should use original colors  
-      cell_1_0 = grid.grid |> Enum.at(1) |> Enum.at(0)  # row 1, col 0
-      assert cell_1_0.bottom_right_color == "#FF0000"   # original
+      # row 1, col 0
+      cell_1_0 = grid.grid |> Enum.at(1) |> Enum.at(0)
+      # original
+      assert cell_1_0.bottom_right_color == "#FF0000"
       assert cell_1_0.use_inverted == false
 
       # Check pattern: on diagonal should use original colors
-      cell_1_1 = grid.grid |> Enum.at(1) |> Enum.at(1)  # row 1, col 1
-      assert cell_1_1.bottom_right_color == "#00FF00"   # original
+      # row 1, col 1
+      cell_1_1 = grid.grid |> Enum.at(1) |> Enum.at(1)
+      # original
+      assert cell_1_1.bottom_right_color == "#00FF00"
       assert cell_1_1.is_diagonal == true
     end
 

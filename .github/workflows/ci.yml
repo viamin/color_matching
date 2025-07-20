@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+env:
+  MIX_ENV: test
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Elixir and Erlang/OTP
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: '1.16'
+          otp-version: '26'
+
+      - name: Cache deps
+        uses: actions/cache@v4
+        with:
+          path: deps
+          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-
+
+      - name: Cache _build
+        uses: actions/cache@v4
+        with:
+          path: _build
+          key: ${{ runner.os }}-build-${{ hashFiles('**/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-build-
+
+      - name: Install dependencies
+        run: mix deps.get
+
+      - name: Compile dependencies
+        run: mix deps.compile
+
+      - name: Setup assets
+        run: mix assets.setup
+
+      - name: Build assets
+        run: mix assets.build
+
+      - name: Check code formatting
+        run: mix format --check-formatted
+
+      - name: Run tests
+        run: mix test
+
+      - name: Run type checking (if Dialyzer is configured)
+        run: |
+          if grep -q "dialyxir" mix.exs; then
+            mix dialyzer
+          else
+            echo "Dialyzer not configured, skipping type checking"
+          fi
+        continue-on-error: true
+
+  quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Elixir and Erlang/OTP
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: '1.16'
+          otp-version: '26'
+
+      - name: Cache deps
+        uses: actions/cache@v4
+        with:
+          path: deps
+          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-
+
+      - name: Install dependencies
+        run: mix deps.get
+
+      - name: Check for unused dependencies
+        run: mix deps.unlock --check-unused
+
+      - name: Check for security vulnerabilities
+        run: mix deps.audit
+
+      - name: Check code compilation
+        run: mix compile --warnings-as-errors
+
+      - name: Run Credo (if configured)
+        run: |
+          if grep -q "credo" mix.exs; then
+            mix credo --strict
+          else
+            echo "Credo not configured, skipping code analysis"
+          fi
+        continue-on-error: true

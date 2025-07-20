@@ -1,7 +1,7 @@
 defmodule ColorMatching.Grid do
   @moduledoc """
   Handles grid generation and color matching logic.
-  
+
   Creates a grid where:
   - Each row has the same top-left triangle color
   - Each column has the same bottom-right triangle color
@@ -26,16 +26,17 @@ defmodule ColorMatching.Grid do
     for row <- 0..(size - 1) do
       for col <- 0..(size - 1) do
         base_color = Enum.at(colors, col)
-        
+
         # Determine bottom-right triangle color based on position relative to main diagonal
-        bottom_right_color = cond do
-          # Above main diagonal: use inverted color
-          row < col -> ColorUtils.invert_color(base_color)
-          # Below main diagonal: use original color
-          row > col -> base_color
-          # On main diagonal: use original color (will be handled specially in UI for split effect)
-          row == col -> base_color
-        end
+        bottom_right_color =
+          cond do
+            # Above main diagonal: use inverted color
+            row < col -> ColorUtils.invert_color(base_color)
+            # Below main diagonal: use original color
+            row > col -> base_color
+            # On main diagonal: use original color (will be handled specially in UI for split effect)
+            row == col -> base_color
+          end
 
         %{
           row: row,

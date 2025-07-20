@@ -44,10 +44,10 @@ defmodule ColorMatching.ColorUtilsTest do
   describe "random_color/0" do
     test "generates a valid 6-character hex color" do
       color = ColorUtils.random_color()
-      
+
       assert String.starts_with?(color, "#")
       assert String.length(color) == 7
-      
+
       hex_part = String.slice(color, 1, 6)
       assert String.match?(hex_part, ~r/^[0-9A-F]{6}$/)
     end
@@ -55,7 +55,7 @@ defmodule ColorMatching.ColorUtilsTest do
     test "generates different colors on multiple calls" do
       colors = for _ <- 1..10, do: ColorUtils.random_color()
       unique_colors = Enum.uniq(colors)
-      
+
       # Should be very unlikely to get all the same color
       assert length(unique_colors) > 1
     end
@@ -63,7 +63,7 @@ defmodule ColorMatching.ColorUtilsTest do
     test "generated colors can be inverted" do
       color = ColorUtils.random_color()
       inverted = ColorUtils.invert_color(color)
-      
+
       assert String.starts_with?(inverted, "#")
       assert String.length(inverted) == 7
       refute color == inverted
@@ -72,7 +72,7 @@ defmodule ColorMatching.ColorUtilsTest do
     test "inversion is reversible" do
       color = ColorUtils.random_color()
       double_inverted = color |> ColorUtils.invert_color() |> ColorUtils.invert_color()
-      
+
       assert color == double_inverted
     end
   end
