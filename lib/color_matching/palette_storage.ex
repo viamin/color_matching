@@ -34,6 +34,8 @@ defmodule ColorMatching.PaletteStorage do
     case Jason.decode(json_string) do
       {:ok, %{"name" => name, "colors" => colors, "is_preset" => is_preset}} ->
         {:ok, %{name: name, colors: colors, is_preset: is_preset}}
+      {:ok, _incomplete} ->
+        {:error, "Missing required fields"}
       {:error, reason} ->
         {:error, reason}
     end
