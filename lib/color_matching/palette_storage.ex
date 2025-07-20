@@ -3,6 +3,12 @@ defmodule ColorMatching.PaletteStorage do
   Handles storage and retrieval of color palettes using localStorage and provides preset palettes.
   """
 
+  @type palette :: %{
+          name: String.t(),
+          colors: [String.t()],
+          is_preset: boolean()
+        }
+
   @preset_palettes %{
     "Warm" => [
       "#FF6B6B",
@@ -198,22 +204,26 @@ defmodule ColorMatching.PaletteStorage do
     ]
   }
 
+  @spec get_preset_palettes() :: [palette()]
   def get_preset_palettes do
     @preset_palettes
     |> Enum.map(fn {name, colors} -> %{name: name, colors: colors, is_preset: true} end)
   end
 
+  @spec get_preset_palette(String.t()) :: [String.t()] | nil
   def get_preset_palette(name) do
     Map.get(@preset_palettes, name)
   end
 
   # Note: Actual localStorage operations will be handled in the LiveView 
   # using JavaScript hooks since Elixir runs server-side
+  @spec encode_palette(String.t(), [String.t()]) :: String.t()
   def encode_palette(name, colors) do
     %{name: name, colors: colors, is_preset: false}
     |> Jason.encode!()
   end
 
+  @spec decode_palette(String.t()) :: {:ok, palette()} | {:error, String.t()}
   def decode_palette(json_string) do
     case Jason.decode(json_string) do
       {:ok, %{"name" => name, "colors" => colors, "is_preset" => is_preset}} ->
@@ -227,6 +237,7 @@ defmodule ColorMatching.PaletteStorage do
     end
   end
 
+  @spec validate_palette_name(term()) :: {:ok, String.t()} | {:error, String.t()}
   def validate_palette_name(name) when is_binary(name) do
     trimmed = String.trim(name)
 

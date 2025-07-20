@@ -14,6 +14,7 @@ defmodule ColorMatching.ColorUtils do
       iex> ColorMatching.ColorUtils.invert_color("#000000")
       "#FFFFFF"
   """
+  @spec invert_color(String.t()) :: String.t()
   def invert_color("#" <> hex) when byte_size(hex) == 6 do
     {r, g, b} = parse_hex_color(hex)
 
@@ -44,6 +45,7 @@ defmodule ColorMatching.ColorUtils do
       iex> ColorMatching.ColorUtils.random_color()
       "#A3B5C7"
   """
+  @spec random_color() :: String.t()
   def random_color do
     r = :rand.uniform(256) - 1
     g = :rand.uniform(256) - 1
@@ -56,6 +58,7 @@ defmodule ColorMatching.ColorUtils do
     "#" <> r_hex <> g_hex <> b_hex
   end
 
+  @spec parse_hex_color(String.t()) :: {non_neg_integer(), non_neg_integer(), non_neg_integer()}
   defp parse_hex_color(hex) do
     {r, ""} = String.slice(hex, 0, 2) |> Integer.parse(16)
     {g, ""} = String.slice(hex, 2, 2) |> Integer.parse(16)

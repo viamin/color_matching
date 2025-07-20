@@ -22,3 +22,15 @@ config :phoenix, :plug_init_mode, :runtime
 # Enable helpful, but potentially expensive runtime checks
 config :phoenix_live_view,
   enable_expensive_runtime_checks: true
+
+# Test coverage configuration
+config :excoveralls,
+  coverage_options: [
+    minimum_coverage: 80,
+    skip_files: [
+      "test/support/",
+      "priv/",
+      "lib/color_matching_web/controllers/page_controller.ex",
+      "lib/color_matching_web/components/layouts.ex"
+    ]
+  ]

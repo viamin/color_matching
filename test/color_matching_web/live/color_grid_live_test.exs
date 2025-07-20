@@ -253,5 +253,137 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       # Started at 6, added 2, now 8
       assert html =~ "Grid Size: 8×8"
     end
+
+    test "handles palette menu interactions", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      # Open palette menu
+      view
+      |> element("button[phx-click='toggle_palette_menu']")
+      |> render_click()
+
+      # Open save modal
+      view
+      |> element("button[phx-click='show_save_modal']")
+      |> render_click()
+
+      html = render(view)
+      assert html =~ "Save Color Palette"
+
+      # Close modal
+      view
+      |> element("button[phx-click='close_modal']")
+      |> render_click()
+
+      html = render(view)
+      refute html =~ "Save Color Palette"
+    end
+
+    test "handles load modal interactions", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      # Open palette menu and then load modal
+      view
+      |> element("button[phx-click='toggle_palette_menu']")
+      |> render_click()
+
+      view
+      |> element("button[phx-click='show_load_modal']")
+      |> render_click()
+
+      html = render(view)
+      assert html =~ "Load Color Palette"
+      assert html =~ "Preset Palettes"
+    end
+
+    test "handles save palette name updates", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      # Open save modal
+      view
+      |> element("button[phx-click='toggle_palette_menu']")
+      |> render_click()
+
+      view
+      |> element("button[phx-click='show_save_modal']")
+      |> render_click()
+
+      # Update the save name
+      view
+      |> element("input[name='name']")
+      |> render_change(%{"value" => "Test Palette"})
+
+      html = render(view)
+      assert html =~ "value=\"Test Palette\""
+    end
+
+    test "handles empty color input for add_color", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      # Try to add color with empty input
+      view
+      |> element("form[phx-submit='add_color']")
+      |> render_submit(%{"color" => ""})
+
+      # Should not add any color or change grid size
+      html = render(view)
+      assert html =~ "Grid Size: 6×6"
+      color_count = (html |> String.split("phx-value-index=") |> length()) - 1
+      assert color_count == 6
+    end
+
+    test "handles color input with 'value' parameter", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      # Add color using 'value' parameter (color picker)
+      view
+      |> element("form[phx-submit='add_color']")
+      |> render_submit(%{"value" => "#ABCDEF"})
+
+      html = render(view)
+      assert html =~ "#ABCDEF"
+      assert html =~ "Grid Size: 7×7"
+    end
+
+    test "handles grid size change with existing colors", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      # Start with 6 colors, change grid size to 7 (will add 1 random color)
+      view
+      |> form("form[phx-change='change_grid_size']", %{"size" => "7"})
+      |> render_change()
+
+      html = render(view)
+      assert html =~ "Grid Size: 7×7"
+      
+      # Should now have 7 colors (6 original + 1 random)
+      color_count = (html |> String.split("phx-value-index=") |> length()) - 1
+      assert color_count == 7
+    end
+
+    test "displays grid when colors are sufficient", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      html = render(view)
+      # With 6 colors and 6x6 grid, should show the actual grid
+      assert html =~ "triangle-top-left"
+      assert html =~ "triangle-bottom-right"
+      refute html =~ "Add at least"
+    end
+
+    test "displays warning when insufficient colors", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      # Remove multiple colors to get below grid size requirement
+      for i <- 5..2//-1 do
+        view
+        |> element("button[phx-click='remove_color'][phx-value-index='#{i}']")
+        |> render_click()
+      end
+
+      # Now we should have 2 colors but grid size will be 6 (minimum)
+      html = render(view)
+      assert html =~ "Add at least 6 colors to generate the grid"
+    end
   end
 end

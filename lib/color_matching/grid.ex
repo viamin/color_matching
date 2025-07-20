@@ -12,8 +12,24 @@ defmodule ColorMatching.Grid do
 
   alias ColorMatching.ColorUtils
 
+  @type cell :: %{
+          row: non_neg_integer(),
+          col: non_neg_integer(),
+          top_left_color: String.t(),
+          bottom_right_color: String.t(),
+          is_diagonal: boolean(),
+          use_inverted: boolean()
+        }
+
+  @type t :: %__MODULE__{
+          colors: [String.t()],
+          size: non_neg_integer(),
+          grid: [[cell()]]
+        }
+
   defstruct [:colors, :size, :grid]
 
+  @spec new([String.t()], non_neg_integer()) :: t()
   def new(colors, size \\ 5) do
     %__MODULE__{
       colors: colors,
@@ -22,6 +38,7 @@ defmodule ColorMatching.Grid do
     }
   end
 
+  @spec generate_grid([String.t()], non_neg_integer()) :: [[cell()]]
   defp generate_grid(colors, size) do
     for row <- 0..(size - 1) do
       for col <- 0..(size - 1) do
