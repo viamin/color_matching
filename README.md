@@ -42,7 +42,6 @@ This design eliminates duplicate combinations while providing both subtle (origi
 To start your Phoenix server:
 
 - Run `mix setup` to install and setup dependencies
-- Run `mix deps.update --all` to update dependencies within the version constraints in `mix.exs`
 - Run `mix test` to run the test suite
 - Start Phoenix endpoint with `mix phx.server` or inside IEx with `iex -S mix phx.server`
 
