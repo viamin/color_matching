@@ -1,0 +1,3 @@
+---
+driver: playwright
+auto_capture: true
