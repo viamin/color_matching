@@ -43,6 +43,12 @@ config :color_matching, ColorMatchingWeb.Endpoint,
 # different ports.
 
 # Watch static and templates for browser reloading.
+config :phoenix_live_reload, :dirs, [
+  "lib",
+  "priv/gettext",
+  "priv/static"
+]
+
 config :color_matching, ColorMatchingWeb.Endpoint,
   live_reload: [
     patterns: [
