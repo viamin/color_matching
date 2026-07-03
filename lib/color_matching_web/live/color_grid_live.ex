@@ -246,8 +246,8 @@ defmodule ColorMatchingWeb.ColorGridLive do
           </p>
         </div>
       </div>
-      
-    <!-- Color Management -->
+
+      <!-- Color Management -->
       <div class="mb-8 p-4 bg-gray-50 rounded-lg no-print">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-xl font-semibold">Manage Colors</h2>
@@ -287,8 +287,8 @@ defmodule ColorMatchingWeb.ColorGridLive do
         <p class="text-sm text-gray-600 mb-3">
           Each color shows its hex code and inverted hex code below. Inverted colors appear in the upper portion of the grid for high-contrast combinations.
         </p>
-        
-    <!-- Current Colors -->
+
+        <!-- Current Colors -->
         <div class="flex flex-wrap gap-2 mb-4">
           <%= for {color, index} <- Enum.with_index(@colors) do %>
             <div class="flex items-center bg-white border rounded-lg p-3">
@@ -317,8 +317,8 @@ defmodule ColorMatchingWeb.ColorGridLive do
             </div>
           <% end %>
         </div>
-        
-    <!-- Add Color -->
+
+        <!-- Add Color -->
         <form phx-change="update_color_input" phx-submit="add_color" class="flex gap-2 items-center">
           <input
             type="color"
@@ -342,8 +342,8 @@ defmodule ColorMatchingWeb.ColorGridLive do
           </button>
         </form>
       </div>
-      
-    <!-- Grid Size Control -->
+
+      <!-- Grid Size Control -->
       <div class="mb-6 no-print">
         <label class="block text-sm font-medium text-gray-700 mb-2">
           Grid Size: {@grid_size}×{@grid_size}
@@ -355,8 +355,8 @@ defmodule ColorMatchingWeb.ColorGridLive do
           <input type="range" name="size" min="6" max="12" value={@grid_size} class="w-48" />
         </form>
       </div>
-      
-    <!-- Color Grid -->
+
+      <!-- Color Grid -->
       <%= if length(@colors) >= @grid_size do %>
         <!-- Print Area (hidden on screen, visible when printing) -->
         <div class="print-area">
@@ -379,8 +379,8 @@ defmodule ColorMatchingWeb.ColorGridLive do
               </div>
             </div>
           </div>
-          
-    <!-- Print Legend -->
+
+          <!-- Print Legend -->
           <div class="print-legend">
             <h3>Color Legend</h3>
             <div class="print-legend-colors">
@@ -405,8 +405,8 @@ defmodule ColorMatchingWeb.ColorGridLive do
             </div>
           </div>
         </div>
-        
-    <!-- Screen Display (visible on screen, hidden when printing) -->
+
+        <!-- Screen Display (visible on screen, hidden when printing) -->
         <div
           class="grid gap-1 no-print"
           style={"grid-template-columns: repeat(#{@grid_size}, 1fr); max-width: 600px;"}
@@ -452,8 +452,8 @@ defmodule ColorMatchingWeb.ColorGridLive do
           Add at least {@grid_size} colors to generate the grid.
         </div>
       <% end %>
-      
-    <!-- Save Palette Modal -->
+
+      <!-- Save Palette Modal -->
       <%= if @show_save_modal do %>
         <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 no-print">
           <div class="bg-white rounded-lg p-6 w-96">
@@ -487,14 +487,14 @@ defmodule ColorMatchingWeb.ColorGridLive do
           </div>
         </div>
       <% end %>
-      
-    <!-- Load Palette Modal -->
+
+      <!-- Load Palette Modal -->
       <%= if @show_load_modal do %>
         <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 no-print">
           <div class="bg-white rounded-lg p-6 w-96 max-h-96 overflow-y-auto">
             <h3 class="text-lg font-semibold mb-4">Load Color Palette</h3>
-            
-    <!-- Preset Palettes -->
+
+            <!-- Preset Palettes -->
             <div class="mb-6">
               <h4 class="font-medium text-gray-700 mb-2">Preset Palettes</h4>
               <%= for palette <- @preset_palettes do %>
@@ -521,8 +521,8 @@ defmodule ColorMatchingWeb.ColorGridLive do
                 </div>
               <% end %>
             </div>
-            
-    <!-- Saved Palettes -->
+
+            <!-- Saved Palettes -->
             <%= if length(@saved_palettes) > 0 do %>
               <div class="mb-4">
                 <h4 class="font-medium text-gray-700 mb-2">Saved Palettes</h4>
@@ -577,8 +577,8 @@ defmodule ColorMatchingWeb.ColorGridLive do
           </div>
         </div>
       <% end %>
-      
-    <!-- Rename Palette Modal -->
+
+      <!-- Rename Palette Modal -->
       <%= if @show_rename_modal do %>
         <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 no-print">
           <div class="bg-white rounded-lg p-6 w-96">
@@ -615,8 +615,8 @@ defmodule ColorMatchingWeb.ColorGridLive do
           </div>
         </div>
       <% end %>
-      
-    <!-- Confirm Load Modal -->
+
+      <!-- Confirm Load Modal -->
       <%= if @show_confirm_load do %>
         <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 no-print">
           <div class="bg-white rounded-lg p-6 w-96">
