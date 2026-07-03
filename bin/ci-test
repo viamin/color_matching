@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+#
+# Local CI simulation script
+# Runs the same steps as our GitHub Actions workflow
+#
+
+set -euo pipefail
+
+REQUIRED_ELIXIR="1.16"
+REQUIRED_OTP="26"
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+
+if [[ "${1:-}" == "--native" ]]; then
+    shift
+else
+    ELIXIR_VERSION_OUTPUT="$(elixir --version)"
+    ELIXIR_VERSION="$(awk '/^Elixir/ {print $2; exit}' <<< "${ELIXIR_VERSION_OUTPUT}")"
+    OTP_VERSION="$(awk '/^Erlang\/OTP/ {print $2; exit}' <<< "${ELIXIR_VERSION_OUTPUT}")"
+
+    if [[ "${ELIXIR_VERSION}" != ${REQUIRED_ELIXIR}.* || "${OTP_VERSION}" != "${REQUIRED_OTP}" ]]; then
+        if command -v mise >/dev/null 2>&1; then
+            echo "🔁 Re-running with CI toolchain: Elixir ${REQUIRED_ELIXIR}, OTP ${REQUIRED_OTP}"
+            CI_TEST_REEXECED=1 exec mise x "erlang@${REQUIRED_OTP}" "elixir@${REQUIRED_ELIXIR}" -- bash "${SCRIPT_PATH}" --native "$@"
+        fi
+
+        echo "❌ CI uses Elixir ${REQUIRED_ELIXIR} / OTP ${REQUIRED_OTP}, but local shell has Elixir ${ELIXIR_VERSION} / OTP ${OTP_VERSION}."
+        echo "   Install/use the CI toolchain, or install mise so this script can run with the pinned versions automatically."
+        exit 1
+    fi
+fi
+
+ELIXIR_VERSION_OUTPUT="$(elixir --version)"
+ELIXIR_VERSION="$(awk '/^Elixir/ {print $2; exit}' <<< "${ELIXIR_VERSION_OUTPUT}")"
+OTP_VERSION="$(awk '/^Erlang\/OTP/ {print $2; exit}' <<< "${ELIXIR_VERSION_OUTPUT}")"
+
+export MIX_ENV=test
+export MIX_BUILD_PATH="${MIX_BUILD_PATH:-${PWD}/_build/ci-elixir-${ELIXIR_VERSION}-otp-${OTP_VERSION}}"
+
+if [[ "${CI_TEST_REEXECED:-}" == "1" && -d deps ]]; then
+    echo "🧹 Cleaning stale dependency build artifacts from other local toolchains..."
+    find deps -name _build -type d -prune -exec rm -rf {} +
+fi
+
+run_step() {
+    local label="$1"
+    local success_message="$2"
+    local failure_message="$3"
+    shift 3
+
+    echo "${label}"
+
+    if "$@"; then
+        echo "   ✅ ${success_message}"
+    else
+        echo "   ❌ ${failure_message}"
+        exit 1
+    fi
+}
+
+echo "🚀 Starting CI simulation..."
+echo ""
+
+# Test Environment Setup
+echo "📋 Test Environment:"
+echo "  Elixir: $(awk 'NR == 1 {print}' <<< "${ELIXIR_VERSION_OUTPUT}")"
+echo "  Mix: $(mix --version)"
+echo "  Git: $(git --version)"
+echo "  MIX_ENV: ${MIX_ENV}"
+echo "  MIX_BUILD_PATH: ${MIX_BUILD_PATH}"
+echo ""
+
+# Test Job Simulation
+echo "🧪 Running TEST job simulation..."
+echo ""
+
+echo "1️⃣  Installing dependencies..."
+mix deps.get
+
+echo "2️⃣  Compiling dependencies..."
+mix deps.compile
+
+echo "3️⃣  Setting up assets..."
+mix assets.setup
+
+echo "4️⃣  Building assets..."
+mix assets.build
+
+run_step "5️⃣  Checking code formatting..." "Code formatting OK" "Code formatting failed" mix format --check-formatted
+
+run_step "6️⃣  Running tests with coverage..." "Tests passed" "Tests failed" mix coveralls
+
+run_step "7️⃣  Running Dialyzer type checking..." "Dialyzer passed" "Dialyzer failed" \
+    bash -c 'MIX_ENV=dev mix deps.compile && MIX_ENV=dev mix compile && MIX_ENV=dev mix dialyzer'
+
+echo ""
+echo "🏆 Running CODE QUALITY job simulation..."
+echo ""
+
+run_step "1️⃣  Checking for unused dependencies..." "No unused dependencies" "Unused dependencies found" \
+    mix deps.unlock --check-unused
+
+run_step "2️⃣  Checking code compilation with warnings as errors..." "Compilation OK" "Compilation warnings/errors" \
+    mix compile --warnings-as-errors
+
+run_step "3️⃣  Running Credo code analysis..." "Credo passed" "Credo failed" mix credo --strict
+
+echo "4️⃣  Running Sobelow security analysis..."
+mix sobelow --config
+echo "   ✅ Sobelow completed (warnings are expected in dev)"
+
+echo ""
+echo "🎉 CI simulation completed successfully!"
+echo ""
+echo "Your changes are ready for GitHub Actions CI! 🚀"

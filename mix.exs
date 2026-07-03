@@ -11,15 +11,20 @@ defmodule ColorMatching.MixProject do
       aliases: aliases(),
       deps: deps(),
       test_coverage: [tool: ExCoveralls],
-      preferred_cli_env: [
+      # Dialyzer configuration
+      dialyzer: [
+        plt_add_apps: [:mix]
+      ]
+    ]
+  end
+
+  def cli do
+    [
+      preferred_envs: [
         coveralls: :test,
         "coveralls.detail": :test,
         "coveralls.post": :test,
         "coveralls.html": :test
-      ],
-      # Dialyzer configuration
-      dialyzer: [
-        plt_add_apps: [:mix]
       ]
     ]
   end

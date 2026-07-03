@@ -6,6 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Setup**: `mix setup` - Install dependencies and setup assets
 - **Setup git hooks**: `bin/setup-git-hooks` - Install pre-commit formatting hooks
+- **Test CI locally**: `bin/ci-test` - Simulate GitHub Actions workflow locally
 - **Start server**: `mix phx.server` or `iex -S mix phx.server` (with interactive shell)
 - **Compile**: `mix compile`
 - **Run tests**: `mix test`
