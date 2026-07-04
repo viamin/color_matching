@@ -3,12 +3,22 @@ defmodule ColorMatchingWeb.ColorGridLive do
   alias ColorMatching.{ColorUtils, Grid, PaletteStorage}
 
   @default_colors ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#FD79A8"]
+  # Lower bound for grid_size; matches the `min` attribute on the grid-size
+  # range input. All paths that derive grid_size from a color count must clamp
+  # to this so reloads/loads cannot shrink the grid below what the UI allows.
+  @min_grid_size 6
 
   def mount(_params, _session, socket) do
+    # NOTE: intentionally do not `push_active_palette/1` here. On a hard
+    # refresh the PaletteStorage hook hydrates the saved palette from
+    # localStorage and pushes it back via `active_palette_loaded`. Pushing
+    # `activate_palette` now (with the default colors) would race that
+    # hydration and overwrite the saved palette. Only re-persist on real user
+    # changes (add/remove/save/load/etc.).
     {:ok,
      socket
      |> assign(:colors, @default_colors)
-     |> assign(:grid_size, 6)
+     |> assign(:grid_size, @min_grid_size)
      |> assign(:new_color, "")
      |> assign(:preset_palettes, PaletteStorage.get_preset_palettes())
      |> assign(:saved_palettes, [])
@@ -22,8 +32,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
      |> assign(:selected_palette, nil)
      |> assign(:pending_load_palette, nil)
      |> assign(:active_palette, nil)
-     |> assign_grid()
-     |> push_active_palette()}
+     |> assign_grid()}
   end
 
   def handle_event("add_color", params, socket) do
@@ -51,13 +60,11 @@ defmodule ColorMatchingWeb.ColorGridLive do
   def handle_event("remove_color", %{"index" => index_str}, socket) do
     index = String.to_integer(index_str)
     colors = List.delete_at(socket.assigns.colors, index)
-    min_size = 6
-    new_grid_size = max(length(colors), min_size)
 
     {:noreply,
      socket
      |> assign(:colors, colors)
-     |> assign(:grid_size, new_grid_size)
+     |> assign(:grid_size, grid_size_for_colors(colors))
      |> assign_grid()
      |> push_active_palette()}
   end
@@ -165,12 +172,11 @@ defmodule ColorMatchingWeb.ColorGridLive do
 
   def handle_event("confirm_load_palette", _params, socket) do
     palette = socket.assigns.pending_load_palette
-    new_grid_size = length(palette.colors)
 
     {:noreply,
      socket
      |> assign(:colors, palette.colors)
-     |> assign(:grid_size, new_grid_size)
+     |> assign(:grid_size, grid_size_for_colors(palette.colors))
      |> assign(:active_palette, %{name: palette.name, is_preset: palette.is_preset})
      |> assign(:show_confirm_load, false)
      |> assign(:pending_load_palette, nil)
@@ -187,7 +193,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
         {:noreply,
          socket
          |> assign(:colors, colors)
-         |> assign(:grid_size, length(colors))
+         |> assign(:grid_size, grid_size_for_colors(colors))
          |> assign(:active_palette, %{name: new_name, is_preset: false})
          |> assign(:show_load_modal, false)
          |> put_flash(:info, "Duplicated \"#{name}\" as \"#{new_name}\"")
@@ -259,7 +265,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
     {:noreply,
      socket
      |> assign(:colors, colors)
-     |> assign(:grid_size, length(colors))
+     |> assign(:grid_size, grid_size_for_colors(colors))
      |> assign(:active_palette, name && %{name: name, is_preset: is_preset})
      |> assign_grid()}
   end
@@ -269,6 +275,11 @@ defmodule ColorMatchingWeb.ColorGridLive do
   defp assign_grid(socket) do
     grid = Grid.new(socket.assigns.colors, socket.assigns.grid_size)
     assign(socket, :grid, grid)
+  end
+
+  # Derives a grid size from a color count, clamped to the app minimum.
+  defp grid_size_for_colors(colors) do
+    max(length(colors), @min_grid_size)
   end
 
   # Persists the currently active palette (name + colors) to localStorage via
