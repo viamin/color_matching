@@ -1,6 +1,6 @@
 defmodule ColorMatching.PaletteStorageTest do
   use ExUnit.Case
-  alias ColorMatching.PaletteStorage
+  alias ColorMatching.{Palette, PaletteStorage}
 
   describe "get_preset_palettes/0" do
     test "returns all preset palettes with correct structure" do
@@ -11,10 +11,12 @@ defmodule ColorMatching.PaletteStorageTest do
 
       # Check that each palette has the correct structure
       Enum.each(palettes, fn palette ->
+        assert %Palette{} = palette
         assert Map.has_key?(palette, :name)
         assert Map.has_key?(palette, :colors)
         assert Map.has_key?(palette, :is_preset)
         assert palette.is_preset == true
+        assert palette.created_at == nil
         assert is_binary(palette.name)
         assert is_list(palette.colors)
       end)
@@ -190,6 +192,41 @@ defmodule ColorMatching.PaletteStorageTest do
       assert decoded.name == original_name
       assert decoded.colors == original_colors
       assert decoded.is_preset == false
+    end
+  end
+
+  describe "preset_palette?/1" do
+    test "returns true for a preset name" do
+      assert PaletteStorage.preset_palette?("Warm")
+    end
+
+    test "returns false for a non-preset name" do
+      refute PaletteStorage.preset_palette?("My Custom Palette")
+    end
+  end
+
+  describe "duplicate_name/2" do
+    test "appends 'Copy' when there is no conflict" do
+      assert PaletteStorage.duplicate_name("Warm", []) == "Warm Copy"
+    end
+
+    test "increments a numeric suffix when the first copy name is taken" do
+      assert PaletteStorage.duplicate_name("Warm", ["Warm Copy"]) == "Warm Copy 2"
+      assert PaletteStorage.duplicate_name("Warm", ["Warm Copy", "Warm Copy 2"]) == "Warm Copy 3"
+    end
+
+    test "never returns a name that collides with an existing preset" do
+      for preset <- PaletteStorage.get_preset_palettes() do
+        candidate = PaletteStorage.duplicate_name(preset.name, [])
+        refute PaletteStorage.preset_palette?(candidate)
+      end
+    end
+
+    test "returns nil when every copy candidate up to 1000 is already taken" do
+      taken = for n <- 2..1000, do: "Warm Copy #{n}"
+      taken = ["Warm Copy" | taken]
+
+      assert PaletteStorage.duplicate_name("Warm", taken) == nil
     end
   end
 end

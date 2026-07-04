@@ -1,14 +1,24 @@
 defmodule ColorMatchingWeb.ColorGridLive do
   use ColorMatchingWeb, :live_view
-  alias ColorMatching.{ColorUtils, Grid, PaletteStorage}
+  alias ColorMatching.{ColorUtils, Grid, Palette, PaletteStorage}
 
   @default_colors ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#FD79A8"]
+  # Lower bound for grid_size; matches the `min` attribute on the grid-size
+  # range input. All paths that derive grid_size from a color count must clamp
+  # to this so reloads/loads cannot shrink the grid below what the UI allows.
+  @min_grid_size 6
 
   def mount(_params, _session, socket) do
+    # NOTE: intentionally do not `push_active_palette/1` here. On a hard
+    # refresh the PaletteStorage hook hydrates the saved palette from
+    # localStorage and pushes it back via `active_palette_loaded`. Pushing
+    # `activate_palette` now (with the default colors) would race that
+    # hydration and overwrite the saved palette. Only re-persist on real user
+    # changes (add/remove/save/load/etc.).
     {:ok,
      socket
      |> assign(:colors, @default_colors)
-     |> assign(:grid_size, 6)
+     |> assign(:grid_size, @min_grid_size)
      |> assign(:new_color, "")
      |> assign(:preset_palettes, PaletteStorage.get_preset_palettes())
      |> assign(:saved_palettes, [])
@@ -21,6 +31,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
      |> assign(:rename_palette_name, "")
      |> assign(:selected_palette, nil)
      |> assign(:pending_load_palette, nil)
+     |> assign(:active_palette, nil)
      |> assign_grid()}
   end
 
@@ -39,7 +50,9 @@ defmodule ColorMatchingWeb.ColorGridLive do
        |> assign(:colors, colors)
        |> assign(:grid_size, new_size)
        |> assign(:new_color, "")
-       |> assign_grid()}
+       |> assign(:active_palette, nil)
+       |> assign_grid()
+       |> push_active_palette()}
     else
       {:noreply, socket}
     end
@@ -48,14 +61,14 @@ defmodule ColorMatchingWeb.ColorGridLive do
   def handle_event("remove_color", %{"index" => index_str}, socket) do
     index = String.to_integer(index_str)
     colors = List.delete_at(socket.assigns.colors, index)
-    min_size = 6
-    new_grid_size = max(length(colors), min_size)
 
     {:noreply,
      socket
      |> assign(:colors, colors)
-     |> assign(:grid_size, new_grid_size)
-     |> assign_grid()}
+     |> assign(:grid_size, grid_size_for_colors(colors))
+     |> assign(:active_palette, nil)
+     |> assign_grid()
+     |> push_active_palette()}
   end
 
   def handle_event("update_color_input", params, socket) do
@@ -83,7 +96,9 @@ defmodule ColorMatchingWeb.ColorGridLive do
      socket
      |> assign(:grid_size, new_size)
      |> assign(:colors, updated_colors)
-     |> assign_grid()}
+     |> assign(:active_palette, nil)
+     |> assign_grid()
+     |> push_active_palette()}
   end
 
   # Palette management events
@@ -133,7 +148,9 @@ defmodule ColorMatchingWeb.ColorGridLive do
          socket
          |> assign(:show_save_modal, false)
          |> assign(:save_palette_name, "")
-         |> push_event("save_palette", %{name: validated_name, colors: socket.assigns.colors})}
+         |> assign(:active_palette, %{name: validated_name, is_preset: false})
+         |> push_event("save_palette", %{name: validated_name, colors: socket.assigns.colors})
+         |> push_active_palette()}
 
       {:error, error} ->
         {:noreply, put_flash(socket, :error, error)}
@@ -158,15 +175,59 @@ defmodule ColorMatchingWeb.ColorGridLive do
 
   def handle_event("confirm_load_palette", _params, socket) do
     palette = socket.assigns.pending_load_palette
-    new_grid_size = length(palette.colors)
 
     {:noreply,
      socket
      |> assign(:colors, palette.colors)
-     |> assign(:grid_size, new_grid_size)
+     |> assign(:grid_size, grid_size_for_colors(palette.colors))
+     |> assign(:active_palette, %{name: palette.name, is_preset: palette.is_preset})
      |> assign(:show_confirm_load, false)
      |> assign(:pending_load_palette, nil)
-     |> assign_grid()}
+     |> assign_grid()
+     |> push_active_palette()}
+  end
+
+  def handle_event("duplicate_palette", %{"palette" => palette_json}, socket) do
+    case PaletteStorage.decode_palette(palette_json) do
+      {:ok, palette} ->
+        existing_names = Enum.map(socket.assigns.saved_palettes, & &1["name"])
+        candidate_name = PaletteStorage.duplicate_name(palette.name, existing_names)
+
+        # duplicate_name/2 returns nil when every "<base> Copy" through
+        # "<base> Copy 1000" candidate is already taken. Handle that
+        # exhaustion explicitly rather than letting `nil` reach
+        # validate_palette_name/1, which would report the misleading
+        # "Name must be a string" error.
+        case candidate_name && PaletteStorage.validate_palette_name(candidate_name) do
+          {:ok, validated_name} ->
+            duplicated = Palette.duplicate(palette, validated_name)
+
+            {:noreply,
+             socket
+             |> assign(:colors, duplicated.colors)
+             |> assign(:grid_size, grid_size_for_colors(duplicated.colors))
+             |> assign(:active_palette, %{name: duplicated.name, is_preset: false})
+             |> assign(:show_load_modal, false)
+             |> put_flash(:info, "Duplicated \"#{palette.name}\" as \"#{duplicated.name}\"")
+             |> assign_grid()
+             |> push_event("save_palette", %{name: duplicated.name, colors: duplicated.colors})
+             |> push_active_palette()}
+
+          {:error, error} ->
+            {:noreply, put_flash(socket, :error, error)}
+
+          nil ->
+            {:noreply,
+             put_flash(
+               socket,
+               :error,
+               "Couldn't find a free name for the duplicate. Rename or remove some existing copies of \"#{palette.name}\" and try again."
+             )}
+        end
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Invalid palette data")}
+    end
   end
 
   def handle_event("show_rename_modal", %{"palette" => palette_json}, socket) do
@@ -194,7 +255,9 @@ defmodule ColorMatchingWeb.ColorGridLive do
          |> assign(:show_rename_modal, false)
          |> assign(:rename_palette_name, "")
          |> assign(:selected_palette, nil)
-         |> push_event("rename_palette", %{old_name: old_name, new_name: validated_name})}
+         |> assign(:active_palette, renamed_active_palette(socket, old_name, validated_name))
+         |> push_event("rename_palette", %{old_name: old_name, new_name: validated_name})
+         |> push_active_palette()}
 
       {:error, error} ->
         {:noreply, put_flash(socket, :error, error)}
@@ -205,16 +268,70 @@ defmodule ColorMatchingWeb.ColorGridLive do
     {:noreply,
      socket
      |> assign(:show_load_modal, false)
-     |> push_event("delete_palette", %{name: name})}
+     |> assign(:active_palette, deleted_active_palette(socket, name))
+     |> push_event("delete_palette", %{name: name})
+     |> push_active_palette()}
   end
 
   def handle_event("palettes_updated", %{"palettes" => palettes}, socket) do
     {:noreply, assign(socket, :saved_palettes, palettes)}
   end
 
+  def handle_event(
+        "active_palette_loaded",
+        %{"palette" => %{"colors" => colors} = palette_map},
+        socket
+      )
+      when is_list(colors) and colors != [] do
+    name = Map.get(palette_map, "name")
+    is_preset = Map.get(palette_map, "is_preset", false)
+
+    {:noreply,
+     socket
+     |> assign(:colors, colors)
+     |> assign(:grid_size, grid_size_for_colors(colors))
+     |> assign(:active_palette, name && %{name: name, is_preset: is_preset})
+     |> assign_grid()}
+  end
+
+  def handle_event("active_palette_loaded", _params, socket), do: {:noreply, socket}
+
   defp assign_grid(socket) do
     grid = Grid.new(socket.assigns.colors, socket.assigns.grid_size)
     assign(socket, :grid, grid)
+  end
+
+  # Derives a grid size from a color count, clamped to the app minimum.
+  defp grid_size_for_colors(colors) do
+    max(length(colors), @min_grid_size)
+  end
+
+  # Persists the currently active palette (name + colors) to localStorage via
+  # the PaletteStorage hook, so any other page/reload can pick up the same
+  # in-progress selection. See ColorMatching.PaletteStorage moduledoc for the
+  # full explanation of this handoff.
+  defp push_active_palette(socket) do
+    active = socket.assigns.active_palette
+
+    push_event(socket, "activate_palette", %{
+      name: active && active.name,
+      colors: socket.assigns.colors,
+      is_preset: (active && active.is_preset) || false
+    })
+  end
+
+  defp renamed_active_palette(socket, old_name, new_name) do
+    case socket.assigns.active_palette do
+      %{name: ^old_name} = active -> %{active | name: new_name}
+      other -> other
+    end
+  end
+
+  defp deleted_active_palette(socket, name) do
+    case socket.assigns.active_palette do
+      %{name: ^name} -> nil
+      other -> other
+    end
   end
 
   def render(assigns) do
@@ -250,7 +367,20 @@ defmodule ColorMatchingWeb.ColorGridLive do
       <!-- Color Management -->
       <div class="mb-8 p-4 bg-gray-50 rounded-lg no-print">
         <div class="flex justify-between items-center mb-4">
-          <h2 class="text-xl font-semibold">Manage Colors</h2>
+          <div>
+            <h2 class="text-xl font-semibold">Manage Colors</h2>
+            <p class="text-xs text-gray-500 mt-1">
+              Active palette:
+              <%= if @active_palette do %>
+                <span class="font-medium">{@active_palette.name}</span>
+                <%= if @active_palette.is_preset do %>
+                  (preset)
+                <% end %>
+              <% else %>
+                <span class="italic">Custom (unsaved)</span>
+              <% end %>
+            </p>
+          </div>
           <div class="relative">
             <button
               phx-click="toggle_palette_menu"
@@ -511,13 +641,23 @@ defmodule ColorMatchingWeb.ColorGridLive do
                       <% end %>
                     </div>
                   </div>
-                  <button
-                    phx-click="request_load_palette"
-                    phx-value-palette={Jason.encode!(palette)}
-                    class="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
-                  >
-                    Load
-                  </button>
+                  <div class="flex gap-1">
+                    <button
+                      phx-click="request_load_palette"
+                      phx-value-palette={Jason.encode!(palette)}
+                      class="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
+                    >
+                      Load
+                    </button>
+                    <button
+                      phx-click="duplicate_palette"
+                      phx-value-palette={Jason.encode!(palette)}
+                      class="px-3 py-1 bg-gray-500 text-white text-sm rounded hover:bg-gray-600"
+                      title="Duplicate into an editable palette"
+                    >
+                      Duplicate
+                    </button>
+                  </div>
                 </div>
               <% end %>
             </div>
