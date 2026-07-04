@@ -75,6 +75,17 @@ defmodule ColorMatching.ColorFormatTest do
       assert ColorFormat.parse_rgb("rgba(255, 107, 107, 0.5)") == {:ok, {255, 107, 107}}
     end
 
+    test "rejects a fourth component in rgb(...) and invalid rgba alpha" do
+      assert ColorFormat.parse_rgb("rgb(255, 107, 107, 0.5)") ==
+               {:error, "Invalid RGB format. Expected rgb(r, g, b) with values 0-255"}
+
+      assert ColorFormat.parse_rgb("rgba(255, 107, 107, 1.5)") ==
+               {:error, "RGBA alpha must be between 0 and 1"}
+
+      assert ColorFormat.parse_rgb("rgba(255, 107, 107, nope)") ==
+               {:error, "RGBA alpha must be between 0 and 1"}
+    end
+
     test "formats an rgb tuple" do
       assert ColorFormat.format_rgb({255, 107, 107}) == "rgb(255, 107, 107)"
     end
@@ -143,6 +154,17 @@ defmodule ColorMatching.ColorFormatTest do
       assert ColorFormat.format_hsl({0, 100, 71}) == "hsl(0, 100%, 71%)"
     end
 
+    test "rejects a fourth component in hsl(...) and invalid hsla alpha" do
+      assert ColorFormat.parse_hsl("hsl(0, 100%, 71%, 0.5)") ==
+               {:error, "Invalid HSL format. Expected hsl(h, s%, l%)"}
+
+      assert ColorFormat.parse_hsl("hsla(0, 100%, 71%, 1.5)") ==
+               {:error, "HSLA alpha must be between 0 and 1"}
+
+      assert ColorFormat.parse_hsl("hsla(0, 100%, 71%, nope)") ==
+               {:error, "HSLA alpha must be between 0 and 1"}
+    end
+
     test "rejects saturation/lightness outside of 0%-100%" do
       assert ColorFormat.parse_hsl("hsl(0, 150%, 50%)") ==
                {:error, "HSL saturation and lightness must be between 0% and 100%"}
@@ -204,6 +226,17 @@ defmodule ColorMatching.ColorFormatTest do
 
     test "formats an hsv tuple" do
       assert ColorFormat.format_hsv({0, 58, 100}) == "hsv(0, 58%, 100%)"
+    end
+
+    test "rejects a fourth component in hsv/hsb and invalid alpha variants" do
+      assert ColorFormat.parse_hsv("hsv(0, 58%, 100%, 0.5)") ==
+               {:error, "Invalid HSV format. Expected hsv(h, s%, v%)"}
+
+      assert ColorFormat.parse_hsv("hsva(0, 58%, 100%, 1.5)") ==
+               {:error, "HSV alpha must be between 0 and 1"}
+
+      assert ColorFormat.parse_hsv("hsba(0, 58%, 100%, nope)") ==
+               {:error, "HSV alpha must be between 0 and 1"}
     end
 
     test "rejects saturation/value outside of 0%-100%" do

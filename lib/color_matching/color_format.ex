@@ -112,7 +112,8 @@ defmodule ColorMatching.ColorFormat do
   # RGB string parsing/formatting
   # ---------------------------------------------------------------------
 
-  @rgb_regex ~r/^rgba?\(\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*(?:,\s*[\d.]+\s*)?\)$/i
+  @rgb_regex ~r/^rgb\(\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*\)$/i
+  @rgba_regex ~r/^rgba\(\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*([^\s,)]+)\s*\)$/i
 
   @doc """
   Parses a user-entered RGB string such as `"rgb(255, 107, 107)"` into an
@@ -128,7 +129,9 @@ defmodule ColorMatching.ColorFormat do
   """
   @spec parse_rgb(String.t()) :: {:ok, rgb()} | {:error, String.t()}
   def parse_rgb(string) when is_binary(string) do
-    case Regex.run(@rgb_regex, String.trim(string)) do
+    trimmed = String.trim(string)
+
+    case Regex.run(@rgb_regex, trimmed) do
       [_full, r, g, b] ->
         values = Enum.map([r, g, b], &String.to_integer/1)
 
@@ -139,7 +142,7 @@ defmodule ColorMatching.ColorFormat do
         end
 
       nil ->
-        {:error, "Invalid RGB format. Expected rgb(r, g, b) with values 0-255"}
+        parse_rgba(trimmed)
     end
   end
 
@@ -160,7 +163,8 @@ defmodule ColorMatching.ColorFormat do
   # HSL
   # ---------------------------------------------------------------------
 
-  @hsl_regex ~r/^hsla?\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)%\s*,\s*(-?\d+(?:\.\d+)?)%\s*(?:,\s*[\d.]+\s*)?\)$/i
+  @hsl_regex ~r/^hsl\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)%\s*,\s*(-?\d+(?:\.\d+)?)%\s*\)$/i
+  @hsla_regex ~r/^hsla\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)%\s*,\s*(-?\d+(?:\.\d+)?)%\s*,\s*([^\s,)]+)\s*\)$/i
 
   @doc """
   Converts a hex color string to an `{h, s, l}` tuple (hue 0-360, saturation
@@ -255,20 +259,14 @@ defmodule ColorMatching.ColorFormat do
   """
   @spec parse_hsl(String.t()) :: {:ok, hsl()} | {:error, String.t()}
   def parse_hsl(string) when is_binary(string) do
-    case Regex.run(@hsl_regex, String.trim(string)) do
-      [_full, h, s, l] ->
-        {h, s, l} =
-          {String.to_float(ensure_decimal(h)), String.to_float(ensure_decimal(s)),
-           String.to_float(ensure_decimal(l))}
+    trimmed = String.trim(string)
 
-        if percentage?(s) and percentage?(l) do
-          {:ok, {wrap_hue(h), round(s), round(l)}}
-        else
-          {:error, "HSL saturation and lightness must be between 0% and 100%"}
-        end
+    case Regex.run(@hsl_regex, trimmed) do
+      [_full, h, s, l] ->
+        parse_hsl_components(h, s, l)
 
       nil ->
-        {:error, "Invalid HSL format. Expected hsl(h, s%, l%)"}
+        parse_hsla(trimmed)
     end
   end
 
@@ -289,7 +287,8 @@ defmodule ColorMatching.ColorFormat do
   # HSV / HSB
   # ---------------------------------------------------------------------
 
-  @hsv_regex ~r/^hs[vb]a?\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)%\s*,\s*(-?\d+(?:\.\d+)?)%\s*(?:,\s*[\d.]+\s*)?\)$/i
+  @hsv_regex ~r/^hs([vb])\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)%\s*,\s*(-?\d+(?:\.\d+)?)%\s*\)$/i
+  @hsva_regex ~r/^hs([vb])a\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)%\s*,\s*(-?\d+(?:\.\d+)?)%\s*,\s*([^\s,)]+)\s*\)$/i
 
   @doc """
   Converts a hex color string to an `{h, s, v}` tuple (hue 0-360, saturation
@@ -376,20 +375,14 @@ defmodule ColorMatching.ColorFormat do
   """
   @spec parse_hsv(String.t()) :: {:ok, hsv()} | {:error, String.t()}
   def parse_hsv(string) when is_binary(string) do
-    case Regex.run(@hsv_regex, String.trim(string)) do
-      [_full, h, s, v] ->
-        {h, s, v} =
-          {String.to_float(ensure_decimal(h)), String.to_float(ensure_decimal(s)),
-           String.to_float(ensure_decimal(v))}
+    trimmed = String.trim(string)
 
-        if percentage?(s) and percentage?(v) do
-          {:ok, {wrap_hue(h), round(s), round(v)}}
-        else
-          {:error, "HSV saturation and value must be between 0% and 100%"}
-        end
+    case Regex.run(@hsv_regex, trimmed) do
+      [_full, _family, h, s, v] ->
+        parse_hsv_components(h, s, v)
 
       nil ->
-        {:error, "Invalid HSV format. Expected hsv(h, s%, v%)"}
+        parse_hsva(trimmed)
     end
   end
 
@@ -465,6 +458,90 @@ defmodule ColorMatching.ColorFormat do
   @spec ensure_decimal(String.t()) :: String.t()
   defp ensure_decimal(numeric_string) do
     if String.contains?(numeric_string, "."), do: numeric_string, else: numeric_string <> ".0"
+  end
+
+  @spec parse_rgba(String.t()) :: {:ok, rgb()} | {:error, String.t()}
+  defp parse_rgba(string) do
+    case Regex.run(@rgba_regex, string) do
+      [_full, r, g, b, alpha] ->
+        with :ok <- validate_alpha(alpha),
+             values = Enum.map([r, g, b], &String.to_integer/1),
+             true <- Enum.all?(values, &(&1 in 0..255)) do
+          {:ok, List.to_tuple(values)}
+        else
+          false -> {:error, "RGB values must be between 0 and 255"}
+          {:error, _reason} -> {:error, "RGBA alpha must be between 0 and 1"}
+        end
+
+      nil ->
+        {:error, "Invalid RGB format. Expected rgb(r, g, b) with values 0-255"}
+    end
+  end
+
+  @spec parse_hsl_components(String.t(), String.t(), String.t()) ::
+          {:ok, hsl()} | {:error, String.t()}
+  defp parse_hsl_components(h, s, l) do
+    {h, s, l} =
+      {String.to_float(ensure_decimal(h)), String.to_float(ensure_decimal(s)),
+       String.to_float(ensure_decimal(l))}
+
+    if percentage?(s) and percentage?(l) do
+      {:ok, {wrap_hue(h), round(s), round(l)}}
+    else
+      {:error, "HSL saturation and lightness must be between 0% and 100%"}
+    end
+  end
+
+  @spec parse_hsla(String.t()) :: {:ok, hsl()} | {:error, String.t()}
+  defp parse_hsla(string) do
+    case Regex.run(@hsla_regex, string) do
+      [_full, h, s, l, alpha] ->
+        case validate_alpha(alpha) do
+          :ok -> parse_hsl_components(h, s, l)
+          {:error, _reason} -> {:error, "HSLA alpha must be between 0 and 1"}
+        end
+
+      nil ->
+        {:error, "Invalid HSL format. Expected hsl(h, s%, l%)"}
+    end
+  end
+
+  @spec parse_hsv_components(String.t(), String.t(), String.t()) ::
+          {:ok, hsv()} | {:error, String.t()}
+  defp parse_hsv_components(h, s, v) do
+    {h, s, v} =
+      {String.to_float(ensure_decimal(h)), String.to_float(ensure_decimal(s)),
+       String.to_float(ensure_decimal(v))}
+
+    if percentage?(s) and percentage?(v) do
+      {:ok, {wrap_hue(h), round(s), round(v)}}
+    else
+      {:error, "HSV saturation and value must be between 0% and 100%"}
+    end
+  end
+
+  @spec parse_hsva(String.t()) :: {:ok, hsv()} | {:error, String.t()}
+  defp parse_hsva(string) do
+    case Regex.run(@hsva_regex, string) do
+      [_full, _family, h, s, v, alpha] ->
+        case validate_alpha(alpha) do
+          :ok -> parse_hsv_components(h, s, v)
+          {:error, _reason} -> {:error, "HSV alpha must be between 0 and 1"}
+        end
+
+      nil ->
+        {:error, "Invalid HSV format. Expected hsv(h, s%, v%)"}
+    end
+  end
+
+  @spec validate_alpha(String.t()) :: :ok | {:error, String.t()}
+  defp validate_alpha(alpha) do
+    with {value, ""} <- Float.parse(alpha),
+         true <- value >= 0 and value <= 1 do
+      :ok
+    else
+      _ -> {:error, "Alpha must be between 0 and 1"}
+    end
   end
 
   # Checks that a (possibly float) value falls within 0..100 inclusive.
