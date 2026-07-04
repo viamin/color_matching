@@ -21,7 +21,9 @@ defmodule ColorMatchingWeb.ColorGridLive do
      |> assign(:rename_palette_name, "")
      |> assign(:selected_palette, nil)
      |> assign(:pending_load_palette, nil)
-     |> assign_grid()}
+     |> assign(:active_palette, nil)
+     |> assign_grid()
+     |> push_active_palette()}
   end
 
   def handle_event("add_color", params, socket) do
@@ -39,7 +41,8 @@ defmodule ColorMatchingWeb.ColorGridLive do
        |> assign(:colors, colors)
        |> assign(:grid_size, new_size)
        |> assign(:new_color, "")
-       |> assign_grid()}
+       |> assign_grid()
+       |> push_active_palette()}
     else
       {:noreply, socket}
     end
@@ -55,7 +58,8 @@ defmodule ColorMatchingWeb.ColorGridLive do
      socket
      |> assign(:colors, colors)
      |> assign(:grid_size, new_grid_size)
-     |> assign_grid()}
+     |> assign_grid()
+     |> push_active_palette()}
   end
 
   def handle_event("update_color_input", params, socket) do
@@ -83,7 +87,8 @@ defmodule ColorMatchingWeb.ColorGridLive do
      socket
      |> assign(:grid_size, new_size)
      |> assign(:colors, updated_colors)
-     |> assign_grid()}
+     |> assign_grid()
+     |> push_active_palette()}
   end
 
   # Palette management events
@@ -133,7 +138,9 @@ defmodule ColorMatchingWeb.ColorGridLive do
          socket
          |> assign(:show_save_modal, false)
          |> assign(:save_palette_name, "")
-         |> push_event("save_palette", %{name: validated_name, colors: socket.assigns.colors})}
+         |> assign(:active_palette, %{name: validated_name, is_preset: false})
+         |> push_event("save_palette", %{name: validated_name, colors: socket.assigns.colors})
+         |> push_active_palette()}
 
       {:error, error} ->
         {:noreply, put_flash(socket, :error, error)}
@@ -164,9 +171,33 @@ defmodule ColorMatchingWeb.ColorGridLive do
      socket
      |> assign(:colors, palette.colors)
      |> assign(:grid_size, new_grid_size)
+     |> assign(:active_palette, %{name: palette.name, is_preset: palette.is_preset})
      |> assign(:show_confirm_load, false)
      |> assign(:pending_load_palette, nil)
-     |> assign_grid()}
+     |> assign_grid()
+     |> push_active_palette()}
+  end
+
+  def handle_event("duplicate_palette", %{"palette" => palette_json}, socket) do
+    case Jason.decode(palette_json) do
+      {:ok, %{"name" => name, "colors" => colors}} ->
+        existing_names = Enum.map(socket.assigns.saved_palettes, & &1["name"])
+        new_name = PaletteStorage.duplicate_name(name, existing_names)
+
+        {:noreply,
+         socket
+         |> assign(:colors, colors)
+         |> assign(:grid_size, length(colors))
+         |> assign(:active_palette, %{name: new_name, is_preset: false})
+         |> assign(:show_load_modal, false)
+         |> put_flash(:info, "Duplicated \"#{name}\" as \"#{new_name}\"")
+         |> assign_grid()
+         |> push_event("save_palette", %{name: new_name, colors: colors})
+         |> push_active_palette()}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Invalid palette data")}
+    end
   end
 
   def handle_event("show_rename_modal", %{"palette" => palette_json}, socket) do
@@ -194,7 +225,9 @@ defmodule ColorMatchingWeb.ColorGridLive do
          |> assign(:show_rename_modal, false)
          |> assign(:rename_palette_name, "")
          |> assign(:selected_palette, nil)
-         |> push_event("rename_palette", %{old_name: old_name, new_name: validated_name})}
+         |> assign(:active_palette, renamed_active_palette(socket, old_name, validated_name))
+         |> push_event("rename_palette", %{old_name: old_name, new_name: validated_name})
+         |> push_active_palette()}
 
       {:error, error} ->
         {:noreply, put_flash(socket, :error, error)}
@@ -205,16 +238,65 @@ defmodule ColorMatchingWeb.ColorGridLive do
     {:noreply,
      socket
      |> assign(:show_load_modal, false)
-     |> push_event("delete_palette", %{name: name})}
+     |> assign(:active_palette, deleted_active_palette(socket, name))
+     |> push_event("delete_palette", %{name: name})
+     |> push_active_palette()}
   end
 
   def handle_event("palettes_updated", %{"palettes" => palettes}, socket) do
     {:noreply, assign(socket, :saved_palettes, palettes)}
   end
 
+  def handle_event(
+        "active_palette_loaded",
+        %{"palette" => %{"colors" => colors} = palette_map},
+        socket
+      )
+      when is_list(colors) and colors != [] do
+    name = Map.get(palette_map, "name")
+    is_preset = Map.get(palette_map, "is_preset", false)
+
+    {:noreply,
+     socket
+     |> assign(:colors, colors)
+     |> assign(:grid_size, length(colors))
+     |> assign(:active_palette, name && %{name: name, is_preset: is_preset})
+     |> assign_grid()}
+  end
+
+  def handle_event("active_palette_loaded", _params, socket), do: {:noreply, socket}
+
   defp assign_grid(socket) do
     grid = Grid.new(socket.assigns.colors, socket.assigns.grid_size)
     assign(socket, :grid, grid)
+  end
+
+  # Persists the currently active palette (name + colors) to localStorage via
+  # the PaletteStorage hook, so any other page/reload can pick up the same
+  # in-progress selection. See ColorMatching.PaletteStorage moduledoc for the
+  # full explanation of this handoff.
+  defp push_active_palette(socket) do
+    active = socket.assigns.active_palette
+
+    push_event(socket, "activate_palette", %{
+      name: active && active.name,
+      colors: socket.assigns.colors,
+      is_preset: (active && active.is_preset) || false
+    })
+  end
+
+  defp renamed_active_palette(socket, old_name, new_name) do
+    case socket.assigns.active_palette do
+      %{name: ^old_name} = active -> %{active | name: new_name}
+      other -> other
+    end
+  end
+
+  defp deleted_active_palette(socket, name) do
+    case socket.assigns.active_palette do
+      %{name: ^name} -> nil
+      other -> other
+    end
   end
 
   def render(assigns) do
@@ -250,7 +332,20 @@ defmodule ColorMatchingWeb.ColorGridLive do
       <!-- Color Management -->
       <div class="mb-8 p-4 bg-gray-50 rounded-lg no-print">
         <div class="flex justify-between items-center mb-4">
-          <h2 class="text-xl font-semibold">Manage Colors</h2>
+          <div>
+            <h2 class="text-xl font-semibold">Manage Colors</h2>
+            <p class="text-xs text-gray-500 mt-1">
+              Active palette:
+              <%= if @active_palette do %>
+                <span class="font-medium">{@active_palette.name}</span>
+                <%= if @active_palette.is_preset do %>
+                  (preset)
+                <% end %>
+              <% else %>
+                <span class="italic">Custom (unsaved)</span>
+              <% end %>
+            </p>
+          </div>
           <div class="relative">
             <button
               phx-click="toggle_palette_menu"
@@ -511,13 +606,23 @@ defmodule ColorMatchingWeb.ColorGridLive do
                       <% end %>
                     </div>
                   </div>
-                  <button
-                    phx-click="request_load_palette"
-                    phx-value-palette={Jason.encode!(palette)}
-                    class="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
-                  >
-                    Load
-                  </button>
+                  <div class="flex gap-1">
+                    <button
+                      phx-click="request_load_palette"
+                      phx-value-palette={Jason.encode!(palette)}
+                      class="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
+                    >
+                      Load
+                    </button>
+                    <button
+                      phx-click="duplicate_palette"
+                      phx-value-palette={Jason.encode!(palette)}
+                      class="px-3 py-1 bg-gray-500 text-white text-sm rounded hover:bg-gray-600"
+                      title="Duplicate into an editable palette"
+                    >
+                      Duplicate
+                    </button>
+                  </div>
                 </div>
               <% end %>
             </div>

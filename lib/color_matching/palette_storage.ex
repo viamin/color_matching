@@ -1,13 +1,35 @@
 defmodule ColorMatching.PaletteStorage do
   @moduledoc """
   Handles storage and retrieval of color palettes using localStorage and provides preset palettes.
+
+  ## How palette state moves between pages
+
+  This app has no database, so palette data lives in the browser via two
+  `localStorage` keys managed by the `PaletteStorage` JS hook
+  (`assets/js/app.js`):
+
+    * `color_matching_palettes` - the list of saved user palettes. This is
+      the durable store for anything the user has explicitly saved, renamed,
+      or duplicated. Its shape matches `ColorMatching.Palette.to_json_map/1`.
+    * `color_matching_active_palette` - the single "currently selected"
+      palette (name/colors/is_preset), used to hand off the in-progress
+      palette between pages/reloads without requiring a server-side session.
+
+  Every LiveView page that needs palette data mounts the same
+  `PaletteStorage` hook, which loads both keys on mount and pushes them to
+  the server as `palettes_updated` and `active_palette_loaded` events. Pages
+  update the active palette by `push_event`-ing an `activate_palette` event,
+  which the hook persists back to `localStorage` so any other page (current
+  or future) picks up the same selection on its next mount.
+
+  Saving, renaming, deleting, and duplicating palettes all go through
+  `push_event`/`handleEvent` pairs with the hook (`save_palette`,
+  `rename_palette`, `delete_palette`), keeping `PaletteStorage` (this
+  module) as the single place that validates names and shapes data,
+  while the hook is the only place that touches `localStorage` directly.
   """
 
-  @type palette :: %{
-          name: String.t(),
-          colors: [String.t()],
-          is_preset: boolean()
-        }
+  alias ColorMatching.Palette
 
   @preset_palettes %{
     "Warm" => [
@@ -204,16 +226,21 @@ defmodule ColorMatching.PaletteStorage do
     ]
   }
 
-  @spec get_preset_palettes() :: [palette()]
+  @spec get_preset_palettes() :: [Palette.t()]
   def get_preset_palettes do
     @preset_palettes
-    |> Enum.map(fn {name, colors} -> %{name: name, colors: colors, is_preset: true} end)
+    |> Enum.map(fn {name, colors} ->
+      Palette.new(%{name: name, colors: colors, is_preset: true})
+    end)
   end
 
   @spec get_preset_palette(String.t()) :: [String.t()] | nil
   def get_preset_palette(name) do
     Map.get(@preset_palettes, name)
   end
+
+  @spec preset_palette?(String.t()) :: boolean()
+  def preset_palette?(name), do: Map.has_key?(@preset_palettes, name)
 
   # Note: Actual localStorage operations will be handled in the LiveView
   # using JavaScript hooks since Elixir runs server-side
@@ -223,17 +250,11 @@ defmodule ColorMatching.PaletteStorage do
     |> Jason.encode!()
   end
 
-  @spec decode_palette(String.t()) :: {:ok, palette()} | {:error, String.t()}
+  @spec decode_palette(String.t()) :: {:ok, Palette.t()} | {:error, String.t()}
   def decode_palette(json_string) do
     case Jason.decode(json_string) do
-      {:ok, %{"name" => name, "colors" => colors, "is_preset" => is_preset}} ->
-        {:ok, %{name: name, colors: colors, is_preset: is_preset}}
-
-      {:ok, _incomplete} ->
-        {:error, "Missing required fields"}
-
-      {:error, reason} ->
-        {:error, reason}
+      {:ok, map} -> Palette.from_json_map(map)
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -250,4 +271,33 @@ defmodule ColorMatching.PaletteStorage do
   end
 
   def validate_palette_name(_), do: {:error, "Name must be a string"}
+
+  @doc """
+  Generates a unique name for duplicating `base_name` into an editable user
+  palette, avoiding collisions with both preset names and any
+  `existing_names` (typically the user's currently saved palettes).
+
+  ## Examples
+
+      iex> ColorMatching.PaletteStorage.duplicate_name("Warm", [])
+      "Warm Copy"
+
+      iex> ColorMatching.PaletteStorage.duplicate_name("Warm", ["Warm Copy"])
+      "Warm Copy 2"
+
+  """
+  @spec duplicate_name(String.t(), [String.t()]) :: String.t()
+  def duplicate_name(base_name, existing_names) do
+    taken = MapSet.new(existing_names)
+
+    Enum.reduce_while(1..1000, nil, fn n, _ ->
+      candidate = if n == 1, do: "#{base_name} Copy", else: "#{base_name} Copy #{n}"
+
+      if MapSet.member?(taken, candidate) or preset_palette?(candidate) do
+        {:cont, nil}
+      else
+        {:halt, candidate}
+      end
+    end)
+  end
 end

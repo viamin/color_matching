@@ -393,4 +393,117 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       assert html =~ "Add at least 6 colors to generate the grid"
     end
   end
+
+  describe "active palette state" do
+    test "defaults to a custom/unsaved active palette", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      assert html =~ "Active palette:"
+      assert html =~ "Custom (unsaved)"
+    end
+
+    test "loads colors handed off from a previous session via the storage hook", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      html =
+        render_hook(view, "active_palette_loaded", %{
+          "palette" => %{
+            "name" => "Handoff Palette",
+            "colors" => ["#111111", "#222222", "#333333", "#444444", "#555555", "#666666"],
+            "is_preset" => false
+          }
+        })
+
+      assert html =~ "#111111"
+      assert html =~ "Handoff Palette"
+      refute html =~ "Custom (unsaved)"
+    end
+
+    test "ignores an empty active palette handoff", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      html = render_hook(view, "active_palette_loaded", %{"palette" => nil})
+
+      assert html =~ "Grid Size: 6×6"
+      assert html =~ "Custom (unsaved)"
+    end
+
+    test "saving the current palette makes it the active palette", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      view |> element("button[phx-click='toggle_palette_menu']") |> render_click()
+      view |> element("button[phx-click='show_save_modal']") |> render_click()
+
+      html =
+        view
+        |> element("form[phx-submit='save_palette']")
+        |> render_submit(%{"name" => "My Palette"})
+
+      assert html =~ "Active palette:"
+      assert html =~ "My Palette"
+      refute html =~ "Custom (unsaved)"
+    end
+
+    test "loading a preset makes it the active palette and marks it as a preset", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      warm = Enum.find(ColorMatching.PaletteStorage.get_preset_palettes(), &(&1.name == "Warm"))
+
+      view
+      |> render_click("request_load_palette", %{"palette" => Jason.encode!(warm)})
+
+      html = view |> render_click("confirm_load_palette", %{})
+
+      assert html =~ "Active palette:"
+      assert html =~ "Warm"
+      assert html =~ "(preset)"
+    end
+
+    test "duplicating a preset creates an editable copy and makes it active", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      warm = Enum.find(ColorMatching.PaletteStorage.get_preset_palettes(), &(&1.name == "Warm"))
+
+      html =
+        view
+        |> render_click("duplicate_palette", %{"palette" => Jason.encode!(warm)})
+
+      assert html =~ "Warm Copy"
+      assert html =~ "Duplicated"
+      refute html =~ "(preset)"
+    end
+
+    test "renaming the active palette updates its label", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      view |> element("button[phx-click='toggle_palette_menu']") |> render_click()
+      view |> element("button[phx-click='show_save_modal']") |> render_click()
+
+      view
+      |> element("form[phx-submit='save_palette']")
+      |> render_submit(%{"name" => "Old Name"})
+
+      html =
+        view
+        |> render_click("rename_palette", %{"old_name" => "Old Name", "new_name" => "New Name"})
+
+      assert html =~ "New Name"
+      refute html =~ "Old Name"
+    end
+
+    test "deleting the active palette clears the active selection", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      view |> element("button[phx-click='toggle_palette_menu']") |> render_click()
+      view |> element("button[phx-click='show_save_modal']") |> render_click()
+
+      view
+      |> element("form[phx-submit='save_palette']")
+      |> render_submit(%{"name" => "To Delete"})
+
+      html = view |> render_click("delete_palette", %{"name" => "To Delete"})
+
+      assert html =~ "Custom (unsaved)"
+    end
+  end
 end

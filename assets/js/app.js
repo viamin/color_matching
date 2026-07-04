@@ -28,17 +28,22 @@ let Hooks = {}
 Hooks.PaletteStorage = {
   mounted() {
     this.loadSavedPalettes()
-    
+    this.loadActivePalette()
+
     this.handleEvent("save_palette", ({name, colors}) => {
       this.savePalette(name, colors)
     })
-    
+
     this.handleEvent("delete_palette", ({name}) => {
       this.deletePalette(name)
     })
-    
+
     this.handleEvent("rename_palette", ({old_name, new_name}) => {
       this.renamePalette(old_name, new_name)
+    })
+
+    this.handleEvent("activate_palette", (palette) => {
+      this.storeActivePalette(palette)
     })
   },
 
@@ -50,6 +55,29 @@ Hooks.PaletteStorage = {
     } catch (e) {
       console.error("Error loading palettes:", e)
       this.pushEvent("palettes_updated", {palettes: []})
+    }
+  },
+
+  // The "active palette" is the currently selected/edited palette, shared
+  // across pages (and reloads) via localStorage so a future palette
+  // management page can pick up right where the grid page left off, and
+  // vice versa. See ColorMatching.PaletteStorage moduledoc for details.
+  loadActivePalette() {
+    try {
+      const saved = localStorage.getItem('color_matching_active_palette')
+      const palette = saved ? JSON.parse(saved) : null
+      this.pushEvent("active_palette_loaded", {palette})
+    } catch (e) {
+      console.error("Error loading active palette:", e)
+      this.pushEvent("active_palette_loaded", {palette: null})
+    }
+  },
+
+  storeActivePalette(palette) {
+    try {
+      localStorage.setItem('color_matching_active_palette', JSON.stringify(palette))
+    } catch (e) {
+      console.error("Error storing active palette:", e)
     }
   },
 
