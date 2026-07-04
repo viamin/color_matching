@@ -473,6 +473,29 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       refute html =~ "(preset)"
     end
 
+    test "duplicating a palette whose generated name would exceed 50 characters is rejected", %{
+      conn: conn
+    } do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      # 48 chars + " Copy" (5 chars) = 53, over the 50 char limit enforced by
+      # PaletteStorage.validate_palette_name/1.
+      long_name = String.duplicate("a", 48)
+
+      palette_json =
+        Jason.encode!(%{
+          "name" => long_name,
+          "colors" => ["#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF", "#00FFFF"],
+          "is_preset" => false
+        })
+
+      html = view |> render_click("duplicate_palette", %{"palette" => palette_json})
+
+      assert html =~ "Name too long"
+      refute html =~ "Duplicated"
+      assert html =~ "Custom (unsaved)"
+    end
+
     test "renaming the active palette updates its label", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
 

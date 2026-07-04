@@ -1,6 +1,6 @@
 defmodule ColorMatchingWeb.ColorGridLive do
   use ColorMatchingWeb, :live_view
-  alias ColorMatching.{ColorUtils, Grid, PaletteStorage}
+  alias ColorMatching.{ColorUtils, Grid, Palette, PaletteStorage}
 
   @default_colors ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#FD79A8"]
   # Lower bound for grid_size; matches the `min` attribute on the grid-size
@@ -185,21 +185,33 @@ defmodule ColorMatchingWeb.ColorGridLive do
   end
 
   def handle_event("duplicate_palette", %{"palette" => palette_json}, socket) do
-    case Jason.decode(palette_json) do
-      {:ok, %{"name" => name, "colors" => colors}} ->
+    case PaletteStorage.decode_palette(palette_json) do
+      {:ok, palette} ->
         existing_names = Enum.map(socket.assigns.saved_palettes, & &1["name"])
-        new_name = PaletteStorage.duplicate_name(name, existing_names)
+        candidate_name = PaletteStorage.duplicate_name(palette.name, existing_names)
 
-        {:noreply,
-         socket
-         |> assign(:colors, colors)
-         |> assign(:grid_size, grid_size_for_colors(colors))
-         |> assign(:active_palette, %{name: new_name, is_preset: false})
-         |> assign(:show_load_modal, false)
-         |> put_flash(:info, "Duplicated \"#{name}\" as \"#{new_name}\"")
-         |> assign_grid()
-         |> push_event("save_palette", %{name: new_name, colors: colors})
-         |> push_active_palette()}
+        # duplicate_name/2 only avoids collisions with preset/existing names; it
+        # doesn't enforce the length limit, so a name close to the 50-char cap
+        # (e.g. "... Copy" or "... Copy 2") can exceed it. Route it through the
+        # same validation `save_palette` uses before persisting anything.
+        case PaletteStorage.validate_palette_name(candidate_name) do
+          {:ok, validated_name} ->
+            duplicated = Palette.duplicate(palette, validated_name)
+
+            {:noreply,
+             socket
+             |> assign(:colors, duplicated.colors)
+             |> assign(:grid_size, grid_size_for_colors(duplicated.colors))
+             |> assign(:active_palette, %{name: duplicated.name, is_preset: false})
+             |> assign(:show_load_modal, false)
+             |> put_flash(:info, "Duplicated \"#{palette.name}\" as \"#{duplicated.name}\"")
+             |> assign_grid()
+             |> push_event("save_palette", %{name: duplicated.name, colors: duplicated.colors})
+             |> push_active_palette()}
+
+          {:error, error} ->
+            {:noreply, put_flash(socket, :error, error)}
+        end
 
       {:error, _} ->
         {:noreply, put_flash(socket, :error, "Invalid palette data")}
