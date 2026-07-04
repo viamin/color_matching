@@ -528,5 +528,70 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
 
       assert html =~ "Custom (unsaved)"
     end
+
+    test "duplicating a palette is rejected when every copy name is already taken", %{
+      conn: conn
+    } do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      taken = for n <- 2..1000, do: %{"name" => "Warm Copy #{n}", "colors" => ["#FF0000"]}
+      taken = [%{"name" => "Warm Copy", "colors" => ["#FF0000"]} | taken]
+
+      render_hook(view, "palettes_updated", %{"palettes" => taken})
+
+      warm = Enum.find(ColorMatching.PaletteStorage.get_preset_palettes(), &(&1.name == "Warm"))
+
+      html =
+        view
+        |> render_click("duplicate_palette", %{"palette" => Jason.encode!(warm)})
+
+      assert html =~ "find a free name"
+      refute html =~ "Duplicated"
+    end
+
+    test "adding a color to a loaded preset clears the active selection", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      warm = Enum.find(ColorMatching.PaletteStorage.get_preset_palettes(), &(&1.name == "Warm"))
+      view |> render_click("request_load_palette", %{"palette" => Jason.encode!(warm)})
+      view |> render_click("confirm_load_palette", %{})
+
+      html =
+        view
+        |> element("form[phx-submit='add_color']")
+        |> render_submit(%{"color" => "#123456"})
+
+      assert html =~ "Custom (unsaved)"
+    end
+
+    test "removing a color from a loaded preset clears the active selection", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      warm = Enum.find(ColorMatching.PaletteStorage.get_preset_palettes(), &(&1.name == "Warm"))
+      view |> render_click("request_load_palette", %{"palette" => Jason.encode!(warm)})
+      view |> render_click("confirm_load_palette", %{})
+
+      html =
+        view
+        |> element("button[phx-click='remove_color'][phx-value-index='0']")
+        |> render_click()
+
+      assert html =~ "Custom (unsaved)"
+    end
+
+    test "changing grid size after loading a preset clears the active selection", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      warm = Enum.find(ColorMatching.PaletteStorage.get_preset_palettes(), &(&1.name == "Warm"))
+      view |> render_click("request_load_palette", %{"palette" => Jason.encode!(warm)})
+      view |> render_click("confirm_load_palette", %{})
+
+      html =
+        view
+        |> form("form[phx-change='change_grid_size']", %{"size" => "11"})
+        |> render_change()
+
+      assert html =~ "Custom (unsaved)"
+    end
   end
 end

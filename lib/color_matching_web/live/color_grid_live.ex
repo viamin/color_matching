@@ -50,6 +50,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
        |> assign(:colors, colors)
        |> assign(:grid_size, new_size)
        |> assign(:new_color, "")
+       |> assign(:active_palette, nil)
        |> assign_grid()
        |> push_active_palette()}
     else
@@ -65,6 +66,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
      socket
      |> assign(:colors, colors)
      |> assign(:grid_size, grid_size_for_colors(colors))
+     |> assign(:active_palette, nil)
      |> assign_grid()
      |> push_active_palette()}
   end
@@ -94,6 +96,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
      socket
      |> assign(:grid_size, new_size)
      |> assign(:colors, updated_colors)
+     |> assign(:active_palette, nil)
      |> assign_grid()
      |> push_active_palette()}
   end
@@ -190,11 +193,12 @@ defmodule ColorMatchingWeb.ColorGridLive do
         existing_names = Enum.map(socket.assigns.saved_palettes, & &1["name"])
         candidate_name = PaletteStorage.duplicate_name(palette.name, existing_names)
 
-        # duplicate_name/2 only avoids collisions with preset/existing names; it
-        # doesn't enforce the length limit, so a name close to the 50-char cap
-        # (e.g. "... Copy" or "... Copy 2") can exceed it. Route it through the
-        # same validation `save_palette` uses before persisting anything.
-        case PaletteStorage.validate_palette_name(candidate_name) do
+        # duplicate_name/2 returns nil when every "<base> Copy" through
+        # "<base> Copy 1000" candidate is already taken. Handle that
+        # exhaustion explicitly rather than letting `nil` reach
+        # validate_palette_name/1, which would report the misleading
+        # "Name must be a string" error.
+        case candidate_name && PaletteStorage.validate_palette_name(candidate_name) do
           {:ok, validated_name} ->
             duplicated = Palette.duplicate(palette, validated_name)
 
@@ -211,6 +215,14 @@ defmodule ColorMatchingWeb.ColorGridLive do
 
           {:error, error} ->
             {:noreply, put_flash(socket, :error, error)}
+
+          nil ->
+            {:noreply,
+             put_flash(
+               socket,
+               :error,
+               "Couldn't find a free name for the duplicate. Rename or remove some existing copies of \"#{palette.name}\" and try again."
+             )}
         end
 
       {:error, _} ->

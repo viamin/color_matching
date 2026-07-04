@@ -277,6 +277,10 @@ defmodule ColorMatching.PaletteStorage do
   palette, avoiding collisions with both preset names and any
   `existing_names` (typically the user's currently saved palettes).
 
+  Returns `nil` if every candidate from `"<base_name> Copy"` through
+  `"<base_name> Copy 1000"` is already taken; callers must handle that case
+  explicitly rather than treating the result as always being a string.
+
   ## Examples
 
       iex> ColorMatching.PaletteStorage.duplicate_name("Warm", [])
@@ -286,7 +290,7 @@ defmodule ColorMatching.PaletteStorage do
       "Warm Copy 2"
 
   """
-  @spec duplicate_name(String.t(), [String.t()]) :: String.t()
+  @spec duplicate_name(String.t(), [String.t()]) :: String.t() | nil
   def duplicate_name(base_name, existing_names) do
     taken = MapSet.new(existing_names)
 

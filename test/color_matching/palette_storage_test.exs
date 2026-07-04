@@ -221,5 +221,12 @@ defmodule ColorMatching.PaletteStorageTest do
         refute PaletteStorage.preset_palette?(candidate)
       end
     end
+
+    test "returns nil when every copy candidate up to 1000 is already taken" do
+      taken = for n <- 2..1000, do: "Warm Copy #{n}"
+      taken = ["Warm Copy" | taken]
+
+      assert PaletteStorage.duplicate_name("Warm", taken) == nil
+    end
   end
 end
