@@ -26,6 +26,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
      |> assign(:grid_size, @min_grid_size)
      |> assign(:new_color, "")
      |> assign(:active_palette, nil)
+     |> assign(:max_grid_colors, @max_grid_colors)
      |> assign_grid()}
   end
 
@@ -263,7 +264,14 @@ defmodule ColorMatchingWeb.ColorGridLive do
           Expanding the grid will automatically add random colors as needed
         </p>
         <form phx-change="change_grid_size">
-          <input type="range" name="size" min="6" max={@max_grid_colors} value={@grid_size} class="w-48" />
+          <input
+            type="range"
+            name="size"
+            min="6"
+            max={@max_grid_colors}
+            value={@grid_size}
+            class="w-48"
+          />
         </form>
       </div>
 
@@ -363,7 +371,6 @@ defmodule ColorMatchingWeb.ColorGridLive do
           Add at least {@grid_size} colors to generate the grid.
         </div>
       <% end %>
-
     </div>
     """
   end

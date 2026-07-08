@@ -24,7 +24,8 @@ defmodule ColorMatchingWeb.PalettesLive do
      |> assign(:editor_inputs, %{})
      |> assign(:editor_errors, %{})
      |> assign(:new_palette_name, "")
-     |> assign(:new_color_value, "#FFFFFF")}
+     |> assign(:new_color_value, "#FFFFFF")
+     |> assign(:max_grid_colors, @max_grid_colors)}
   end
 
   def handle_event("palettes_updated", %{"palettes" => palettes}, socket) do
@@ -136,16 +137,7 @@ defmodule ColorMatchingWeb.PalettesLive do
              )}
 
           candidate_name ->
-            with {:ok, validated_name} <- validate_user_palette_name(socket, candidate_name),
-                 duplicated = Palette.duplicate(palette, validated_name) do
-              {:noreply,
-               socket
-               |> put_flash(:info, "Duplicated \"#{palette.name}\" as \"#{duplicated.name}\"")
-               |> persist_palette(duplicated)
-               |> assign_editor(duplicated)}
-            else
-              {:error, error} -> {:noreply, put_flash(socket, :error, error)}
-            end
+            finish_duplicate_palette(socket, palette, candidate_name)
         end
 
       {:error, _reason} ->
@@ -165,13 +157,13 @@ defmodule ColorMatchingWeb.PalettesLive do
       |> maybe_clear_editor(name)
       |> push_event("delete_palette", %{name: name})
 
+    # Only clear the active selection when deleting a user-palette
+    # activation. The validator above prevents saved palettes from sharing
+    # names with presets, but we still gate on `is_preset: false` so a
+    # deletion can't silently deactivate a currently-selected preset just
+    # because the names happen to match (e.g., stale localStorage data from
+    # before this rule landed).
     socket =
-      # Only clear the active selection when deleting a user-palette
-      # activation. The validator above prevents saved palettes from sharing
-      # names with presets, but we still gate on `is_preset: false` so a
-      # deletion can't silently deactivate a currently-selected preset just
-      # because the names happen to match (e.g., stale localStorage data from
-      # before this rule landed).
       case {socket.assigns.active_palette, deleted} do
         {%{name: ^name, is_preset: false}, %Palette{} = palette} ->
           socket
@@ -197,20 +189,24 @@ defmodule ColorMatchingWeb.PalettesLive do
   def handle_event("rename_palette", %{"name" => name}, socket) do
     case socket.assigns.editing_palette do
       %Palette{} = palette ->
-        with {:ok, validated_name} <-
-               validate_user_palette_name(socket, name, except_name: palette.name) do
-          renamed = %{palette | name: validated_name}
-          saved_palettes = socket.assigns.saved_palettes
+        case validate_user_palette_name(socket, name, except_name: palette.name) do
+          {:ok, validated_name} ->
+            renamed = %{palette | name: validated_name}
+            saved_palettes = socket.assigns.saved_palettes
 
-          {:noreply,
-           socket
-           |> assign(:saved_palettes, rename_saved_palette(saved_palettes, palette.name, renamed))
-           |> assign_editor(renamed)
-           |> push_event("rename_palette", %{old_name: palette.name, new_name: validated_name})
-           |> maybe_activate_after_rename(palette, renamed)
-           |> put_flash(:info, "Renamed palette to \"#{validated_name}\"")}
-        else
-          {:error, error} -> {:noreply, put_flash(socket, :error, error)}
+            {:noreply,
+             socket
+             |> assign(
+               :saved_palettes,
+               rename_saved_palette(saved_palettes, palette.name, renamed)
+             )
+             |> assign_editor(renamed)
+             |> push_event("rename_palette", %{old_name: palette.name, new_name: validated_name})
+             |> maybe_activate_after_rename(palette, renamed)
+             |> put_flash(:info, "Renamed palette to \"#{validated_name}\"")}
+
+          {:error, error} ->
+            {:noreply, put_flash(socket, :error, error)}
         end
 
       nil ->
@@ -218,11 +214,18 @@ defmodule ColorMatchingWeb.PalettesLive do
     end
   end
 
+  # `update_editor_field` is fired from a bare `<input phx-change>` that
+  # isn't wrapped in a `<form>`. LiveView only merges `phx-value-*` into
+  # payloads for bindings like phx-click; a phx-change payload is always the
+  # value of the input itself, so `index`/`format` are encoded directly in
+  # the event name instead (see the `phx-change` binding in the template).
   def handle_event(
-        "update_editor_field",
-        %{"index" => index, "format" => format, "value" => value},
+        "update_editor_field:" <> index_and_format,
+        %{"value" => value},
         socket
       ) do
+    [index, format] = String.split(index_and_format, ":", parts: 2)
+
     {:noreply,
      socket
      |> put_in_editor_input(index, format, value)
@@ -255,26 +258,15 @@ defmodule ColorMatchingWeb.PalettesLive do
   def handle_event("add_editor_color", %{"color" => color}, socket) do
     case socket.assigns.editing_palette do
       %Palette{} = palette ->
-        cond do
-          length(palette.colors) >= @max_grid_colors ->
-            {:noreply,
-             put_flash(
-               socket,
-               :error,
-               "Palettes are limited to #{@max_grid_colors} colors so the grid can render every combination."
-             )}
-
-          true ->
-            with {:ok, normalized_hex} <- ColorFormat.normalize_hex(color),
-                 updated_palette <- %{palette | colors: palette.colors ++ [normalized_hex]} do
-              {:noreply,
-               socket
-               |> assign(:new_color_value, "#FFFFFF")
-               |> persist_palette(updated_palette)
-               |> assign_editor(updated_palette)}
-            else
-              {:error, error} -> {:noreply, put_flash(socket, :error, error)}
-            end
+        if length(palette.colors) >= @max_grid_colors do
+          {:noreply,
+           put_flash(
+             socket,
+             :error,
+             "Palettes are limited to #{@max_grid_colors} colors so the grid can render every combination."
+           )}
+        else
+          finish_add_editor_color(socket, palette, color)
         end
 
       nil ->
@@ -450,7 +442,10 @@ defmodule ColorMatchingWeb.PalettesLive do
               <span class="text-xs text-gray-500">{length(@saved_palettes)} saved</span>
             </div>
 
-            <div :if={@saved_palettes == []} class="mt-4 rounded-xl border border-dashed border-gray-300 p-4 text-sm text-gray-500">
+            <div
+              :if={@saved_palettes == []}
+              class="mt-4 rounded-xl border border-dashed border-gray-300 p-4 text-sm text-gray-500"
+            >
               No user palettes yet.
             </div>
 
@@ -648,7 +643,7 @@ defmodule ColorMatchingWeb.PalettesLive do
                           <input
                             type="text"
                             value={get_in(@editor_inputs, [row_key, format])}
-                            phx-change="update_editor_field"
+                            phx-change={"update_editor_field:#{row_key}:#{format}"}
                             phx-value-index={row_key}
                             phx-value-format={format}
                             name="value"
@@ -730,6 +725,22 @@ defmodule ColorMatchingWeb.PalettesLive do
     end
   end
 
+  defp finish_duplicate_palette(socket, %Palette{} = palette, candidate_name) do
+    case validate_user_palette_name(socket, candidate_name) do
+      {:ok, validated_name} ->
+        duplicated = Palette.duplicate(palette, validated_name)
+
+        {:noreply,
+         socket
+         |> put_flash(:info, "Duplicated \"#{palette.name}\" as \"#{duplicated.name}\"")
+         |> persist_palette(duplicated)
+         |> assign_editor(duplicated)}
+
+      {:error, error} ->
+        {:noreply, put_flash(socket, :error, error)}
+    end
+  end
+
   defp validate_user_palette_name(socket, name, opts \\ []) do
     except_name = Keyword.get(opts, :except_name)
 
@@ -794,6 +805,22 @@ defmodule ColorMatchingWeb.PalettesLive do
   end
 
   defp parse_color_value(_format, _value), do: {:error, "Unsupported color format"}
+
+  defp finish_add_editor_color(socket, %Palette{} = palette, color) do
+    case ColorFormat.normalize_hex(color) do
+      {:ok, normalized_hex} ->
+        updated_palette = %{palette | colors: palette.colors ++ [normalized_hex]}
+
+        {:noreply,
+         socket
+         |> assign(:new_color_value, "#FFFFFF")
+         |> persist_palette(updated_palette)
+         |> assign_editor(updated_palette)}
+
+      {:error, error} ->
+        {:noreply, put_flash(socket, :error, error)}
+    end
+  end
 
   defp replace_palette_color(%Palette{} = palette, index, color) do
     %{palette | colors: List.replace_at(palette.colors, String.to_integer(index), color)}

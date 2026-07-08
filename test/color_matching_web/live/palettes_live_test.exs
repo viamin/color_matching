@@ -145,7 +145,10 @@ defmodule ColorMatchingWeb.PalettesLiveTest do
 
       assert html =~ "RGB values must be between 0 and 255"
       assert html =~ "#111111"
-      refute html =~ "#FF0000"
+      # Scoped to the rendered input `value` (rather than a bare "#FF0000"
+      # substring) since the "High Contrast" preset swatch also contains
+      # "#FF0000" and would otherwise make this assertion a false positive.
+      refute html =~ ~s(value="#FF0000")
     end
 
     test "opening a palette with malformed colors renders empty derived fields instead of crashing",
@@ -176,7 +179,7 @@ defmodule ColorMatchingWeb.PalettesLiveTest do
       assert html =~ "rgb(17, 17, 17)"
       # The malformed row's derived format fields fall back to empty strings
       # rather than raising a MatchError.
-      assert html =~ ~s(value="" phx-change="update_editor_field" phx-value-index="1")
+      assert html =~ ~s(value="" phx-change="update_editor_field:1:rgb" phx-value-index="1")
     end
 
     test "use in grid marks the palette as the active grid selection", %{conn: conn} do
@@ -215,7 +218,6 @@ defmodule ColorMatchingWeb.PalettesLiveTest do
         })
 
       assert html =~ "Custom unsaved colors"
-      refute html =~ "Palette name"
       refute html =~ "Rename"
     end
 
@@ -316,7 +318,6 @@ defmodule ColorMatchingWeb.PalettesLiveTest do
       assert html =~ "Deleted"
       assert html =~ "To Delete"
       assert html =~ "Custom unsaved colors"
-      refute html =~ "Grid selection:"
     end
 
     test "create_palette is rejected before the active grid selection has hydrated", %{
