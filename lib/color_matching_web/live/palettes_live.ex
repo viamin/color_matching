@@ -112,7 +112,8 @@ defmodule ColorMatchingWeb.PalettesLive do
         {:noreply,
          socket
          |> activate_palette(palette)
-         |> put_flash(:info, "\"#{palette.name}\" is ready for the grid")}
+         |> put_flash(:info, "\"#{palette.name}\" is now active in the grid")
+         |> push_navigate(to: ~p"/")}
 
       {:error, _reason} ->
         {:noreply, put_flash(socket, :error, "Invalid palette data")}
@@ -340,12 +341,12 @@ defmodule ColorMatchingWeb.PalettesLive do
       <div class="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
         <span class="font-semibold">Grid selection:</span>
         <%= if @active_palette do %>
-          {@active_palette.name}
+          {active_palette_label(@active_palette)}
           <%= if @active_palette.is_preset do %>
             <span>(preset)</span>
           <% end %>
         <% else %>
-          Custom unsaved colors
+          Custom
         <% end %>
       </div>
 
@@ -952,6 +953,9 @@ defmodule ColorMatchingWeb.PalettesLive do
   defp palette_meta(%Palette{} = palette) do
     %{name: palette.name, is_preset: palette.is_preset}
   end
+
+  defp active_palette_label(%{name: name}) when is_binary(name) and name != "", do: name
+  defp active_palette_label(_active_palette), do: "Custom"
 
   defp maybe_clear_editor(socket, name) do
     case socket.assigns.editing_palette do

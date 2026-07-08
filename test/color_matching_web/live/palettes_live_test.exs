@@ -182,7 +182,7 @@ defmodule ColorMatchingWeb.PalettesLiveTest do
       assert html =~ ~s(value="" phx-change="update_editor_field:1:rgb" phx-value-index="1")
     end
 
-    test "use in grid marks the palette as the active grid selection", %{conn: conn} do
+    test "use in grid activates the palette and returns to the grid page", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/palettes")
 
       palette = %{
@@ -194,11 +194,8 @@ defmodule ColorMatchingWeb.PalettesLiveTest do
 
       render_hook(view, "palettes_updated", %{"palettes" => [palette]})
 
-      html = render_click(view, "use_palette", %{"palette" => Jason.encode!(palette)})
-
-      assert html =~ "Grid selection:"
-      assert html =~ "Studio Set"
-      assert html =~ "ready for the grid"
+      render_click(view, "use_palette", %{"palette" => Jason.encode!(palette)})
+      assert_redirect(view, ~p"/")
     end
 
     test "loading an active palette with no name does not open it in the editor", %{conn: conn} do
@@ -217,7 +214,7 @@ defmodule ColorMatchingWeb.PalettesLiveTest do
           }
         })
 
-      assert html =~ "Custom unsaved colors"
+      assert html =~ "Custom"
       refute html =~ "Rename"
     end
 
@@ -289,7 +286,7 @@ defmodule ColorMatchingWeb.PalettesLiveTest do
       }
 
       render_hook(view, "palettes_updated", %{"palettes" => [palette]})
-      render_click(view, "use_palette", %{"palette" => Jason.encode!(palette)})
+      render_hook(view, "active_palette_loaded", %{"palette" => palette})
       render_click(view, "open_palette", %{"palette" => Jason.encode!(palette)})
 
       html = render_submit(view, "rename_palette", %{"name" => "New Name"})
@@ -311,13 +308,13 @@ defmodule ColorMatchingWeb.PalettesLiveTest do
       }
 
       render_hook(view, "palettes_updated", %{"palettes" => [palette]})
-      render_click(view, "use_palette", %{"palette" => Jason.encode!(palette)})
+      render_hook(view, "active_palette_loaded", %{"palette" => palette})
 
       html = render_click(view, "delete_palette", %{"name" => "To Delete"})
 
       assert html =~ "Deleted"
       assert html =~ "To Delete"
-      assert html =~ "Custom unsaved colors"
+      assert html =~ "Custom"
     end
 
     test "create_palette is rejected before the active grid selection has hydrated", %{

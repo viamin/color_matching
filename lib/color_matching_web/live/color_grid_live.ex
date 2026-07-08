@@ -141,6 +141,9 @@ defmodule ColorMatchingWeb.ColorGridLive do
     })
   end
 
+  defp active_palette_label(%{name: name}) when is_binary(name) and name != "", do: name
+  defp active_palette_label(_active_palette), do: "Custom"
+
   def render(assigns) do
     ~H"""
     <div class="max-w-6xl mx-auto p-6" phx-hook="PaletteStorage" id="palette-storage">
@@ -179,12 +182,12 @@ defmodule ColorMatchingWeb.ColorGridLive do
             <p class="text-xs text-gray-500 mt-1">
               Active palette:
               <%= if @active_palette do %>
-                <span class="font-medium">{@active_palette.name}</span>
+                <span class="font-medium">{active_palette_label(@active_palette)}</span>
                 <%= if @active_palette.is_preset do %>
                   (preset)
                 <% end %>
               <% else %>
-                <span class="italic">Custom (unsaved)</span>
+                <span class="italic">Custom</span>
               <% end %>
             </p>
           </div>
