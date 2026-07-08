@@ -17,6 +17,9 @@ defmodule ColorMatching.ColorFormat do
   @type rgb :: {0..255, 0..255, 0..255}
   @type hsl :: {0..360, 0..100, 0..100}
   @type hsv :: {0..360, 0..100, 0..100}
+  @type display_format :: :hex | :rgb | :hsl | :hsv
+
+  @display_formats [:hex, :rgb, :hsl, :hsv]
 
   # ---------------------------------------------------------------------
   # HEX
@@ -398,6 +401,66 @@ defmodule ColorMatching.ColorFormat do
   """
   @spec format_hsv(hsv()) :: String.t()
   def format_hsv({h, s, v}), do: "hsv(#{h}, #{s}%, #{v}%)"
+
+  @doc """
+  Returns the supported global display formats for grid/print labels.
+  """
+  @spec display_formats() :: [display_format()]
+  def display_formats, do: @display_formats
+
+  @doc """
+  Returns the default global display format.
+  """
+  @spec default_display_format() :: display_format()
+  def default_display_format, do: :hex
+
+  @doc """
+  Normalizes a display format value from atoms/strings into a supported atom.
+  """
+  @spec normalize_display_format(atom() | String.t() | nil) ::
+          {:ok, display_format()} | {:error, String.t()}
+  def normalize_display_format(format) when format in @display_formats, do: {:ok, format}
+
+  def normalize_display_format(format) when is_binary(format) do
+    format
+    |> String.trim()
+    |> String.downcase()
+    |> case do
+      "hex" -> {:ok, :hex}
+      "rgb" -> {:ok, :rgb}
+      "hsl" -> {:ok, :hsl}
+      "hsv" -> {:ok, :hsv}
+      _ -> {:error, "Unsupported color display format"}
+    end
+  end
+
+  def normalize_display_format(_format), do: {:error, "Unsupported color display format"}
+
+  @doc """
+  Formats a hex color in the requested display format.
+  """
+  @spec format_color(String.t(), display_format()) :: {:ok, String.t()} | {:error, String.t()}
+  def format_color(color, :hex), do: normalize_hex(color)
+
+  def format_color(color, :rgb) do
+    with {:ok, rgb} <- hex_to_rgb(color) do
+      {:ok, format_rgb(rgb)}
+    end
+  end
+
+  def format_color(color, :hsl) do
+    with {:ok, hsl} <- hex_to_hsl(color) do
+      {:ok, format_hsl(hsl)}
+    end
+  end
+
+  def format_color(color, :hsv) do
+    with {:ok, hsv} <- hex_to_hsv(color) do
+      {:ok, format_hsv(hsv)}
+    end
+  end
+
+  def format_color(_color, _format), do: {:error, "Unsupported color display format"}
 
   # ---------------------------------------------------------------------
   # Shared helpers

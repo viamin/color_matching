@@ -17,7 +17,7 @@ cat > .git/hooks/pre-commit << 'EOF'
 # it wants to stop the commit.
 
 # Check if mix is available
-if ! command -v mix &> /dev/null; then
+if ! command -v mix >/dev/null 2>&1; then
     echo "Error: mix command not found. Please ensure Elixir is installed."
     exit 1
 fi

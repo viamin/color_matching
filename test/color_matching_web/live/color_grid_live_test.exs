@@ -121,6 +121,17 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       assert html =~ "/palettes"
     end
 
+    test "renders a global display format selector", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      assert html =~ "Grid and print label format"
+      assert html =~ ~s(<option value="hex")
+      assert html =~ "selected"
+      assert html =~ "RGB"
+      assert html =~ "HSL"
+      assert html =~ "HSV"
+    end
+
     test "validates color input format", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
 
@@ -457,6 +468,64 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
         |> render_change()
 
       assert html =~ "Custom"
+    end
+  end
+
+  describe "display format preference and print output" do
+    test "uses the selected display format for grid labels and print legend", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      html =
+        view
+        |> form("form[phx-change='set_display_format']", %{"format" => "rgb"})
+        |> render_change()
+
+      assert html =~ "rgb(255, 107, 107)"
+      assert html =~ "rgb(0, 148, 148)"
+      assert html =~ "rgb(255, 107, 107) (Row 1)"
+      refute html =~ "<span class=\"print-legend-text\">#FF6B6B (Row 1)</span>"
+    end
+
+    test "loads a persisted display format preference from the storage hook", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      html = render_hook(view, "display_format_loaded", %{"format" => "hsl"})
+
+      assert html =~ "hsl(0, 100%, 71%)"
+      assert html =~ "hsl(180, 100%, 29%)"
+    end
+
+    test "print title uses the active palette name", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      html =
+        render_hook(view, "active_palette_loaded", %{
+          "palette" => %{
+            "name" => "Studio Set",
+            "colors" => ["#111111", "#222222", "#333333", "#444444", "#555555", "#666666"],
+            "is_preset" => false
+          }
+        })
+
+      assert html =~ ~s(<div class="print-title">Studio Set</div>)
+      refute html =~ ~s(<div class="print-title">Color Matching Grid)
+      refute html =~ "<div class=\"print-title\">Color Matching Grid (6×6)</div>"
+    end
+
+    test "print title falls back to Custom when the active palette is unnamed", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      html =
+        render_hook(view, "active_palette_loaded", %{
+          "palette" => %{
+            "name" => nil,
+            "colors" => ["#111111", "#222222", "#333333", "#444444", "#555555", "#666666"],
+            "is_preset" => false
+          }
+        })
+
+      assert html =~ ~s(<div class="print-title">Custom</div>)
+      refute html =~ ~s(<div class="print-title">Color Matching Grid)
     end
   end
 end

@@ -29,6 +29,7 @@ Hooks.PaletteStorage = {
   mounted() {
     this.loadSavedPalettes()
     this.loadActivePalette()
+    this.loadDisplayFormatPreference()
 
     this.handleEvent("save_palette", (palette) => {
       this.savePalette(palette)
@@ -44,6 +45,10 @@ Hooks.PaletteStorage = {
 
     this.handleEvent("activate_palette", (palette) => {
       this.storeActivePalette(palette)
+    })
+
+    this.handleEvent("set_display_format_preference", ({format}) => {
+      this.storeDisplayFormatPreference(format)
     })
   },
 
@@ -129,6 +134,28 @@ Hooks.PaletteStorage = {
       }
     } catch (e) {
       console.error("Error renaming palette:", e)
+    }
+  },
+
+  loadDisplayFormatPreference() {
+    if (this.el.dataset.loadDisplayFormat !== "true") {
+      return
+    }
+
+    try {
+      const format = localStorage.getItem('color_matching_display_format')
+      this.pushEvent("display_format_loaded", {format})
+    } catch (e) {
+      console.error("Error loading display format preference:", e)
+      this.pushEvent("display_format_loaded", {format: null})
+    }
+  },
+
+  storeDisplayFormatPreference(format) {
+    try {
+      localStorage.setItem('color_matching_display_format', format)
+    } catch (e) {
+      console.error("Error storing display format preference:", e)
     }
   }
 }

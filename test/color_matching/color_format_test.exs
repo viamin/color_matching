@@ -267,6 +267,27 @@ defmodule ColorMatching.ColorFormatTest do
     end
   end
 
+  describe "display format helpers" do
+    test "normalizes supported display formats" do
+      assert ColorFormat.normalize_display_format(:hex) == {:ok, :hex}
+      assert ColorFormat.normalize_display_format("RGB") == {:ok, :rgb}
+      assert ColorFormat.normalize_display_format(" hsl ") == {:ok, :hsl}
+      assert ColorFormat.normalize_display_format("hsv") == {:ok, :hsv}
+    end
+
+    test "rejects unsupported display formats" do
+      assert ColorFormat.normalize_display_format("cmyk") ==
+               {:error, "Unsupported color display format"}
+    end
+
+    test "formats a color in each supported display format" do
+      assert ColorFormat.format_color("#ABCDEF", :hex) == {:ok, "#ABCDEF"}
+      assert ColorFormat.format_color("#ABCDEF", :rgb) == {:ok, "rgb(171, 205, 239)"}
+      assert ColorFormat.format_color("#ABCDEF", :hsl) == {:ok, "hsl(210, 68%, 80%)"}
+      assert ColorFormat.format_color("#ABCDEF", :hsv) == {:ok, "hsv(210, 28%, 94%)"}
+    end
+  end
+
   # Asserts that two hex colors are equal within a small per-channel
   # tolerance, to account for rounding when a color is displayed/edited as
   # whole-number HSL/HSV percentages.
