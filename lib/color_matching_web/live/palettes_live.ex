@@ -12,6 +12,7 @@ defmodule ColorMatchingWeb.PalettesLive do
      |> assign(:saved_palettes, [])
      |> assign(:active_palette, nil)
      |> assign(:active_palette_colors, @default_colors)
+     |> assign(:active_palette_hydrated, false)
      |> assign(:editing_palette, nil)
      |> assign(:editing_name, "")
      |> assign(:editor_inputs, %{})
@@ -36,18 +37,22 @@ defmodule ColorMatchingWeb.PalettesLive do
       socket
       |> assign(:active_palette, palette_meta(palette))
       |> assign(:active_palette_colors, colors)
+      |> assign(:active_palette_hydrated, true)
 
     {:noreply, maybe_assign_editor(socket, palette)}
   end
 
-  def handle_event("active_palette_loaded", _params, socket), do: {:noreply, socket}
+  def handle_event("active_palette_loaded", _params, socket) do
+    {:noreply, assign(socket, :active_palette_hydrated, true)}
+  end
 
   def handle_event("update_new_palette_name", %{"value" => value}, socket) do
     {:noreply, assign(socket, :new_palette_name, value)}
   end
 
   def handle_event("create_palette", %{"name" => name}, socket) do
-    with {:ok, validated_name} <- validate_user_palette_name(socket, name),
+    with true <- socket.assigns.active_palette_hydrated,
+         {:ok, validated_name} <- validate_user_palette_name(socket, name),
          colors <- socket.assigns.active_palette_colors,
          palette <-
            Palette.new(%{
@@ -63,7 +68,16 @@ defmodule ColorMatchingWeb.PalettesLive do
        |> persist_palette(palette)
        |> assign_editor(palette)}
     else
-      {:error, error} -> {:noreply, put_flash(socket, :error, error)}
+      false ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "Still loading the current grid selection. Please try again in a moment."
+         )}
+
+      {:error, error} ->
+        {:noreply, put_flash(socket, :error, error)}
     end
   end
 
@@ -314,7 +328,8 @@ defmodule ColorMatchingWeb.PalettesLive do
               />
               <button
                 type="submit"
-                class="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-700"
+                disabled={!@active_palette_hydrated}
+                class="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-40"
               >
                 Create
               </button>

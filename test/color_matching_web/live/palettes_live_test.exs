@@ -188,6 +188,40 @@ defmodule ColorMatchingWeb.PalettesLiveTest do
       refute html =~ "Rename"
     end
 
+    test "create_palette is rejected before the active grid selection has hydrated", %{
+      conn: conn
+    } do
+      {:ok, view, _html} = live(conn, ~p"/palettes")
+
+      # Before the PaletteStorage hook's "active_palette_loaded" event arrives,
+      # `active_palette_colors` still holds the hard-coded defaults seeded in
+      # mount/3. Creating here would silently save those defaults instead of
+      # whatever is actually selected on the grid, so creation must be gated
+      # until hydration completes.
+      html = render_click(view, "create_palette", %{"name" => "Too Soon"})
+
+      assert html =~ "Still loading the current grid selection"
+      refute html =~ "Too Soon"
+    end
+
+    test "create_palette uses the hydrated active grid colors once loaded", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/palettes")
+
+      render_hook(view, "active_palette_loaded", %{
+        "palette" => %{
+          "name" => nil,
+          "colors" => ["#ABCDEF"],
+          "is_preset" => false
+        }
+      })
+
+      html = render_click(view, "create_palette", %{"name" => "From Grid"})
+
+      assert html =~ "Created"
+      assert html =~ "From Grid"
+      assert html =~ "#ABCDEF"
+    end
+
     test "cannot remove the last remaining color from a palette", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/palettes")
 
