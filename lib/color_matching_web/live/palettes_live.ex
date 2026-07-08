@@ -142,7 +142,8 @@ defmodule ColorMatchingWeb.PalettesLive do
   def handle_event("delete_palette", %{"name" => name}, socket) do
     deleted =
       Enum.find(socket.assigns.saved_palettes, &(&1.name == name)) ||
-        socket.assigns.editing_palette
+        (match?(%Palette{name: ^name}, socket.assigns.editing_palette) &&
+           socket.assigns.editing_palette)
 
     socket =
       socket
