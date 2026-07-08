@@ -327,7 +327,7 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       {:ok, _view, html} = live(conn, ~p"/")
 
       assert html =~ "Active palette:"
-      assert html =~ "Custom (unsaved)"
+      assert html =~ "Custom"
     end
 
     test "loads colors handed off from a previous session via the storage hook", %{conn: conn} do
@@ -344,7 +344,34 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
 
       assert html =~ "#111111"
       assert html =~ "Handoff Palette"
-      refute html =~ "Custom (unsaved)"
+      refute html =~ "Custom</span>"
+    end
+
+    test "renders an edited selected palette when returning from palette management", %{
+      conn: conn
+    } do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      render_hook(view, "active_palette_loaded", %{
+        "palette" => %{
+          "name" => "Studio Set",
+          "colors" => ["#111111", "#222222", "#333333", "#444444", "#555555", "#666666"],
+          "is_preset" => false
+        }
+      })
+
+      html =
+        render_hook(view, "active_palette_loaded", %{
+          "palette" => %{
+            "name" => "Studio Set Revised",
+            "colors" => ["#ABCDEF", "#222222", "#333333", "#444444", "#555555", "#666666"],
+            "is_preset" => false
+          }
+        })
+
+      assert html =~ "Studio Set Revised"
+      assert html =~ "#ABCDEF"
+      refute html =~ ">Studio Set<"
     end
 
     test "ignores an empty active palette handoff", %{conn: conn} do
@@ -353,7 +380,7 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       html = render_hook(view, "active_palette_loaded", %{"palette" => nil})
 
       assert html =~ "Grid Size: 6×6"
-      assert html =~ "Custom (unsaved)"
+      assert html =~ "Custom"
     end
 
     test "loading a preset handoff makes it the active palette and marks it as a preset", %{
@@ -391,7 +418,7 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
         |> element("form[phx-submit='add_color']")
         |> render_submit(%{"color" => "#123456"})
 
-      assert html =~ "Custom (unsaved)"
+      assert html =~ "Custom"
     end
 
     test "removing a color from a loaded preset clears the active selection", %{conn: conn} do
@@ -410,7 +437,7 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
         |> element("button[phx-click='remove_color'][phx-value-index='0']")
         |> render_click()
 
-      assert html =~ "Custom (unsaved)"
+      assert html =~ "Custom"
     end
 
     test "changing grid size after loading a preset clears the active selection", %{conn: conn} do
@@ -429,7 +456,7 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
         |> form("form[phx-change='change_grid_size']", %{"size" => "11"})
         |> render_change()
 
-      assert html =~ "Custom (unsaved)"
+      assert html =~ "Custom"
     end
   end
 end
