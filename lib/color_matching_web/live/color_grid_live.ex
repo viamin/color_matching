@@ -7,6 +7,11 @@ defmodule ColorMatchingWeb.ColorGridLive do
   # range input. All paths that derive grid_size from a color count must clamp
   # to this so reloads/loads cannot shrink the grid below what the UI allows.
   @min_grid_size 6
+  # Upper bound for grid_size and palette length. The grid-size range input
+  # caps at this value, and `ColorMatchingWeb.PalettesLive` rejects adding
+  # more colors once a palette reaches this count so "Use in Grid" never
+  # hands the grid a palette whose colors it cannot represent.
+  @max_grid_colors 12
 
   def mount(_params, _session, socket) do
     # NOTE: intentionally do not `push_active_palette/1` here. On a hard
@@ -30,7 +35,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
 
     if color && color != "" do
       current_size = socket.assigns.grid_size
-      max_size = 12
+      max_size = @max_grid_colors
       colors = socket.assigns.colors ++ [color]
       new_size = min(max(length(colors), current_size + 1), max_size)
 
@@ -241,7 +246,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
           />
           <button
             type="submit"
-            disabled={@new_color == "" || @grid_size >= 12}
+            disabled={@new_color == "" || @grid_size >= @max_grid_colors}
             class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
           >
             Add Color
@@ -258,7 +263,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
           Expanding the grid will automatically add random colors as needed
         </p>
         <form phx-change="change_grid_size">
-          <input type="range" name="size" min="6" max="12" value={@grid_size} class="w-48" />
+          <input type="range" name="size" min="6" max={@max_grid_colors} value={@grid_size} class="w-48" />
         </form>
       </div>
 

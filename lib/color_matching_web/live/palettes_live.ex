@@ -5,6 +5,12 @@ defmodule ColorMatchingWeb.PalettesLive do
 
   @default_colors ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#FD79A8"]
 
+  # Mirrors `ColorMatchingWeb.ColorGridLive.@max_grid_colors`. The grid page
+  # caps its grid-size range at this many colors, so the editor must reject
+  # `add_editor_color` once a palette hits this limit and defensively clamp
+  # oversized palettes before handing them back via "Use in Grid".
+  @max_grid_colors 12
+
   def mount(_params, _session, socket) do
     {:ok,
      socket
@@ -25,18 +31,22 @@ defmodule ColorMatchingWeb.PalettesLive do
     {:noreply, assign(socket, :saved_palettes, normalize_saved_palettes(palettes))}
   end
 
-  def handle_event(
+def handle_event(
         "active_palette_loaded",
         %{"palette" => %{"colors" => colors} = palette_map},
         socket
       )
-      when is_list(colors) and colors != [] do
+       when is_list(colors) and colors != [] do
     palette = Palette.new(palette_map)
+
+    # Clamp any stale palette (>12 colors) coming out of localStorage so the
+    # grid page cannot receive more colors than its size slider allows.
+    palette = clamp_palette_for_grid(palette)
 
     socket =
       socket
       |> assign(:active_palette, if(palette.name, do: palette_meta(palette), else: nil))
-      |> assign(:active_palette_colors, colors)
+      |> assign(:active_palette_colors, palette.colors)
       |> assign(:active_palette_hydrated, true)
 
     {:noreply, maybe_assign_editor(socket, palette)}
@@ -52,6 +62,7 @@ defmodule ColorMatchingWeb.PalettesLive do
 
   def handle_event("create_palette", %{"name" => name}, socket) do
     with true <- socket.assigns.active_palette_hydrated,
+         :ok <- check_under_color_limit(socket.assigns.active_palette_colors),
          {:ok, validated_name} <- validate_user_palette_name(socket, name),
          colors <- socket.assigns.active_palette_colors,
          palette <-
@@ -155,8 +166,14 @@ defmodule ColorMatchingWeb.PalettesLive do
       |> push_event("delete_palette", %{name: name})
 
     socket =
+      # Only clear the active selection when deleting a user-palette
+      # activation. The validator above prevents saved palettes from sharing
+      # names with presets, but we still gate on `is_preset: false` so a
+      # deletion can't silently deactivate a currently-selected preset just
+      # because the names happen to match (e.g., stale localStorage data from
+      # before this rule landed).
       case {socket.assigns.active_palette, deleted} do
-        {%{name: ^name}, %Palette{} = palette} ->
+        {%{name: ^name, is_preset: false}, %Palette{} = palette} ->
           socket
           |> assign(:active_palette, nil)
           |> assign(:active_palette_colors, palette.colors)
@@ -236,20 +253,32 @@ defmodule ColorMatchingWeb.PalettesLive do
   end
 
   def handle_event("add_editor_color", %{"color" => color}, socket) do
-    with %Palette{} = palette <- socket.assigns.editing_palette,
-         {:ok, normalized_hex} <- ColorFormat.normalize_hex(color),
-         updated_palette <- %{palette | colors: palette.colors ++ [normalized_hex]} do
-      {:noreply,
-       socket
-       |> assign(:new_color_value, "#FFFFFF")
-       |> persist_palette(updated_palette)
-       |> assign_editor(updated_palette)}
-    else
+    case socket.assigns.editing_palette do
+      %Palette{} = palette ->
+        cond do
+          length(palette.colors) >= @max_grid_colors ->
+            {:noreply,
+             put_flash(
+               socket,
+               :error,
+               "Palettes are limited to #{@max_grid_colors} colors so the grid can render every combination."
+             )}
+
+          true ->
+            with {:ok, normalized_hex} <- ColorFormat.normalize_hex(color),
+                 updated_palette <- %{palette | colors: palette.colors ++ [normalized_hex]} do
+              {:noreply,
+               socket
+               |> assign(:new_color_value, "#FFFFFF")
+               |> persist_palette(updated_palette)
+               |> assign_editor(updated_palette)}
+            else
+              {:error, error} -> {:noreply, put_flash(socket, :error, error)}
+            end
+        end
+
       nil ->
         {:noreply, put_flash(socket, :error, "Choose a user palette to edit")}
-
-      {:error, error} ->
-        {:noreply, put_flash(socket, :error, error)}
     end
   end
 
@@ -371,7 +400,7 @@ defmodule ColorMatchingWeb.PalettesLive do
                         Duplicate to create an editable user palette.
                       </p>
                     </div>
-                    <%= if @active_palette && @active_palette.name == palette.name do %>
+                    <%= if @active_palette && @active_palette.name == palette.name && @active_palette.is_preset do %>
                       <span class="rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
                         Active
                       </span>
@@ -436,7 +465,7 @@ defmodule ColorMatchingWeb.PalettesLive do
                       </p>
                     </div>
                     <div class="flex gap-2">
-                      <%= if @active_palette && @active_palette.name == palette.name do %>
+                      <%= if @active_palette && @active_palette.name == palette.name && not @active_palette.is_preset do %>
                         <span class="rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
                           Active
                         </span>
@@ -543,14 +572,22 @@ defmodule ColorMatchingWeb.PalettesLive do
                   value={@new_color_value}
                   phx-change="update_new_color_value"
                   placeholder="#FFFFFF"
-                  class="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono"
+                  disabled={length(@editing_palette.colors) >= @max_grid_colors}
+                  class="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono disabled:opacity-40"
                 />
                 <button
                   type="submit"
-                  class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-white"
+                  disabled={length(@editing_palette.colors) >= @max_grid_colors}
+                  class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-white disabled:opacity-40"
                 >
                   Add Color
                 </button>
+                <p
+                  :if={length(@editing_palette.colors) >= @max_grid_colors}
+                  class="basis-full text-xs text-gray-500"
+                >
+                  Limit reached: palettes can hold at most {@max_grid_colors} colors.
+                </p>
               </form>
             </div>
 
@@ -688,7 +725,15 @@ defmodule ColorMatchingWeb.PalettesLive do
   defp validate_user_palette_name(socket, name, opts \\ []) do
     except_name = Keyword.get(opts, :except_name)
 
+    # `PaletteStorage.validate_palette_name/1` already rejects preset-name
+    # collisions, but we also gate on `preset_palette?/1` here to make the
+    # intent explicit. Without this guard, a user palette could otherwise be
+    # created or renamed to a preset name like "Warm" — at which point several
+    # downstream handlers (delete, maybe_activate_after_edit, the active
+    # badge rendering) conflate preset and user palettes because they key off
+    # `name` alone.
     with {:ok, validated_name} <- PaletteStorage.validate_palette_name(name),
+         false <- PaletteStorage.preset_palette?(validated_name),
          false <-
            saved_palette_name_taken?(
              socket.assigns.saved_palettes,
@@ -697,7 +742,7 @@ defmodule ColorMatchingWeb.PalettesLive do
            ) do
       {:ok, validated_name}
     else
-      true -> {:error, "Name already exists"}
+      true -> {:error, "Name conflicts with preset palette"}
       {:error, _reason} = error -> error
     end
   end
@@ -706,6 +751,18 @@ defmodule ColorMatchingWeb.PalettesLive do
     Enum.any?(palettes, fn palette ->
       palette.name == name and palette.name != except_name
     end)
+  end
+
+  # Mirrors the upper bound enforced by `ColorMatchingWeb.ColorGridLive`'s
+  # grid-size slider. Use `:ok` to continue, `{:error, msg}` to surface a
+  # flash. Returning `:ok` keeps it composable inside `with` chains.
+  defp check_under_color_limit(colors) do
+    if length(colors) > @max_grid_colors do
+      {:error,
+       "Palettes are limited to #{@max_grid_colors} colors so the grid can render every combination."}
+    else
+      :ok
+    end
   end
 
   defp parse_color_value("hex", value), do: ColorFormat.normalize_hex(value)
@@ -790,8 +847,15 @@ defmodule ColorMatchingWeb.PalettesLive do
 
   defp maybe_activate_after_edit(socket, %Palette{} = palette) do
     case socket.assigns.active_palette do
-      %{name: name} when name == palette.name -> activate_palette(socket, palette)
-      _other -> socket
+      # Editing a saved user palette should re-activate the grid selection
+      # only when the grid is currently showing that same user palette. If
+      # the grid is showing a preset with a colliding name (which the
+      # validator normally prevents), we leave the preset selection alone.
+      %{name: name, is_preset: false} when name == palette.name ->
+        activate_palette(socket, palette)
+
+      _other ->
+        socket
     end
   end
 
@@ -801,8 +865,14 @@ defmodule ColorMatchingWeb.PalettesLive do
          %Palette{} = renamed_palette
        ) do
     case socket.assigns.active_palette do
-      %{name: name} when name == old_palette.name -> activate_palette(socket, renamed_palette)
-      _other -> socket
+      # Same reasoning as `maybe_activate_after_edit/2`: a rename only
+      # propagates to the grid selection when the grid was already showing
+      # this user palette, never when it was showing a same-named preset.
+      %{name: name, is_preset: false} when name == old_palette.name ->
+        activate_palette(socket, renamed_palette)
+
+      _other ->
+        socket
     end
   end
 
@@ -818,14 +888,30 @@ defmodule ColorMatchingWeb.PalettesLive do
   defp maybe_assign_editor(socket, %Palette{} = palette), do: assign_editor(socket, palette)
 
   defp activate_palette(socket, %Palette{} = palette) do
+    # The grid page only renders up to `@max_grid_colors`, so any palette
+    # handed to the grid through `Use in Grid` (or via the editor) is
+    # defensively clamped here. The editor already prevents growing past
+    # this limit, but stale palettes in localStorage from before that
+    # rule existed would otherwise produce a grid larger than the slider
+    # allows.
+    clamped = clamp_palette_for_grid(palette)
+
     socket
-    |> assign(:active_palette, palette_meta(palette))
-    |> assign(:active_palette_colors, palette.colors)
+    |> assign(:active_palette, palette_meta(clamped))
+    |> assign(:active_palette_colors, clamped.colors)
     |> push_event("activate_palette", %{
-      name: palette.name,
-      colors: palette.colors,
-      is_preset: palette.is_preset
+      name: clamped.name,
+      colors: clamped.colors,
+      is_preset: clamped.is_preset
     })
+  end
+
+  defp clamp_palette_for_grid(%Palette{} = palette) do
+    if length(palette.colors) > @max_grid_colors do
+      %{palette | colors: Enum.take(palette.colors, @max_grid_colors)}
+    else
+      palette
+    end
   end
 
   defp palette_meta(%Palette{} = palette) do
