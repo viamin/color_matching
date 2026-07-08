@@ -1,6 +1,6 @@
 defmodule ColorMatchingWeb.ColorGridLive do
   use ColorMatchingWeb, :live_view
-  alias ColorMatching.{ColorUtils, Grid}
+  alias ColorMatching.{ColorFormat, ColorUtils, Grid}
 
   @default_colors ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#FD79A8"]
   # Lower bound for grid_size; matches the `min` attribute on the grid-size
@@ -26,6 +26,8 @@ defmodule ColorMatchingWeb.ColorGridLive do
      |> assign(:grid_size, @min_grid_size)
      |> assign(:new_color, "")
      |> assign(:active_palette, nil)
+     |> assign(:display_format, ColorFormat.default_display_format())
+     |> assign(:display_formats, ColorFormat.display_formats())
      |> assign(:max_grid_colors, @max_grid_colors)
      |> assign_grid()}
   end
@@ -98,6 +100,29 @@ defmodule ColorMatchingWeb.ColorGridLive do
 
   def handle_event("palettes_updated", _params, socket), do: {:noreply, socket}
 
+  def handle_event("set_display_format", %{"format" => format}, socket) do
+    with {:ok, display_format} <- ColorFormat.normalize_display_format(format) do
+      {:noreply,
+       socket
+       |> assign(:display_format, display_format)
+       |> push_event("set_display_format_preference", %{format: Atom.to_string(display_format)})}
+    else
+      {:error, _reason} ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("display_format_loaded", %{"format" => format}, socket) do
+    with {:ok, display_format} <- ColorFormat.normalize_display_format(format) do
+      {:noreply, assign(socket, :display_format, display_format)}
+    else
+      {:error, _reason} ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("display_format_loaded", _params, socket), do: {:noreply, socket}
+
   def handle_event(
         "active_palette_loaded",
         %{"palette" => %{"colors" => colors} = palette_map},
@@ -144,9 +169,23 @@ defmodule ColorMatchingWeb.ColorGridLive do
   defp active_palette_label(%{name: name}) when is_binary(name) and name != "", do: name
   defp active_palette_label(_active_palette), do: "Custom"
 
+  defp display_format_label(format), do: format |> Atom.to_string() |> String.upcase()
+
+  defp format_color_label(color, display_format) do
+    case ColorFormat.format_color(color, display_format) do
+      {:ok, formatted} -> formatted
+      {:error, _reason} -> color
+    end
+  end
+
   def render(assigns) do
     ~H"""
-    <div class="max-w-6xl mx-auto p-6" phx-hook="PaletteStorage" id="palette-storage">
+    <div
+      class="max-w-6xl mx-auto p-6"
+      phx-hook="PaletteStorage"
+      id="palette-storage"
+      data-load-display-format="true"
+    >
       <h1 class="text-3xl font-bold text-gray-900 mb-4 no-print">Color Matching Grid</h1>
       <p class="text-gray-600 mb-8 no-print">
         This grid shows all unique color combinations from your palette, split by the main diagonal:
@@ -200,8 +239,29 @@ defmodule ColorMatchingWeb.ColorGridLive do
         </div>
 
         <p class="text-sm text-gray-600 mb-3">
-          Each color shows its hex code and inverted hex code below. Inverted colors appear in the upper portion of the grid for high-contrast combinations.
+          The palette editor still exposes every format. This preference controls how grid and print labels are displayed.
         </p>
+
+        <form
+          id="display-format-form"
+          phx-change="set_display_format"
+          class="mb-4 flex items-center gap-3"
+        >
+          <label for="display-format" class="text-sm font-medium text-gray-700">
+            Grid and print label format
+          </label>
+          <select
+            id="display-format"
+            name="format"
+            class="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          >
+            <%= for format <- @display_formats do %>
+              <option value={format} selected={@display_format == format}>
+                {display_format_label(format)}
+              </option>
+            <% end %>
+          </select>
+        </form>
 
         <!-- Current Colors -->
         <div class="flex flex-wrap gap-2 mb-4">
@@ -215,9 +275,11 @@ defmodule ColorMatchingWeb.ColorGridLive do
                 >
                 </div>
                 <div class="flex flex-col">
-                  <span class="text-sm font-mono">{color}</span>
+                  <span class="text-sm font-mono">
+                    {format_color_label(color, @display_format)}
+                  </span>
                   <span class="text-xs text-gray-500 font-mono">
-                    {ColorUtils.invert_color(color)}
+                    {format_color_label(ColorUtils.invert_color(color), @display_format)}
                   </span>
                 </div>
               </div>
@@ -234,7 +296,12 @@ defmodule ColorMatchingWeb.ColorGridLive do
         </div>
 
         <!-- Add Color -->
-        <form phx-change="update_color_input" phx-submit="add_color" class="flex gap-2 items-center">
+        <form
+          id="add-color-form"
+          phx-change="update_color_input"
+          phx-submit="add_color"
+          class="flex gap-2 items-center"
+        >
           <input
             type="color"
             name="value"
@@ -266,7 +333,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
         <p class="text-xs text-gray-500 mb-2">
           Expanding the grid will automatically add random colors as needed
         </p>
-        <form phx-change="change_grid_size">
+        <form id="grid-size-form" phx-change="change_grid_size">
           <input
             type="range"
             name="size"
@@ -282,7 +349,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
       <%= if length(@colors) >= @grid_size do %>
         <!-- Print Area (hidden on screen, visible when printing) -->
         <div class="print-area">
-          <div class="print-title">Color Matching Grid ({@grid_size}×{@grid_size})</div>
+          <div class="print-title">{active_palette_label(@active_palette)}</div>
           <div class="print-grid">
             <div class="print-grid-container">
               <div
@@ -313,7 +380,9 @@ defmodule ColorMatchingWeb.ColorGridLive do
                     style={"background-color: #{color}"}
                   >
                   </div>
-                  <span class="print-legend-text">{color} (Row {index + 1})</span>
+                  <span class="print-legend-text">
+                    {format_color_label(color, @display_format)} (Row {index + 1})
+                  </span>
                 </div>
                 <div class="print-legend-item">
                   <div
@@ -321,7 +390,9 @@ defmodule ColorMatchingWeb.ColorGridLive do
                     style={"background-color: #{color}"}
                   >
                   </div>
-                  <span class="print-legend-text">{color} (Col {index + 1})</span>
+                  <span class="print-legend-text">
+                    {format_color_label(color, @display_format)} (Col {index + 1})
+                  </span>
                 </div>
               <% end %>
             </div>
