@@ -166,5 +166,71 @@ defmodule ColorMatchingWeb.PalettesLiveTest do
       assert html =~ "Studio Set"
       assert html =~ "ready for the grid"
     end
+
+    test "loading an active palette with no name does not open it in the editor", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/palettes")
+
+      # The grid page pushes an active palette with `name: nil` whenever the
+      # user is editing a custom unsaved selection. We must NOT treat that as
+      # a saved user palette and pre-open it in the editor (rename/delete
+      # would otherwise silently no-op because the entry has no name).
+      html =
+        render_hook(view, "active_palette_loaded", %{
+          "palette" => %{
+            "name" => nil,
+            "colors" => ["#111111", "#222222", "#333333"],
+            "is_preset" => false
+          }
+        })
+
+      assert html =~ "Custom unsaved colors"
+      refute html =~ "Palette name"
+      refute html =~ "Rename"
+    end
+
+    test "cannot remove the last remaining color from a palette", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/palettes")
+
+      palette = %{
+        "name" => "Solo",
+        "colors" => ["#111111"],
+        "is_preset" => false,
+        "created_at" => "2026-07-08T00:00:00Z"
+      }
+
+      render_hook(view, "palettes_updated", %{"palettes" => [palette]})
+      render_click(view, "open_palette", %{"palette" => Jason.encode!(palette)})
+
+      # The Remove button must be disabled on the last remaining color.
+      html = render(view)
+      assert html =~ "phx-click=\"remove_editor_color\" phx-value-index=\"0\" disabled"
+
+      html =
+        render_click(view, "remove_editor_color", %{"index" => "0"})
+
+      assert html =~ "Palettes must have at least one color"
+      assert html =~ "#111111"
+    end
+
+    test "can remove a color from a palette that still has more than one color", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/palettes")
+
+      palette = %{
+        "name" => "Duo",
+        "colors" => ["#111111", "#222222"],
+        "is_preset" => false,
+        "created_at" => "2026-07-08T00:00:00Z"
+      }
+
+      render_hook(view, "palettes_updated", %{"palettes" => [palette]})
+      render_click(view, "open_palette", %{"palette" => Jason.encode!(palette)})
+
+      html =
+        render_click(view, "remove_editor_color", %{"index" => "0"})
+
+      refute html =~ "Palettes must have at least one color"
+      assert html =~ "#222222"
+      refute html =~ "#111111"
+    end
   end
 end

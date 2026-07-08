@@ -229,12 +229,19 @@ defmodule ColorMatchingWeb.PalettesLive do
   def handle_event("remove_editor_color", %{"index" => index}, socket) do
     case socket.assigns.editing_palette do
       %Palette{} = palette ->
-        updated_palette = %{palette | colors: List.delete_at(palette.colors, String.to_integer(index))}
+        # Refuse to empty the palette: both LiveViews guard `active_palette_loaded`
+        # on `colors != []`, so an empty palette would silently fall back to
+        # defaults on `/` even though the user just selected it via "Use in Grid".
+        if length(palette.colors) <= 1 do
+          {:noreply, put_flash(socket, :error, "Palettes must have at least one color")}
+        else
+          updated_palette = %{palette | colors: List.delete_at(palette.colors, String.to_integer(index))}
 
-        {:noreply,
-         socket
-         |> persist_palette(updated_palette)
-         |> assign_editor(updated_palette)}
+          {:noreply,
+           socket
+           |> persist_palette(updated_palette)
+           |> assign_editor(updated_palette)}
+        end
 
       nil ->
         {:noreply, put_flash(socket, :error, "Choose a user palette to edit")}
@@ -552,7 +559,8 @@ defmodule ColorMatchingWeb.PalettesLive do
                       <button
                         phx-click="remove_editor_color"
                         phx-value-index={index}
-                        class="rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"
+                        disabled={length(@editing_palette.colors) <= 1}
+                        class="rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-40"
                       >
                         Remove
                       </button>
@@ -613,9 +621,6 @@ defmodule ColorMatchingWeb.PalettesLive do
     |> Enum.reject(fn palette -> palette.is_preset end)
     |> Enum.sort_by(fn palette -> String.downcase(palette.name) end)
   end
-
-  defp maybe_assign_editor(socket, %Palette{is_preset: true}), do: socket
-  defp maybe_assign_editor(socket, %Palette{} = palette), do: assign_editor(socket, palette)
 
   defp assign_editor(socket, %Palette{} = palette) do
     socket
@@ -754,6 +759,17 @@ defmodule ColorMatchingWeb.PalettesLive do
       _other -> socket
     end
   end
+
+  # A `name: nil` active palette represents the grid's custom unsaved
+  # selection. Opening it in the editor would let the user "rename" or
+  # "delete" something that has no entry in localStorage; downstream rename
+  # events look up an existing palette by name, and `normalize_saved_palettes/1`
+  # drops nameless entries, so those flows are silently broken. Treat nil
+  # names as unsaved and only pre-populate the editor for real saved
+  # palettes or for presets (where the editor is gated separately).
+  defp maybe_assign_editor(socket, %Palette{name: nil} = _palette), do: socket
+  defp maybe_assign_editor(socket, %Palette{is_preset: true}), do: socket
+  defp maybe_assign_editor(socket, %Palette{} = palette), do: assign_editor(socket, palette)
 
   defp activate_palette(socket, %Palette{} = palette) do
     socket
