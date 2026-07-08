@@ -188,6 +188,52 @@ defmodule ColorMatchingWeb.PalettesLiveTest do
       refute html =~ "Rename"
     end
 
+    test "typing in the create palette name input updates the field without crashing", %{
+      conn: conn
+    } do
+      {:ok, view, _html} = live(conn, ~p"/palettes")
+
+      html = render_change(view, "update_new_palette_name", %{"name" => "Draft Name"})
+
+      assert html =~ "Draft Name"
+    end
+
+    test "typing in the add color input updates the field without crashing", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/palettes")
+
+      palette = %{
+        "name" => "Studio Set",
+        "colors" => ["#111111", "#222222", "#333333"],
+        "is_preset" => false,
+        "created_at" => "2026-07-08T00:00:00Z"
+      }
+
+      render_hook(view, "palettes_updated", %{"palettes" => [palette]})
+      render_click(view, "open_palette", %{"palette" => Jason.encode!(palette)})
+
+      html = render_change(view, "update_new_color_value", %{"color" => "#AABBCC"})
+
+      assert html =~ "#AABBCC"
+    end
+
+    test "typing in the rename palette input updates the field without crashing", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/palettes")
+
+      palette = %{
+        "name" => "Studio Set",
+        "colors" => ["#111111", "#222222", "#333333"],
+        "is_preset" => false,
+        "created_at" => "2026-07-08T00:00:00Z"
+      }
+
+      render_hook(view, "palettes_updated", %{"palettes" => [palette]})
+      render_click(view, "open_palette", %{"palette" => Jason.encode!(palette)})
+
+      html = render_change(view, "update_editor_name_input", %{"name" => "Renamed Draft"})
+
+      assert html =~ "Renamed Draft"
+    end
+
     test "create_palette is rejected before the active grid selection has hydrated", %{
       conn: conn
     } do

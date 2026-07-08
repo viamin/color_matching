@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+#
+# Local lint helper, invoked by .git/hooks/pre-commit before every commit.
+#
+# This project is Elixir/Phoenix (see CLAUDE.md), so the real lint check is
+# `mix format --check-formatted`. When the Elixir/Erlang toolchain isn't
+# installed (e.g. restricted containers without `mix`), there is nothing
+# meaningful to run, so this exits 0 with a warning rather than failing on a
+# tool that was never available.
+#
+# Returns 0 on success, non-zero when a fixable issue is found so the commit
+# is rejected.
+#
+
+set -euo pipefail
+
+if [ "${1:-}" = "--staged" ]; then
+    staged="$(git diff --cached --name-only --diff-filter=ACM || true)"
+else
+    staged=""
+fi
+
+if ! command -v mix >/dev/null 2>&1; then
+    echo "Warning: mix not available; skipping lint check"
+    exit 0
+fi
+
+if [ -n "$staged" ]; then
+    elixir_files="$(printf '%s\n' "$staged" | grep -E '\.(ex|exs|heex)$' || true)"
+    if [ -n "$elixir_files" ]; then
+        printf '%s\n' "$elixir_files" | xargs mix format
+        printf '%s\n' "$elixir_files" | xargs git add
+    fi
+fi
+
+echo "Running mix format --check-formatted..."
+mix format --check-formatted

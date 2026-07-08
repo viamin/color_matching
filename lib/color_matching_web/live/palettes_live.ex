@@ -46,7 +46,7 @@ defmodule ColorMatchingWeb.PalettesLive do
     {:noreply, assign(socket, :active_palette_hydrated, true)}
   end
 
-  def handle_event("update_new_palette_name", %{"value" => value}, socket) do
+  def handle_event("update_new_palette_name", %{"name" => value}, socket) do
     {:noreply, assign(socket, :new_palette_name, value)}
   end
 
@@ -165,7 +165,7 @@ defmodule ColorMatchingWeb.PalettesLive do
     {:noreply, put_flash(socket, :info, "Deleted \"#{name}\"")}
   end
 
-  def handle_event("update_editor_name_input", %{"value" => value}, socket) do
+  def handle_event("update_editor_name_input", %{"name" => value}, socket) do
     {:noreply, assign(socket, :editing_name, value)}
   end
 
@@ -218,7 +218,7 @@ defmodule ColorMatchingWeb.PalettesLive do
     end
   end
 
-  def handle_event("update_new_color_value", %{"value" => value}, socket) do
+  def handle_event("update_new_color_value", %{"color" => value}, socket) do
     {:noreply, assign(socket, :new_color_value, value)}
   end
 
