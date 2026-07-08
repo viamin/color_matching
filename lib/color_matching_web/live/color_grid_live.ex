@@ -34,22 +34,32 @@ defmodule ColorMatchingWeb.ColorGridLive do
 
   def handle_event("add_color", params, socket) do
     # Get color from either 'color' or 'value' parameter
-    color = params["color"] || params["value"] || socket.assigns.new_color
+    raw_color = params["color"] || params["value"] || socket.assigns.new_color
 
-    if color && color != "" do
-      current_size = socket.assigns.grid_size
-      max_size = @max_grid_colors
-      colors = socket.assigns.colors ++ [color]
-      new_size = min(max(length(colors), current_size + 1), max_size)
+    if raw_color && raw_color != "" do
+      case ColorFormat.normalize_hex(raw_color) do
+        {:ok, color} ->
+          current_size = socket.assigns.grid_size
+          max_size = @max_grid_colors
+          colors = socket.assigns.colors ++ [color]
+          new_size = min(max(length(colors), current_size + 1), max_size)
 
-      {:noreply,
-       socket
-       |> assign(:colors, colors)
-       |> assign(:grid_size, new_size)
-       |> assign(:new_color, "")
-       |> assign(:active_palette, nil)
-       |> assign_grid()
-       |> push_active_palette()}
+          {:noreply,
+           socket
+           |> assign(:colors, colors)
+           |> assign(:grid_size, new_size)
+           |> assign(:new_color, "")
+           |> assign(:active_palette, nil)
+           |> assign_grid()
+           |> push_active_palette()}
+
+        {:error, reason} ->
+          # Reject invalid hex at the boundary so downstream renderers
+          # (Grid.new, ColorUtils.invert_color/1) never see an unparseable
+          # color. ColorUtils.invert_color/1 now also tolerates bad input as
+          # defense in depth, but normalizing here keeps storage clean.
+          {:noreply, put_flash(socket, :error, reason)}
+      end
     else
       {:noreply, socket}
     end

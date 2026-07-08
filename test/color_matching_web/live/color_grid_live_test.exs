@@ -191,7 +191,7 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       # Add a color and change grid size
       view
       |> element("form[phx-submit='add_color']")
-      |> render_submit(%{"color" => "#TESTING"})
+      |> render_submit(%{"color" => "#ABCDEF"})
 
       view
       |> form("form[phx-change='change_grid_size']", %{"size" => "8"})
@@ -199,8 +199,23 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
 
       html = render(view)
       # Both changes should be reflected
-      assert html =~ "#TESTING"
+      assert html =~ "#ABCDEF"
       assert html =~ "Grid Size: 8×8"
+    end
+
+    test "rejects invalid hex colors without poisoning the palette", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      # "#TESTING" is not valid hex; it must be rejected so it never reaches
+      # ColorUtils.invert_color/1 (which would be a crash before this fix).
+      html =
+        view
+        |> element("form[phx-submit='add_color']")
+        |> render_submit(%{"color" => "#TESTING"})
+
+      refute html =~ "#TESTING"
+      assert html =~ "Hex color must start with # followed by 3 or 6 hex digits"
+      assert html =~ "Grid Size: 6×6"
     end
 
     test "disables add color button when grid is at maximum size", %{conn: conn} do
