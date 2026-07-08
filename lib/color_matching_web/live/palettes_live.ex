@@ -31,12 +31,12 @@ defmodule ColorMatchingWeb.PalettesLive do
     {:noreply, assign(socket, :saved_palettes, normalize_saved_palettes(palettes))}
   end
 
-def handle_event(
+  def handle_event(
         "active_palette_loaded",
         %{"palette" => %{"colors" => colors} = palette_map},
         socket
       )
-       when is_list(colors) and colors != [] do
+      when is_list(colors) and colors != [] do
     palette = Palette.new(palette_map)
 
     # Clamp any stale palette (>12 colors) coming out of localStorage so the
@@ -710,16 +710,24 @@ def handle_event(
   end
 
   defp color_input_values(color) do
-    {:ok, rgb} = ColorFormat.hex_to_rgb(color)
-    {:ok, hsl} = ColorFormat.hex_to_hsl(color)
-    {:ok, hsv} = ColorFormat.hex_to_hsv(color)
-
-    %{
-      "hex" => color,
-      "rgb" => ColorFormat.format_rgb(rgb),
-      "hsl" => ColorFormat.format_hsl(hsl),
-      "hsv" => ColorFormat.format_hsv(hsv)
-    }
+    with {:ok, rgb} <- ColorFormat.hex_to_rgb(color),
+         {:ok, hsl} <- ColorFormat.hex_to_hsl(color),
+         {:ok, hsv} <- ColorFormat.hex_to_hsv(color) do
+      %{
+        "hex" => color,
+        "rgb" => ColorFormat.format_rgb(rgb),
+        "hsl" => ColorFormat.format_hsl(hsl),
+        "hsv" => ColorFormat.format_hsv(hsv)
+      }
+    else
+      {:error, _reason} ->
+        # `Palette.from_json_map/1` and the `palettes_updated` / `active_palette_loaded`
+        # events only verify that `colors` is a list, not that each entry is a
+        # well-formed hex string. If stale or malformed data slips through,
+        # fall back to empty derived fields so the editor renders the broken
+        # row instead of crashing the LiveView process.
+        %{"hex" => color, "rgb" => "", "hsl" => "", "hsv" => ""}
+    end
   end
 
   defp validate_user_palette_name(socket, name, opts \\ []) do

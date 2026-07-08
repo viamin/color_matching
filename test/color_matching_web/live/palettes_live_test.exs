@@ -148,6 +148,37 @@ defmodule ColorMatchingWeb.PalettesLiveTest do
       refute html =~ "#FF0000"
     end
 
+    test "opening a palette with malformed colors renders empty derived fields instead of crashing",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/palettes")
+
+      # Stale localStorage data predating the strict hex rules could carry
+      # non-hex strings through `palettes_updated` / `active_palette_loaded`.
+      # `Palette.from_json_map/1` only validates that `colors` is a list, so
+      # the editor must handle each entry defensively rather than pattern
+      # matching on `{:ok, _}` and crashing the LiveView process.
+      palette = %{
+        "name" => "Legacy",
+        "colors" => ["#111111", "not-a-color", "#222222"],
+        "is_preset" => false,
+        "created_at" => "2026-07-08T00:00:00Z"
+      }
+
+      render_hook(view, "palettes_updated", %{"palettes" => [palette]})
+
+      html = render_click(view, "open_palette", %{"palette" => Jason.encode!(palette)})
+
+      assert html =~ "Legacy"
+      assert html =~ "Color 2"
+      assert html =~ "not-a-color"
+      # Valid rows still derive their RGB/HSL/HSV strings, confirming the
+      # malformed row did not poison the rest of the editor.
+      assert html =~ "rgb(17, 17, 17)"
+      # The malformed row's derived format fields fall back to empty strings
+      # rather than raising a MatchError.
+      assert html =~ ~s(value="" phx-change="update_editor_field" phx-value-index="1")
+    end
+
     test "use in grid marks the palette as the active grid selection", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/palettes")
 
