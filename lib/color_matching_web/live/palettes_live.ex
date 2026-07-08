@@ -118,7 +118,10 @@ defmodule ColorMatchingWeb.PalettesLive do
              put_flash(
                socket,
                :error,
-               "Couldn't find a free name for the duplicate. Rename or remove some existing copies of \"#{palette.name}\" and try again."
+               """
+               Couldn't find a free name for the duplicate. Rename or remove some \
+               existing copies of "#{palette.name}" and try again.\
+               """
              )}
 
           candidate_name ->
@@ -157,7 +160,11 @@ defmodule ColorMatchingWeb.PalettesLive do
           socket
           |> assign(:active_palette, nil)
           |> assign(:active_palette_colors, palette.colors)
-          |> push_event("activate_palette", %{name: nil, colors: palette.colors, is_preset: false})
+          |> push_event("activate_palette", %{
+            name: nil,
+            colors: palette.colors,
+            is_preset: false
+          })
 
         _ ->
           socket
@@ -176,10 +183,11 @@ defmodule ColorMatchingWeb.PalettesLive do
         with {:ok, validated_name} <-
                validate_user_palette_name(socket, name, except_name: palette.name) do
           renamed = %{palette | name: validated_name}
+          saved_palettes = socket.assigns.saved_palettes
 
           {:noreply,
            socket
-           |> assign(:saved_palettes, rename_saved_palette(socket.assigns.saved_palettes, palette.name, renamed))
+           |> assign(:saved_palettes, rename_saved_palette(saved_palettes, palette.name, renamed))
            |> assign_editor(renamed)
            |> push_event("rename_palette", %{old_name: palette.name, new_name: validated_name})
            |> maybe_activate_after_rename(palette, renamed)
@@ -193,7 +201,11 @@ defmodule ColorMatchingWeb.PalettesLive do
     end
   end
 
-  def handle_event("update_editor_field", %{"index" => index, "format" => format, "value" => value}, socket) do
+  def handle_event(
+        "update_editor_field",
+        %{"index" => index, "format" => format, "value" => value},
+        socket
+      ) do
     {:noreply,
      socket
      |> put_in_editor_input(index, format, value)
@@ -250,7 +262,10 @@ defmodule ColorMatchingWeb.PalettesLive do
         if length(palette.colors) <= 1 do
           {:noreply, put_flash(socket, :error, "Palettes must have at least one color")}
         else
-          updated_palette = %{palette | colors: List.delete_at(palette.colors, String.to_integer(index))}
+          updated_palette = %{
+            palette
+            | colors: List.delete_at(palette.colors, String.to_integer(index))
+          }
 
           {:noreply,
            socket
@@ -266,7 +281,10 @@ defmodule ColorMatchingWeb.PalettesLive do
   def handle_event("move_color", %{"index" => index, "direction" => direction}, socket) do
     case socket.assigns.editing_palette do
       %Palette{} = palette ->
-        updated_palette = %{palette | colors: move_color(palette.colors, String.to_integer(index), direction)}
+        updated_palette = %{
+          palette
+          | colors: move_color(palette.colors, String.to_integer(index), direction)
+        }
 
         {:noreply,
          socket
@@ -671,7 +689,12 @@ defmodule ColorMatchingWeb.PalettesLive do
     except_name = Keyword.get(opts, :except_name)
 
     with {:ok, validated_name} <- PaletteStorage.validate_palette_name(name),
-         false <- saved_palette_name_taken?(socket.assigns.saved_palettes, validated_name, except_name) do
+         false <-
+           saved_palette_name_taken?(
+             socket.assigns.saved_palettes,
+             validated_name,
+             except_name
+           ) do
       {:ok, validated_name}
     else
       true -> {:error, "Name already exists"}
@@ -725,7 +748,10 @@ defmodule ColorMatchingWeb.PalettesLive do
 
   defp put_in_editor_input(socket, index, format, value) do
     current_row = Map.get(socket.assigns.editor_inputs, index, %{})
-    updated_inputs = Map.put(socket.assigns.editor_inputs, index, Map.put(current_row, format, value))
+
+    updated_inputs =
+      Map.put(socket.assigns.editor_inputs, index, Map.put(current_row, format, value))
+
     assign(socket, :editor_inputs, updated_inputs)
   end
 
@@ -769,7 +795,11 @@ defmodule ColorMatchingWeb.PalettesLive do
     end
   end
 
-  defp maybe_activate_after_rename(socket, %Palette{} = old_palette, %Palette{} = renamed_palette) do
+  defp maybe_activate_after_rename(
+         socket,
+         %Palette{} = old_palette,
+         %Palette{} = renamed_palette
+       ) do
     case socket.assigns.active_palette do
       %{name: name} when name == old_palette.name -> activate_palette(socket, renamed_palette)
       _other -> socket
