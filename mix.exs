@@ -10,6 +10,7 @@ defmodule ColorMatching.MixProject do
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps(),
+      listeners: [Phoenix.CodeReloader],
       test_coverage: [tool: ExCoveralls],
       # Dialyzer configuration
       dialyzer: [

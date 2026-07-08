@@ -131,23 +131,13 @@
   }
   
   /* Ensure print cells display colors properly */
-  .print-cell {
+  .print-cell,
+  .print-cell * {
     -webkit-print-color-adjust: exact;
     color-adjust: exact;
     print-color-adjust: exact;
-    background-size: 100% 100% !important;
-    background-repeat: no-repeat !important;
   }
-  
-  /* Alternative approach using pseudo-elements for better print support */
-  .print-cell::before,
-  .print-cell::after {
-    content: '';
-    position: absolute;
-    width: 0;
-    height: 0;
-  }
-  
+
   /* Title styling for print */
   .print-title {
     text-align: center;
