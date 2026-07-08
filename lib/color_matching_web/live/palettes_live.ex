@@ -35,7 +35,7 @@ defmodule ColorMatchingWeb.PalettesLive do
 
     socket =
       socket
-      |> assign(:active_palette, palette_meta(palette))
+      |> assign(:active_palette, if(palette.name, do: palette_meta(palette), else: nil))
       |> assign(:active_palette_colors, colors)
       |> assign(:active_palette_hydrated, true)
 
