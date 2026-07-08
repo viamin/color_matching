@@ -356,117 +356,35 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       assert html =~ "Custom (unsaved)"
     end
 
-    test "saving the current palette makes it the active palette", %{conn: conn} do
+    test "loading a preset handoff makes it the active palette and marks it as a preset", %{
+      conn: conn
+    } do
       {:ok, view, _html} = live(conn, ~p"/")
 
-      html = render_submit(view, "save_palette", %{"name" => "My Palette"})
-
-      assert html =~ "Active palette:"
-      assert html =~ "My Palette"
-      refute html =~ "Custom (unsaved)"
-    end
-
-    test "loading a preset makes it the active palette and marks it as a preset", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/")
-
-      warm = Enum.find(ColorMatching.PaletteStorage.get_preset_palettes(), &(&1.name == "Warm"))
-
-      view
-      |> render_click("request_load_palette", %{"palette" => Jason.encode!(warm)})
-
-      html = view |> render_click("confirm_load_palette", %{})
+      html =
+        render_hook(view, "active_palette_loaded", %{
+          "palette" => %{
+            "name" => "Warm",
+            "colors" => ["#FF6B6B", "#FF8E53", "#FF6B35", "#F7931E", "#FFD23F", "#FFF07C"],
+            "is_preset" => true
+          }
+        })
 
       assert html =~ "Active palette:"
       assert html =~ "Warm"
       assert html =~ "(preset)"
     end
 
-    test "duplicating a preset creates an editable copy and makes it active", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/")
-
-      warm = Enum.find(ColorMatching.PaletteStorage.get_preset_palettes(), &(&1.name == "Warm"))
-
-      html =
-        view
-        |> render_click("duplicate_palette", %{"palette" => Jason.encode!(warm)})
-
-      assert html =~ "Warm Copy"
-      assert html =~ "Duplicated"
-      refute html =~ "(preset)"
-    end
-
-    test "duplicating a palette whose generated name would exceed 50 characters is rejected", %{
-      conn: conn
-    } do
-      {:ok, view, _html} = live(conn, ~p"/")
-
-      # 48 chars + " Copy" (5 chars) = 53, over the 50 char limit enforced by
-      # PaletteStorage.validate_palette_name/1.
-      long_name = String.duplicate("a", 48)
-
-      palette_json =
-        Jason.encode!(%{
-          "name" => long_name,
-          "colors" => ["#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF", "#00FFFF"],
-          "is_preset" => false
-        })
-
-      html = view |> render_click("duplicate_palette", %{"palette" => palette_json})
-
-      assert html =~ "Name too long"
-      refute html =~ "Duplicated"
-      assert html =~ "Custom (unsaved)"
-    end
-
-    test "renaming the active palette updates its label", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/")
-
-      render_submit(view, "save_palette", %{"name" => "Old Name"})
-
-      html =
-        view
-        |> render_click("rename_palette", %{"old_name" => "Old Name", "new_name" => "New Name"})
-
-      assert html =~ "New Name"
-      refute html =~ "Old Name"
-    end
-
-    test "deleting the active palette clears the active selection", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/")
-
-      render_submit(view, "save_palette", %{"name" => "To Delete"})
-
-      html = view |> render_click("delete_palette", %{"name" => "To Delete"})
-
-      assert html =~ "Custom (unsaved)"
-    end
-
-    test "duplicating a palette is rejected when every copy name is already taken", %{
-      conn: conn
-    } do
-      {:ok, view, _html} = live(conn, ~p"/")
-
-      taken = for n <- 2..1000, do: %{"name" => "Warm Copy #{n}", "colors" => ["#FF0000"]}
-      taken = [%{"name" => "Warm Copy", "colors" => ["#FF0000"]} | taken]
-
-      render_hook(view, "palettes_updated", %{"palettes" => taken})
-
-      warm = Enum.find(ColorMatching.PaletteStorage.get_preset_palettes(), &(&1.name == "Warm"))
-
-      html =
-        view
-        |> render_click("duplicate_palette", %{"palette" => Jason.encode!(warm)})
-
-      assert html =~ "find a free name"
-      refute html =~ "Duplicated"
-    end
-
     test "adding a color to a loaded preset clears the active selection", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
 
-      warm = Enum.find(ColorMatching.PaletteStorage.get_preset_palettes(), &(&1.name == "Warm"))
-      view |> render_click("request_load_palette", %{"palette" => Jason.encode!(warm)})
-      view |> render_click("confirm_load_palette", %{})
+      render_hook(view, "active_palette_loaded", %{
+        "palette" => %{
+          "name" => "Warm",
+          "colors" => ["#FF6B6B", "#FF8E53", "#FF6B35", "#F7931E", "#FFD23F", "#FFF07C"],
+          "is_preset" => true
+        }
+      })
 
       html =
         view
@@ -479,9 +397,13 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
     test "removing a color from a loaded preset clears the active selection", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
 
-      warm = Enum.find(ColorMatching.PaletteStorage.get_preset_palettes(), &(&1.name == "Warm"))
-      view |> render_click("request_load_palette", %{"palette" => Jason.encode!(warm)})
-      view |> render_click("confirm_load_palette", %{})
+      render_hook(view, "active_palette_loaded", %{
+        "palette" => %{
+          "name" => "Warm",
+          "colors" => ["#FF6B6B", "#FF8E53", "#FF6B35", "#F7931E", "#FFD23F", "#FFF07C"],
+          "is_preset" => true
+        }
+      })
 
       html =
         view
@@ -494,9 +416,13 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
     test "changing grid size after loading a preset clears the active selection", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
 
-      warm = Enum.find(ColorMatching.PaletteStorage.get_preset_palettes(), &(&1.name == "Warm"))
-      view |> render_click("request_load_palette", %{"palette" => Jason.encode!(warm)})
-      view |> render_click("confirm_load_palette", %{})
+      render_hook(view, "active_palette_loaded", %{
+        "palette" => %{
+          "name" => "Warm",
+          "colors" => ["#FF6B6B", "#FF8E53", "#FF6B35", "#F7931E", "#FFD23F", "#FFF07C"],
+          "is_preset" => true
+        }
+      })
 
       html =
         view

@@ -234,6 +234,51 @@ defmodule ColorMatchingWeb.PalettesLiveTest do
       assert html =~ "Renamed Draft"
     end
 
+    test "renaming the active edited palette updates both the editor and grid selection", %{
+      conn: conn
+    } do
+      {:ok, view, _html} = live(conn, ~p"/palettes")
+
+      palette = %{
+        "name" => "Old Name",
+        "colors" => ["#111111", "#222222", "#333333"],
+        "is_preset" => false,
+        "created_at" => "2026-07-08T00:00:00Z"
+      }
+
+      render_hook(view, "palettes_updated", %{"palettes" => [palette]})
+      render_click(view, "use_palette", %{"palette" => Jason.encode!(palette)})
+      render_click(view, "open_palette", %{"palette" => Jason.encode!(palette)})
+
+      html = render_submit(view, "rename_palette", %{"name" => "New Name"})
+
+      assert html =~ "Renamed palette to"
+      assert html =~ "Grid selection:"
+      assert html =~ "New Name"
+      refute html =~ ">Old Name<"
+    end
+
+    test "deleting the active palette clears the grid selection", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/palettes")
+
+      palette = %{
+        "name" => "To Delete",
+        "colors" => ["#111111", "#222222", "#333333"],
+        "is_preset" => false,
+        "created_at" => "2026-07-08T00:00:00Z"
+      }
+
+      render_hook(view, "palettes_updated", %{"palettes" => [palette]})
+      render_click(view, "use_palette", %{"palette" => Jason.encode!(palette)})
+
+      html = render_click(view, "delete_palette", %{"name" => "To Delete"})
+
+      assert html =~ "Deleted"
+      assert html =~ "To Delete"
+      assert html =~ "Custom unsaved colors"
+      refute html =~ "Grid selection:"
+    end
+
     test "create_palette is rejected before the active grid selection has hydrated", %{
       conn: conn
     } do
@@ -266,6 +311,45 @@ defmodule ColorMatchingWeb.PalettesLiveTest do
       assert html =~ "Created"
       assert html =~ "From Grid"
       assert html =~ "#ABCDEF"
+    end
+
+    test "duplicating a palette is rejected when every copy name is already taken", %{
+      conn: conn
+    } do
+      {:ok, view, _html} = live(conn, ~p"/palettes")
+
+      taken = for n <- 2..1000, do: %{"name" => "Warm Copy #{n}", "colors" => ["#FF0000"]}
+      taken = [%{"name" => "Warm Copy", "colors" => ["#FF0000"]} | taken]
+
+      render_hook(view, "palettes_updated", %{"palettes" => taken})
+
+      warm = Enum.find(PaletteStorage.get_preset_palettes(), &(&1.name == "Warm"))
+
+      html =
+        render_click(view, "duplicate_palette", %{"palette" => Jason.encode!(warm)})
+
+      assert html =~ "find a free name"
+      refute html =~ "Duplicated"
+    end
+
+    test "duplicating a palette whose generated name would exceed 50 characters is rejected", %{
+      conn: conn
+    } do
+      {:ok, view, _html} = live(conn, ~p"/palettes")
+
+      long_name = String.duplicate("a", 48)
+
+      palette_json =
+        Jason.encode!(%{
+          "name" => long_name,
+          "colors" => ["#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF", "#00FFFF"],
+          "is_preset" => false
+        })
+
+      html = render_click(view, "duplicate_palette", %{"palette" => palette_json})
+
+      assert html =~ "Name too long"
+      refute html =~ "Duplicated"
     end
 
     test "cannot remove the last remaining color from a palette", %{conn: conn} do
