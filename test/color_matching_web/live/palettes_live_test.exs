@@ -193,7 +193,10 @@ defmodule ColorMatchingWeb.PalettesLiveTest do
     } do
       {:ok, view, _html} = live(conn, ~p"/palettes")
 
-      html = render_change(view, "update_new_palette_name", %{"name" => "Draft Name"})
+      html =
+        view
+        |> element("input[name='name'][phx-change='update_new_palette_name']")
+        |> render_change(%{"value" => "Draft Name"})
 
       assert html =~ "Draft Name"
     end
@@ -211,7 +214,10 @@ defmodule ColorMatchingWeb.PalettesLiveTest do
       render_hook(view, "palettes_updated", %{"palettes" => [palette]})
       render_click(view, "open_palette", %{"palette" => Jason.encode!(palette)})
 
-      html = render_change(view, "update_new_color_value", %{"color" => "#AABBCC"})
+      html =
+        view
+        |> element("input[name='color'][phx-change='update_new_color_value']")
+        |> render_change(%{"value" => "#AABBCC"})
 
       assert html =~ "#AABBCC"
     end
@@ -229,7 +235,10 @@ defmodule ColorMatchingWeb.PalettesLiveTest do
       render_hook(view, "palettes_updated", %{"palettes" => [palette]})
       render_click(view, "open_palette", %{"palette" => Jason.encode!(palette)})
 
-      html = render_change(view, "update_editor_name_input", %{"name" => "Renamed Draft"})
+      html =
+        view
+        |> element("input[name='name'][phx-change='update_editor_name_input']")
+        |> render_change(%{"value" => "Renamed Draft"})
 
       assert html =~ "Renamed Draft"
     end
