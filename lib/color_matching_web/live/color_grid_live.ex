@@ -101,21 +101,25 @@ defmodule ColorMatchingWeb.ColorGridLive do
   def handle_event("palettes_updated", _params, socket), do: {:noreply, socket}
 
   def handle_event("set_display_format", %{"format" => format}, socket) do
-    with {:ok, display_format} <- ColorFormat.normalize_display_format(format) do
-      {:noreply,
-       socket
-       |> assign(:display_format, display_format)
-       |> push_event("set_display_format_preference", %{format: Atom.to_string(display_format)})}
-    else
+    case ColorFormat.normalize_display_format(format) do
+      {:ok, display_format} ->
+        {:noreply,
+         socket
+         |> assign(:display_format, display_format)
+         |> push_event("set_display_format_preference", %{
+           format: Atom.to_string(display_format)
+         })}
+
       {:error, _reason} ->
         {:noreply, socket}
     end
   end
 
   def handle_event("display_format_loaded", %{"format" => format}, socket) do
-    with {:ok, display_format} <- ColorFormat.normalize_display_format(format) do
-      {:noreply, assign(socket, :display_format, display_format)}
-    else
+    case ColorFormat.normalize_display_format(format) do
+      {:ok, display_format} ->
+        {:noreply, assign(socket, :display_format, display_format)}
+
       {:error, _reason} ->
         {:noreply, socket}
     end
@@ -239,7 +243,8 @@ defmodule ColorMatchingWeb.ColorGridLive do
         </div>
 
         <p class="text-sm text-gray-600 mb-3">
-          The palette editor still exposes every format. This preference controls how grid and print labels are displayed.
+          The palette editor still exposes every format. This preference controls how grid and
+          print labels are displayed.
         </p>
 
         <form
