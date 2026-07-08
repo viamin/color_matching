@@ -18,6 +18,7 @@ defmodule ColorMatchingWeb.Router do
     pipe_through :browser
 
     live "/", ColorGridLive
+    live "/palettes", PalettesLive
     get "/home", PageController, :home
   end
 

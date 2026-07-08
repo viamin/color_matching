@@ -30,8 +30,8 @@ Hooks.PaletteStorage = {
     this.loadSavedPalettes()
     this.loadActivePalette()
 
-    this.handleEvent("save_palette", ({name, colors}) => {
-      this.savePalette(name, colors)
+    this.handleEvent("save_palette", (palette) => {
+      this.savePalette(palette)
     })
 
     this.handleEvent("delete_palette", ({name}) => {
@@ -81,22 +81,21 @@ Hooks.PaletteStorage = {
     }
   },
 
-  savePalette(name, colors) {
+  savePalette({name, colors, created_at}) {
     try {
       const saved = localStorage.getItem('color_matching_palettes')
       const palettes = saved ? JSON.parse(saved) : []
-      
-      // Remove existing palette with same name
+
+      const existing = palettes.find(p => p.name === name)
       const filtered = palettes.filter(p => p.name !== name)
-      
-      // Add new palette
+
       filtered.push({
         name: name,
         colors: colors,
         is_preset: false,
-        created_at: new Date().toISOString()
+        created_at: created_at || existing?.created_at || new Date().toISOString()
       })
-      
+
       localStorage.setItem('color_matching_palettes', JSON.stringify(filtered))
       this.loadSavedPalettes()
     } catch (e) {
@@ -155,4 +154,3 @@ liveSocket.connect()
 // >> liveSocket.disableLatencySim()
 // Debug logging disabled for cleaner console
 // window.liveSocket = liveSocket
-
