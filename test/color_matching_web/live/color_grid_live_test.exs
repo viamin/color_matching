@@ -114,20 +114,11 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       assert html =~ "grid-template-columns: repeat(8, 1fr)"
     end
 
-    test "toggles palette menu", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/")
+    test "links to palette management", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
 
-      # Initially, palette menu should be closed
-      html = render(view)
-      refute html =~ "Save Current Palette"
-
-      # Click to toggle palette menu
-      view
-      |> element("button[phx-click='toggle_palette_menu']")
-      |> render_click()
-
-      html = render(view)
-      assert html =~ "Save Current Palette" or html =~ "Load Preset"
+      assert html =~ "Manage Palettes"
+      assert html =~ "/palettes"
     end
 
     test "validates color input format", %{conn: conn} do
@@ -164,7 +155,7 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       # We can't easily test the menu display without complex DOM interactions
       # So we'll just verify the page loads successfully with palette data
       assert html =~ "Color Matching Grid"
-      assert html =~ "Palette Options"
+      assert html =~ "Manage Palettes"
     end
 
     test "handles empty color list", %{conn: conn} do
@@ -252,69 +243,6 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       assert html =~ "#222222"
       # Started at 6, added 2, now 8
       assert html =~ "Grid Size: 8×8"
-    end
-
-    test "handles palette menu interactions", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/")
-
-      # Open palette menu
-      view
-      |> element("button[phx-click='toggle_palette_menu']")
-      |> render_click()
-
-      # Open save modal
-      view
-      |> element("button[phx-click='show_save_modal']")
-      |> render_click()
-
-      html = render(view)
-      assert html =~ "Save Color Palette"
-
-      # Close modal
-      view
-      |> element("button[phx-click='close_modal']")
-      |> render_click()
-
-      html = render(view)
-      refute html =~ "Save Color Palette"
-    end
-
-    test "handles load modal interactions", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/")
-
-      # Open palette menu and then load modal
-      view
-      |> element("button[phx-click='toggle_palette_menu']")
-      |> render_click()
-
-      view
-      |> element("button[phx-click='show_load_modal']")
-      |> render_click()
-
-      html = render(view)
-      assert html =~ "Load Color Palette"
-      assert html =~ "Preset Palettes"
-    end
-
-    test "handles save palette name updates", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/")
-
-      # Open save modal
-      view
-      |> element("button[phx-click='toggle_palette_menu']")
-      |> render_click()
-
-      view
-      |> element("button[phx-click='show_save_modal']")
-      |> render_click()
-
-      # Update the save name
-      view
-      |> element("input[name='name']")
-      |> render_change(%{"value" => "Test Palette"})
-
-      html = render(view)
-      assert html =~ "value=\"Test Palette\""
     end
 
     test "handles empty color input for add_color", %{conn: conn} do
@@ -431,13 +359,7 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
     test "saving the current palette makes it the active palette", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
 
-      view |> element("button[phx-click='toggle_palette_menu']") |> render_click()
-      view |> element("button[phx-click='show_save_modal']") |> render_click()
-
-      html =
-        view
-        |> element("form[phx-submit='save_palette']")
-        |> render_submit(%{"name" => "My Palette"})
+      html = render_submit(view, "save_palette", %{"name" => "My Palette"})
 
       assert html =~ "Active palette:"
       assert html =~ "My Palette"
@@ -499,12 +421,7 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
     test "renaming the active palette updates its label", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
 
-      view |> element("button[phx-click='toggle_palette_menu']") |> render_click()
-      view |> element("button[phx-click='show_save_modal']") |> render_click()
-
-      view
-      |> element("form[phx-submit='save_palette']")
-      |> render_submit(%{"name" => "Old Name"})
+      render_submit(view, "save_palette", %{"name" => "Old Name"})
 
       html =
         view
@@ -517,12 +434,7 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
     test "deleting the active palette clears the active selection", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
 
-      view |> element("button[phx-click='toggle_palette_menu']") |> render_click()
-      view |> element("button[phx-click='show_save_modal']") |> render_click()
-
-      view
-      |> element("form[phx-submit='save_palette']")
-      |> render_submit(%{"name" => "To Delete"})
+      render_submit(view, "save_palette", %{"name" => "To Delete"})
 
       html = view |> render_click("delete_palette", %{"name" => "To Delete"})
 

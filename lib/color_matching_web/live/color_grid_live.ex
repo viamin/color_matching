@@ -381,37 +381,12 @@ defmodule ColorMatchingWeb.ColorGridLive do
               <% end %>
             </p>
           </div>
-          <div class="relative">
-            <button
-              phx-click="toggle_palette_menu"
-              class="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded-full"
-              title="Palette Options"
-            >
-              <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z">
-                </path>
-              </svg>
-            </button>
-
-            <%= if @show_palette_menu do %>
-              <div class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border">
-                <div class="py-1">
-                  <button
-                    phx-click="show_save_modal"
-                    class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                  >
-                    Save Current Palette
-                  </button>
-                  <button
-                    phx-click="show_load_modal"
-                    class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                  >
-                    Load Palette
-                  </button>
-                </div>
-              </div>
-            <% end %>
-          </div>
+          <.link
+            navigate={~p"/palettes"}
+            class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-white"
+          >
+            Manage Palettes
+          </.link>
         </div>
 
         <p class="text-sm text-gray-600 mb-3">
