@@ -35,6 +35,15 @@ defmodule ColorMatching.ColorUtilsTest do
       assert ColorUtils.invert_color("") == ""
     end
 
+    test "returns unchanged color when the 6-digit hex contains non-hex digits" do
+      # Without this fallback, parse_hex_color/1 would raise a MatchError for
+      # non-hex characters ("G" has no Integer.parse/2 result), which would
+      # crash color rendering for any unexpected color in the palette.
+      assert ColorUtils.invert_color("#GGGGGG") == "#GGGGGG"
+      assert ColorUtils.invert_color("#Z01234") == "#Z01234"
+      assert ColorUtils.invert_color("#12 456") == "#12 456"
+    end
+
     test "handles edge cases with proper padding" do
       assert ColorUtils.invert_color("#010101") == "#FEFEFE"
       assert ColorUtils.invert_color("#0F0F0F") == "#F0F0F0"

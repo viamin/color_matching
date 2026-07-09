@@ -16,17 +16,24 @@ defmodule ColorMatching.ColorUtils do
   """
   @spec invert_color(String.t()) :: String.t()
   def invert_color("#" <> hex) when byte_size(hex) == 6 do
-    {r, g, b} = parse_hex_color(hex)
+    case parse_hex_color(hex) do
+      {r, g, b} ->
+        inverted_r = 255 - r
+        inverted_g = 255 - g
+        inverted_b = 255 - b
 
-    inverted_r = 255 - r
-    inverted_g = 255 - g
-    inverted_b = 255 - b
+        r_hex = Integer.to_string(inverted_r, 16) |> String.pad_leading(2, "0") |> String.upcase()
+        g_hex = Integer.to_string(inverted_g, 16) |> String.pad_leading(2, "0") |> String.upcase()
+        b_hex = Integer.to_string(inverted_b, 16) |> String.pad_leading(2, "0") |> String.upcase()
 
-    r_hex = Integer.to_string(inverted_r, 16) |> String.pad_leading(2, "0") |> String.upcase()
-    g_hex = Integer.to_string(inverted_g, 16) |> String.pad_leading(2, "0") |> String.upcase()
-    b_hex = Integer.to_string(inverted_b, 16) |> String.pad_leading(2, "0") |> String.upcase()
+        "#" <> r_hex <> g_hex <> b_hex
 
-    "#" <> r_hex <> g_hex <> b_hex
+      :error ->
+        # Unrecognized hex digits (e.g. "#GGGGGG"). Returning the input avoids
+        # crashing callers like ColorGridLive's color_cell that render whatever
+        # is in the palette without further validation.
+        "#" <> hex
+    end
   end
 
   def invert_color("#" <> hex) when byte_size(hex) == 3 do
@@ -58,11 +65,15 @@ defmodule ColorMatching.ColorUtils do
     "#" <> r_hex <> g_hex <> b_hex
   end
 
-  @spec parse_hex_color(String.t()) :: {non_neg_integer(), non_neg_integer(), non_neg_integer()}
+  @spec parse_hex_color(String.t()) ::
+          {non_neg_integer(), non_neg_integer(), non_neg_integer()} | :error
   defp parse_hex_color(hex) do
-    {r, ""} = String.slice(hex, 0, 2) |> Integer.parse(16)
-    {g, ""} = String.slice(hex, 2, 2) |> Integer.parse(16)
-    {b, ""} = String.slice(hex, 4, 2) |> Integer.parse(16)
-    {r, g, b}
+    with {r, ""} <- String.slice(hex, 0, 2) |> Integer.parse(16),
+         {g, ""} <- String.slice(hex, 2, 2) |> Integer.parse(16),
+         {b, ""} <- String.slice(hex, 4, 2) |> Integer.parse(16) do
+      {r, g, b}
+    else
+      _ -> :error
+    end
   end
 end

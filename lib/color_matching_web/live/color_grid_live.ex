@@ -34,22 +34,32 @@ defmodule ColorMatchingWeb.ColorGridLive do
 
   def handle_event("add_color", params, socket) do
     # Get color from either 'color' or 'value' parameter
-    color = params["color"] || params["value"] || socket.assigns.new_color
+    raw_color = params["color"] || params["value"] || socket.assigns.new_color
 
-    if color && color != "" do
-      current_size = socket.assigns.grid_size
-      max_size = @max_grid_colors
-      colors = socket.assigns.colors ++ [color]
-      new_size = min(max(length(colors), current_size + 1), max_size)
+    if raw_color && raw_color != "" do
+      case ColorFormat.normalize_hex(raw_color) do
+        {:ok, color} ->
+          current_size = socket.assigns.grid_size
+          max_size = @max_grid_colors
+          colors = socket.assigns.colors ++ [color]
+          new_size = min(max(length(colors), current_size + 1), max_size)
 
-      {:noreply,
-       socket
-       |> assign(:colors, colors)
-       |> assign(:grid_size, new_size)
-       |> assign(:new_color, "")
-       |> assign(:active_palette, nil)
-       |> assign_grid()
-       |> push_active_palette()}
+          {:noreply,
+           socket
+           |> assign(:colors, colors)
+           |> assign(:grid_size, new_size)
+           |> assign(:new_color, "")
+           |> assign(:active_palette, nil)
+           |> assign_grid()
+           |> push_active_palette()}
+
+        {:error, reason} ->
+          # Reject invalid hex at the boundary so downstream renderers
+          # (Grid.new, ColorUtils.invert_color/1) never see an unparseable
+          # color. ColorUtils.invert_color/1 now also tolerates bad input as
+          # defense in depth, but normalizing here keeps storage clean.
+          {:noreply, put_flash(socket, :error, reason)}
+      end
     else
       {:noreply, socket}
     end
@@ -363,11 +373,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
               >
                 <%= for row <- @grid.grid do %>
                   <%= for cell <- row do %>
-                    <div
-                      class="relative border border-gray-300 print-cell"
-                      style={"background: linear-gradient(to bottom right, #{cell.top_left_color} 0%, #{cell.top_left_color} 50%, #{cell.bottom_right_color} 50%, #{cell.bottom_right_color} 100%)"}
-                    >
-                    </div>
+                    <.color_cell cell={cell} class="print-cell" />
                   <% end %>
                 <% end %>
               </div>
@@ -411,43 +417,50 @@ defmodule ColorMatchingWeb.ColorGridLive do
         >
           <%= for row <- @grid.grid do %>
             <%= for cell <- row do %>
-              <div class="relative w-16 h-16 border border-gray-300">
-                <!-- Top-left triangle -->
-                <div
-                  class="absolute inset-0 triangle-top-left"
-                  style={"background-color: #{cell.top_left_color}"}
-                >
-                </div>
-                <!-- Bottom-right triangle -->
-                <%= if cell.is_diagonal do %>
-                  <!-- On diagonal: split the bottom-right triangle -->
-                  <!-- First layer: inverted color covering the whole bottom-right area -->
-                  <div
-                    class="absolute inset-0 triangle-bottom-right"
-                    style={"background-color: #{ColorUtils.invert_color(cell.bottom_right_color)}"}
-                  >
-                  </div>
-                  <!-- Second layer: original color covering only the lower portion -->
-                  <div
-                    class="absolute inset-0 triangle-diagonal-split"
-                    style={"background-color: #{cell.bottom_right_color}"}
-                  >
-                  </div>
-                <% else %>
-                  <!-- Off diagonal: normal bottom-right triangle -->
-                  <div
-                    class="absolute inset-0 triangle-bottom-right"
-                    style={"background-color: #{cell.bottom_right_color}"}
-                  >
-                  </div>
-                <% end %>
-              </div>
+              <.color_cell cell={cell} class="w-16 h-16" />
             <% end %>
           <% end %>
         </div>
       <% else %>
         <div class="text-gray-500 italic no-print">
           Add at least {@grid_size} colors to generate the grid.
+        </div>
+      <% end %>
+    </div>
+    """
+  end
+
+  # Renders a grid cell as a top-left triangle plus a bottom-right triangle.
+  # On the main diagonal, the bottom-right triangle is further split into an
+  # inverted-color layer topped by an original-color layer (see Grid moduledoc).
+  # Shared by the screen and print grids so both stay visually in sync.
+  attr :cell, :map, required: true
+  attr :class, :string, default: ""
+
+  defp color_cell(assigns) do
+    ~H"""
+    <div class={["relative border border-gray-300", @class]}>
+      <div
+        class="absolute inset-0 triangle-top-left"
+        style={"background-color: #{@cell.top_left_color}"}
+      >
+      </div>
+      <%= if @cell.is_diagonal do %>
+        <div
+          class="absolute inset-0 triangle-bottom-right"
+          style={"background-color: #{ColorUtils.invert_color(@cell.bottom_right_color)}"}
+        >
+        </div>
+        <div
+          class="absolute inset-0 triangle-diagonal-split"
+          style={"background-color: #{@cell.bottom_right_color}"}
+        >
+        </div>
+      <% else %>
+        <div
+          class="absolute inset-0 triangle-bottom-right"
+          style={"background-color: #{@cell.bottom_right_color}"}
+        >
         </div>
       <% end %>
     </div>
