@@ -125,6 +125,7 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       {:ok, _view, html} = live(conn, ~p"/")
 
       assert html =~ "Grid and print label format"
+      assert html =~ ~s(class="rounded-lg border border-gray-300 pl-3 pr-10 py-2 text-sm")
       assert html =~ ~s(<option value="hex")
       assert html =~ "selected"
       assert html =~ "RGB"

@@ -258,7 +258,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
           <select
             id="display-format"
             name="format"
-            class="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            class="rounded-lg border border-gray-300 pl-3 pr-10 py-2 text-sm"
           >
             <%= for format <- @display_formats do %>
               <option value={format} selected={@display_format == format}>
