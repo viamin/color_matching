@@ -543,5 +543,26 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       assert html =~ ~s(<div class="print-title">Custom</div>)
       refute html =~ ~s(<div class="print-title">Color Matching Grid)
     end
+
+    test "print grid renders cells with the same triangle classes as the screen grid", %{
+      conn: conn
+    } do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      # Regression guard: before the shared `color_cell` component, the print
+      # grid used a `linear-gradient` fallback and never emitted any
+      # triangle-* classes. Pinning the print grid to the same triangle
+      # classes as the screen grid keeps both renderers in lock-step.
+      print_section =
+        html
+        |> String.split(~s(class="print-area">))
+        |> Enum.at(1)
+        |> String.split(~s(class="print-legend">))
+        |> hd()
+
+      assert print_section =~ ~s(class="absolute inset-0 triangle-top-left")
+      assert print_section =~ ~s(class="absolute inset-0 triangle-bottom-right")
+      assert print_section =~ ~s(class="absolute inset-0 triangle-diagonal-split")
+    end
   end
 end

@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+#
+# Lint staged Elixir files for the color_matching project.
+#
+# Mirrors the project's `bin/setup-git-hooks` checks so the Paid-installed
+# pre-commit hook (which prefers `bin/lint --staged` over `bundle exec rubocop`)
+# exercises the project's own formatting pipeline on an Elixir codebase.
+
+set -euo pipefail
+
+if ! command -v mix >/dev/null 2>&1; then
+  echo "Warning: mix not available, skipping Elixir formatting checks"
+  exit 0
+fi
+
+staged_files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ex|exs)$' || true)
+
+if [ -n "${1:-}" ] && [ "${1}" = "--staged" ]; then
+  if [ -n "${staged_files}" ]; then
+    echo "Formatting staged files: ${staged_files}"
+    echo "${staged_files}" | xargs mix format
+    echo "${staged_files}" | xargs git add
+  else
+    echo "No Elixir files staged to format"
+  fi
+fi
+
+echo "Verifying mix format on the whole tree..."
+mix format --check-formatted
