@@ -110,18 +110,18 @@
     font-family: monospace;
   }
   
-  /* Ensure grid squares print with proper borders and sizing */
+  /* Ensure print cells stay square without adding chrome between colors */
   .print-grid .relative {
-    border: 0.5px solid #666 !important;
+    border: 0 !important;
     min-height: 1cm;
     aspect-ratio: 1;
   }
-  
+
   /* Make sure the print grid uses all available space */
   .print-grid .grid {
     width: 100%;
     height: 100%;
-    gap: 1px;
+    gap: 0;
   }
   
   /* Override any inherited sizing for print squares */

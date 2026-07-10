@@ -114,6 +114,15 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       assert html =~ "grid-template-columns: repeat(8, 1fr)"
     end
 
+    test "renders edge-to-edge swatches without grid gaps or borders", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      assert html =~ ~s(class="grid gap-0 w-full h-full")
+      assert html =~ ~s(class="grid gap-0 no-print")
+      assert html =~ ~s(class="relative overflow-hidden print-cell")
+      assert html =~ ~s(class="relative overflow-hidden w-16 h-16")
+    end
+
     test "links to palette management", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/")
 

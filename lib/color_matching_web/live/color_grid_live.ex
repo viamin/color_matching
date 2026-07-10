@@ -368,7 +368,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
           <div class="print-grid">
             <div class="print-grid-container">
               <div
-                class="grid gap-1 w-full h-full"
+                class="grid gap-0 w-full h-full"
                 style={"grid-template-columns: repeat(#{@grid_size}, 1fr);"}
               >
                 <%= for row <- @grid.grid do %>
@@ -412,7 +412,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
 
         <!-- Screen Display (visible on screen, hidden when printing) -->
         <div
-          class="grid gap-1 no-print"
+          class="grid gap-0 no-print"
           style={"grid-template-columns: repeat(#{@grid_size}, 1fr); max-width: 600px;"}
         >
           <%= for row <- @grid.grid do %>
@@ -439,7 +439,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
 
   defp color_cell(assigns) do
     ~H"""
-    <div class={["relative border border-gray-300", @class]}>
+    <div class={["relative overflow-hidden", @class]}>
       <div
         class="absolute inset-0 triangle-top-left"
         style={"background-color: #{@cell.top_left_color}"}
