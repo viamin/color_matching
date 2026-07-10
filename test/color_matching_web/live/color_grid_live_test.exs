@@ -120,8 +120,7 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       assert html =~ ~s(class="grid gap-0 w-full h-full")
       assert html =~ ~s(class="grid gap-0 no-print")
       assert html =~ ~s(class="relative overflow-hidden print-cell")
-      refute html =~ "border-gray-300"
-      refute html =~ "gap-1"
+      assert html =~ ~s(class="relative overflow-hidden w-16 h-16")
     end
 
     test "links to palette management", %{conn: conn} do
