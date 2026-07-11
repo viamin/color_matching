@@ -20,6 +20,30 @@ defmodule ColorMatchingWeb.CoreComponents do
   alias Phoenix.HTML.Form
   alias Phoenix.LiveView.JS
 
+  @hero_icon_sources [
+    {"hero-arrow-left-solid", "24/solid/arrow-left.svg", "1.5em"},
+    {"hero-arrow-path", "24/outline/arrow-path.svg", "1.5em"},
+    {"hero-exclamation-circle-mini", "20/solid/exclamation-circle.svg", "1.25em"},
+    {"hero-information-circle-mini", "20/solid/information-circle.svg", "1.25em"},
+    {"hero-x-mark-solid", "24/solid/x-mark.svg", "1.5em"}
+  ]
+  @hero_icons_path Path.expand("../../../deps/heroicons/optimized", __DIR__)
+
+  for {_name, file, _size} <- @hero_icon_sources do
+    file = Path.join(@hero_icons_path, file)
+    @external_resource file
+  end
+
+  @hero_icons Map.new(@hero_icon_sources, fn {name, file, size} ->
+                svg =
+                  @hero_icons_path
+                  |> Path.join(file)
+                  |> File.read!()
+                  |> String.replace(~r/\r?\n|\r/, "")
+
+                {name, {svg, size}}
+              end)
+
   @doc """
   Renders a modal.
 
@@ -581,8 +605,7 @@ defmodule ColorMatchingWeb.CoreComponents do
   You can customize the size and colors of the icons by setting
   width, height, and background color classes.
 
-  Icons are extracted from the `deps/heroicons` directory and bundled within
-  your compiled app.css by the plugin in your `assets/tailwind.config.js`.
+  Icons are embedded from the `deps/heroicons` directory at compile time.
 
   ## Examples
 
@@ -593,9 +616,28 @@ defmodule ColorMatchingWeb.CoreComponents do
   attr :class, :string, default: nil
 
   def icon(%{name: "hero-" <> _} = assigns) do
+    assigns = assign(assigns, :svg, hero_icon_svg!(assigns.name, assigns.class))
+
     ~H"""
-    <span class={[@name, @class]} />
+    {Phoenix.HTML.raw(@svg)}
     """
+  end
+
+  defp hero_icon_svg!(name, class) do
+    {svg, size} =
+      Map.get(@hero_icons, name) ||
+        raise ArgumentError, "unknown heroicon #{inspect(name)}"
+
+    class =
+      ["inline-block align-middle", class]
+      |> Enum.reject(&is_nil/1)
+      |> Enum.join(" ")
+      |> Phoenix.HTML.html_escape()
+      |> Phoenix.HTML.safe_to_string()
+
+    attrs = ~s(class="#{class}" width="#{size}" height="#{size}" )
+
+    String.replace(svg, "<svg ", "<svg #{attrs}", global: false)
   end
 
   ## JS Commands
