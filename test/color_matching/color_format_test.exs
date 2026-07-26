@@ -297,6 +297,11 @@ defmodule ColorMatching.ColorFormatTest do
                   {"HSV", "hsv(210, 28%, 94%)"}
                 ]}
     end
+
+    test "formats pair-level comparison metrics" do
+      assert ColorFormat.format_pair_metrics("#ABCDEF", "#123456") ==
+               {:ok, [{"CIEDE2000 (ΔE00)", "59.9350"}]}
+    end
   end
 
   # Asserts that two hex colors are equal within a small per-channel

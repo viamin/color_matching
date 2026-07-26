@@ -14,6 +14,8 @@ defmodule ColorMatching.ColorFormat do
   lowercase hex, out-of-range hue) resolve to the same internal color.
   """
 
+  alias ColorMatching.ColorSpace
+
   @type rgb :: {0..255, 0..255, 0..255}
   @type hsl :: {0..360, 0..100, 0..100}
   @type hsv :: {0..360, 0..100, 0..100}
@@ -481,9 +483,29 @@ defmodule ColorMatching.ColorFormat do
     end
   end
 
+  @doc """
+  Returns pair-level comparison metrics for two colors.
+  """
+  @spec format_pair_metrics(String.t(), String.t()) ::
+          {:ok, [{String.t(), String.t()}]} | {:error, String.t()}
+  def format_pair_metrics(first, second) do
+    with {:ok, normalized_first} <- normalize_hex(first),
+         {:ok, normalized_second} <- normalize_hex(second),
+         {:ok, delta_e} <- ColorSpace.ciede2000(normalized_first, normalized_second) do
+      {:ok, [{"CIEDE2000 (ΔE00)", format_float(delta_e)}]}
+    end
+  end
+
   # ---------------------------------------------------------------------
   # Shared helpers
   # ---------------------------------------------------------------------
+
+  @spec format_float(float()) :: String.t()
+  defp format_float(value) do
+    value
+    |> Float.round(4)
+    |> :erlang.float_to_binary(decimals: 4)
+  end
 
   # Computes the hue in degrees for RGB channels already normalized to 0..1,
   # given the max channel value and the chroma (max - min).

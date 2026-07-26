@@ -7,6 +7,7 @@ defmodule ColorMatchingWeb.ColorPairLiveTest do
       {:ok, _view, html} = live(conn, "/pair?a=%23ABCDEF&b=%23123456")
 
       assert html =~ "Color Pair"
+      assert html =~ "Pair Metrics"
       assert html =~ "#ABCDEF"
       assert html =~ "#123456"
       assert html =~ "rgb(171, 205, 239)"
@@ -14,6 +15,8 @@ defmodule ColorMatchingWeb.ColorPairLiveTest do
       assert html =~ "hsv(210, 28%, 94%)"
       refute html =~ "hsb(210, 28%, 94%)"
       assert html =~ "rgb(18, 52, 86)"
+      assert html =~ "CIEDE2000 (ΔE00)"
+      assert html =~ "59.9350"
       assert html =~ "Back to grid"
     end
 

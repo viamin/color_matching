@@ -32,12 +32,14 @@ defmodule ColorMatchingWeb.ColorPairLive do
 
   defp assign_pair(socket, %{"a" => color_a, "b" => color_b} = params, printer_profiles) do
     with {:ok, first} <- build_color_details(color_a),
-         {:ok, second} <- build_color_details(color_b) do
+         {:ok, second} <- build_color_details(color_b),
+         {:ok, pair_metrics} <- ColorFormat.format_pair_metrics(first.hex, second.hex) do
       printer_profile = PrinterProfile.from_query_params(params, printer_profiles)
 
       socket
       |> assign(:valid_pair?, true)
       |> assign(:colors, [first, second])
+      |> assign(:pair_metrics, pair_metrics)
       |> assign(:measurement_context, build_measurement_context(params, printer_profile))
       |> assign(:error_message, nil)
     else
@@ -54,6 +56,7 @@ defmodule ColorMatchingWeb.ColorPairLive do
     socket
     |> assign(:valid_pair?, false)
     |> assign(:colors, [])
+    |> assign(:pair_metrics, [])
     |> assign(:measurement_context, nil)
     |> assign(:error_message, reason)
   end
@@ -143,6 +146,21 @@ defmodule ColorMatchingWeb.ColorPairLive do
             </section>
           <% end %>
         </div>
+
+        <section class="mt-6 rounded-lg border border-gray-200 bg-white">
+          <div class="border-b border-gray-200 p-4">
+            <h2 class="text-lg font-semibold text-gray-900">Pair Metrics</h2>
+          </div>
+
+          <dl class="divide-y divide-gray-200">
+            <%= for {label, value} <- @pair_metrics do %>
+              <div class="grid grid-cols-[11rem_1fr] gap-4 p-4">
+                <dt class="text-sm font-medium text-gray-500">{label}</dt>
+                <dd class="break-all font-mono text-sm text-gray-900">{value}</dd>
+              </div>
+            <% end %>
+          </dl>
+        </section>
       <% else %>
         <h1 class="mb-4 text-3xl font-bold text-gray-900">Color Pair</h1>
         <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
