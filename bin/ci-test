@@ -73,23 +73,27 @@ echo ""
 echo "🧪 Running TEST job simulation..."
 echo ""
 
-echo "1️⃣  Installing dependencies..."
+echo "1️⃣  Installing Hex and Rebar..."
+mix local.hex --force
+mix local.rebar --force
+
+echo "2️⃣  Installing dependencies..."
 mix deps.get
 
-echo "2️⃣  Compiling dependencies..."
+echo "3️⃣  Compiling dependencies..."
 mix deps.compile
 
-echo "3️⃣  Setting up assets..."
+echo "4️⃣  Setting up assets..."
 mix assets.setup
 
-echo "4️⃣  Building assets..."
+echo "5️⃣  Building assets..."
 mix assets.build
 
-run_step "5️⃣  Checking code formatting..." "Code formatting OK" "Code formatting failed" mix format --check-formatted
+run_step "6️⃣  Checking code formatting..." "Code formatting OK" "Code formatting failed" mix format --check-formatted
 
-run_step "6️⃣  Running tests with coverage..." "Tests passed" "Tests failed" mix coveralls
+run_step "7️⃣  Running tests with coverage..." "Tests passed" "Tests failed" mix coveralls
 
-run_step "7️⃣  Running Dialyzer type checking..." "Dialyzer passed" "Dialyzer failed" \
+run_step "8️⃣  Running Dialyzer type checking..." "Dialyzer passed" "Dialyzer failed" \
     bash -c 'MIX_ENV=dev mix deps.compile && MIX_ENV=dev mix compile && MIX_ENV=dev mix dialyzer'
 
 echo ""
