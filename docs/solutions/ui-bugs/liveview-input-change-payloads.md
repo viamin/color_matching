@@ -26,7 +26,7 @@ The palette management page appeared to hydrate correctly during the incident, b
 - Browser interactions looked like repeated page loads while typing a palette name.
 - The incident server console logged `FunctionClauseError` for `ColorMatchingWeb.PalettesLive.handle_event/3`.
 - The failing event was `update_new_palette_name`, with params shaped like `%{"name" => value}` rather than `%{"value" => value}`.
-- The create button is gated by `disabled={!@active_palette_hydrated}` in [PalettesLive](../../../lib/color_matching_web/live/palettes_live.ex#L374), so every crash/remount re-disabled it.
+- The create button is gated by `disabled={!@active_palette_hydrated}` in [PalettesLive](../../../lib/color_matching_web/live/palettes_live.ex#L376), so every crash/remount re-disabled it.
 
 ## What Didn't Work
 
