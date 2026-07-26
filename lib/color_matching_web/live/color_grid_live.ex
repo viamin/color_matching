@@ -368,12 +368,12 @@ defmodule ColorMatchingWeb.ColorGridLive do
           <div class="print-grid">
             <div class="print-grid-container">
               <div
-                class="grid gap-0 w-full h-full"
+                class="print-color-grid grid gap-0 w-full h-full"
                 style={"grid-template-columns: repeat(#{@grid_size}, 1fr);"}
               >
                 <%= for row <- @grid.grid do %>
                   <%= for cell <- row do %>
-                    <.color_cell cell={cell} class="print-cell" />
+                    <.color_cell cell={cell} class="print-grid-cell print-cell" />
                   <% end %>
                 <% end %>
               </div>
