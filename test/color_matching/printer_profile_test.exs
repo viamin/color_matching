@@ -129,19 +129,33 @@ defmodule ColorMatching.PrinterProfileTest do
           id: "profile-demo",
           printer_make_model: "Epson SureColor P700",
           paper_type: "Baryta",
-          ink_type: "OEM pigment"
+          ink_type: "OEM pigment",
+          icc_profile: "P700 Baryta ICC",
+          print_settings: "2880 dpi",
+          driver_name: "Epson Driver",
+          driver_version: "15.4",
+          calibration_date: "2026-07-01",
+          calibration_version: "baseline-1",
+          notes: "Reference profile"
         })
 
       params = profile |> PrinterProfile.to_query_params() |> Map.new()
-      rebuilt = PrinterProfile.from_query_params(params, [profile])
+      rebuilt = PrinterProfile.from_query_params(params, [])
 
       assert rebuilt.id == "profile-demo"
       assert rebuilt.printer_make_model == "Epson SureColor P700"
       assert rebuilt.paper_type == "Baryta"
       assert rebuilt.ink_type == "OEM pigment"
+      assert rebuilt.icc_profile == "P700 Baryta ICC"
+      assert rebuilt.print_settings == "2880 dpi"
+      assert rebuilt.driver_name == "Epson Driver"
+      assert rebuilt.driver_version == "15.4"
+      assert rebuilt.calibration_date == "2026-07-01"
+      assert rebuilt.calibration_version == "baseline-1"
+      assert rebuilt.notes == "Reference profile"
     end
 
-    test "query params do not expose optional profile metadata" do
+    test "query params include enough data to rebuild a custom profile anywhere" do
       profile =
         PrinterProfile.new(%{
           id: "profile-full",
@@ -159,9 +173,19 @@ defmodule ColorMatching.PrinterProfileTest do
 
       params = profile |> PrinterProfile.to_query_params() |> Map.new()
 
-      assert params == %{"profile_id" => "profile-full"}
-      refute Map.has_key?(params, "notes")
-      refute Map.has_key?(params, "icc_profile")
+      assert params == %{
+               "profile_calibration_date" => "2026-07-01",
+               "profile_calibration_version" => "baseline-1",
+               "profile_driver_name" => "Epson macOS Driver",
+               "profile_driver_version" => "15.4",
+               "profile_icc_profile" => "SC-P900 Premium Luster",
+               "profile_id" => "profile-full",
+               "profile_ink_type" => "OEM UltraChrome PRO10",
+               "profile_notes" => "Reference profile",
+               "profile_paper_type" => "Ultra Premium Luster",
+               "profile_print_settings" => "1440 dpi, high quality",
+               "profile_printer_make_model" => "Epson SureColor P900"
+             }
     end
   end
 end

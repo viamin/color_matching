@@ -10,6 +10,20 @@ defmodule ColorMatching.PrinterProfile do
 
   @enforce_keys [:id, :printer_make_model, :paper_type, :ink_type]
   @derive Jason.Encoder
+  @query_param_fields [
+    {:id, :profile_id, "profile_id"},
+    {:printer_make_model, :profile_printer_make_model, "profile_printer_make_model"},
+    {:paper_type, :profile_paper_type, "profile_paper_type"},
+    {:ink_type, :profile_ink_type, "profile_ink_type"},
+    {:icc_profile, :profile_icc_profile, "profile_icc_profile"},
+    {:print_settings, :profile_print_settings, "profile_print_settings"},
+    {:driver_name, :profile_driver_name, "profile_driver_name"},
+    {:driver_version, :profile_driver_version, "profile_driver_version"},
+    {:calibration_date, :profile_calibration_date, "profile_calibration_date"},
+    {:calibration_version, :profile_calibration_version, "profile_calibration_version"},
+    {:notes, :profile_notes, "profile_notes"}
+  ]
+
   defstruct id: nil,
             printer_make_model: nil,
             paper_type: nil,
@@ -90,7 +104,13 @@ defmodule ColorMatching.PrinterProfile do
 
   @spec to_query_params(t()) :: keyword(String.t())
   def to_query_params(%__MODULE__{} = profile) do
-    [profile_id: profile.id]
+    Enum.reduce(@query_param_fields, [], fn {field, atom_key, _string_key}, params ->
+      case Map.get(profile, field) do
+        nil -> params
+        value -> [{atom_key, value} | params]
+      end
+    end)
+    |> Enum.reverse()
   end
 
   @spec default_profiles() :: [t()]
@@ -138,12 +158,22 @@ defmodule ColorMatching.PrinterProfile do
   def from_query_params(params, printer_profiles) when is_map(params) and is_list(printer_profiles) do
     profile_id = fetch(params, :profile_id)
 
-    if is_binary(profile_id) do
-      Enum.find(printer_profiles, &(&1.id == profile_id))
-    end
+    Enum.find(printer_profiles, &(&1.id == profile_id)) || profile_from_query_params(params)
   end
 
   def from_query_params(_params, _printer_profiles), do: nil
+
+  defp profile_from_query_params(params) when is_map(params) do
+    attrs =
+      Enum.reduce(@query_param_fields, %{}, fn {field, _atom_key, string_key}, acc ->
+        case fetch(params, string_key) do
+          value when is_binary(value) and value != "" -> Map.put(acc, field, value)
+          _value -> acc
+        end
+      end)
+
+    from_map(attrs)
+  end
 
   defp validate_required(attrs, key, label) do
     value =

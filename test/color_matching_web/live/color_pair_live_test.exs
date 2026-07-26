@@ -38,22 +38,16 @@ defmodule ColorMatchingWeb.ColorPairLiveTest do
       assert html =~ "Generated sheet: sheet-demo"
     end
 
-    test "hydrates custom printer profile context from local storage payload", %{conn: conn} do
-      {:ok, view, _html} =
-        live(conn, "/pair?a=%23ABCDEF&b=%23123456&sheet_id=sheet-demo&profile_id=profile-demo")
-
-      html =
-        render_hook(view, "printer_profiles_loaded", %{
-          "profiles" => [
-            %{
-              "id" => "profile-demo",
-              "printer_make_model" => "Epson SureColor P900",
-              "paper_type" => "Premium Luster",
-              "ink_type" => "OEM pigment",
-              "notes" => "Private note"
-            }
-          ]
-        })
+    test "rebuilds custom printer profile context directly from query params", %{conn: conn} do
+      {:ok, _view, html} =
+        live(
+          conn,
+          "/pair?a=%23ABCDEF&b=%23123456&sheet_id=sheet-demo&profile_id=profile-demo" <>
+            "&profile_printer_make_model=Epson+SureColor+P900" <>
+            "&profile_paper_type=Premium+Luster" <>
+            "&profile_ink_type=OEM+pigment" <>
+            "&profile_notes=Private+note"
+        )
 
       assert html =~ "Measurement Context"
       assert html =~ "Epson SureColor P900 on Premium Luster"
