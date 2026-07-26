@@ -92,5 +92,34 @@ defmodule ColorMatching.PrinterProfileTest do
       assert rebuilt.paper_type == "Baryta"
       assert rebuilt.ink_type == "OEM pigment"
     end
+
+    test "query params round-trip preserves all optional profile metadata" do
+      profile =
+        PrinterProfile.new(%{
+          id: "profile-full",
+          printer_make_model: "Epson SureColor P900",
+          paper_type: "Ultra Premium Luster",
+          ink_type: "OEM UltraChrome PRO10",
+          icc_profile: "SC-P900 Premium Luster",
+          print_settings: "1440 dpi, high quality",
+          driver_name: "Epson macOS Driver",
+          driver_version: "15.4",
+          calibration_date: "2026-07-01",
+          calibration_version: "baseline-1",
+          notes: "Reference profile"
+        })
+
+      params = profile |> PrinterProfile.to_query_params() |> Map.new()
+      rebuilt = PrinterProfile.from_query_params(params)
+
+      assert rebuilt.id == "profile-full"
+      assert rebuilt.icc_profile == "SC-P900 Premium Luster"
+      assert rebuilt.print_settings == "1440 dpi, high quality"
+      assert rebuilt.driver_name == "Epson macOS Driver"
+      assert rebuilt.driver_version == "15.4"
+      assert rebuilt.calibration_date == "2026-07-01"
+      assert rebuilt.calibration_version == "baseline-1"
+      assert rebuilt.notes == "Reference profile"
+    end
   end
 end

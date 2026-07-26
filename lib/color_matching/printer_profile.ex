@@ -80,12 +80,24 @@ defmodule ColorMatching.PrinterProfile do
 
   @spec to_query_params(t()) :: keyword(String.t())
   def to_query_params(%__MODULE__{} = profile) do
-    [
+    required = [
       profile_id: profile.id,
       printer_make_model: profile.printer_make_model,
       paper_type: profile.paper_type,
       ink_type: profile.ink_type
     ]
+
+    optional = [
+      icc_profile: profile.icc_profile,
+      print_settings: profile.print_settings,
+      driver_name: profile.driver_name,
+      driver_version: profile.driver_version,
+      calibration_date: profile.calibration_date,
+      calibration_version: profile.calibration_version,
+      notes: profile.notes
+    ]
+
+    required ++ Enum.reject(optional, fn {_k, v} -> is_nil(v) end)
   end
 
   @spec default_profiles() :: [t()]
@@ -132,7 +144,14 @@ defmodule ColorMatching.PrinterProfile do
         id: profile_id,
         printer_make_model: printer_make_model,
         paper_type: paper_type,
-        ink_type: ink_type
+        ink_type: ink_type,
+        icc_profile: fetch(params, :icc_profile),
+        print_settings: fetch(params, :print_settings),
+        driver_name: fetch(params, :driver_name),
+        driver_version: fetch(params, :driver_version),
+        calibration_date: fetch(params, :calibration_date),
+        calibration_version: fetch(params, :calibration_version),
+        notes: fetch(params, :notes)
       })
     end
   end
