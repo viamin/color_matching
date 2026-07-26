@@ -12,6 +12,7 @@ defmodule ColorMatchingWeb.PalettesLiveTest do
       assert html =~ "Preset Palettes"
       assert html =~ "Your Palettes"
       assert html =~ "Return to Grid"
+      assert html =~ ~s(id="palettes-palette-storage")
 
       html =
         render_hook(view, "palettes_updated", %{
@@ -218,7 +219,7 @@ defmodule ColorMatchingWeb.PalettesLiveTest do
       refute html =~ "Rename"
     end
 
-    test "typing in the create palette name input updates the field without crashing", %{
+    test "typing in the create palette name input accepts browser form payloads", %{
       conn: conn
     } do
       {:ok, view, _html} = live(conn, ~p"/palettes")
@@ -226,12 +227,12 @@ defmodule ColorMatchingWeb.PalettesLiveTest do
       html =
         view
         |> element("input[name='name'][phx-change='update_new_palette_name']")
-        |> render_change(%{"value" => "Draft Name"})
+        |> render_change(%{"name" => "Draft Name"})
 
       assert html =~ "Draft Name"
     end
 
-    test "typing in the add color input updates the field without crashing", %{conn: conn} do
+    test "typing in the add color input accepts browser form payloads", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/palettes")
 
       palette = %{
@@ -247,12 +248,12 @@ defmodule ColorMatchingWeb.PalettesLiveTest do
       html =
         view
         |> element("input[name='color'][phx-change='update_new_color_value']")
-        |> render_change(%{"value" => "#AABBCC"})
+        |> render_change(%{"color" => "#AABBCC"})
 
       assert html =~ "#AABBCC"
     end
 
-    test "typing in the rename palette input updates the field without crashing", %{conn: conn} do
+    test "typing in the rename palette input accepts browser form payloads", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/palettes")
 
       palette = %{
@@ -268,7 +269,7 @@ defmodule ColorMatchingWeb.PalettesLiveTest do
       html =
         view
         |> element("input[name='name'][phx-change='update_editor_name_input']")
-        |> render_change(%{"value" => "Renamed Draft"})
+        |> render_change(%{"name" => "Renamed Draft"})
 
       assert html =~ "Renamed Draft"
     end
