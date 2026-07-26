@@ -1,18 +1,21 @@
 defmodule ColorMatchingWeb.ColorPairLive do
   use ColorMatchingWeb, :live_view
 
-  alias ColorMatching.ColorFormat
+  alias ColorMatching.{ColorFormat, MeasuredColorPair, PrinterProfile}
 
   def mount(params, _session, socket) do
     {:ok, assign_pair(socket, params)}
   end
 
-  defp assign_pair(socket, %{"a" => color_a, "b" => color_b}) do
+  defp assign_pair(socket, %{"a" => color_a, "b" => color_b} = params) do
     with {:ok, first} <- build_color_details(color_a),
          {:ok, second} <- build_color_details(color_b) do
+      printer_profile = PrinterProfile.from_query_params(params)
+
       socket
       |> assign(:valid_pair?, true)
       |> assign(:colors, [first, second])
+      |> assign(:measurement_context, build_measurement_context(params, printer_profile))
       |> assign(:error_message, nil)
     else
       {:error, reason} ->
@@ -28,6 +31,7 @@ defmodule ColorMatchingWeb.ColorPairLive do
     socket
     |> assign(:valid_pair?, false)
     |> assign(:colors, [])
+    |> assign(:measurement_context, nil)
     |> assign(:error_message, reason)
   end
 
@@ -37,6 +41,17 @@ defmodule ColorMatchingWeb.ColorPairLive do
       {:ok, %{hex: hex, formats: formats}}
     end
   end
+
+  defp build_measurement_context(params, %PrinterProfile{} = printer_profile) do
+    MeasuredColorPair.new(%{
+      color_a: params["a"],
+      color_b: params["b"],
+      printer_profile: printer_profile,
+      generated_sheet_id: params["sheet_id"]
+    })
+  end
+
+  defp build_measurement_context(_params, _printer_profile), do: nil
 
   def render(assigns) do
     ~H"""
@@ -50,6 +65,18 @@ defmodule ColorMatchingWeb.ColorPairLive do
 
       <%= if @valid_pair? do %>
         <h1 class="mb-6 text-3xl font-bold text-gray-900">Color Pair</h1>
+
+        <%= if @measurement_context do %>
+          <section class="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
+            <div class="font-semibold">Measurement Context</div>
+            <div>
+              Printer profile: {PrinterProfile.display_name(@measurement_context.printer_profile)}
+            </div>
+            <div :if={@measurement_context.generated_sheet_id}>
+              Generated sheet: {@measurement_context.generated_sheet_id}
+            </div>
+          </section>
+        <% end %>
 
         <div class="mb-8 grid grid-cols-1 overflow-hidden rounded-lg border border-gray-200 md:grid-cols-2">
           <%= for color <- @colors do %>

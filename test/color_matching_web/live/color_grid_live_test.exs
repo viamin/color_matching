@@ -127,9 +127,13 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
     test "screen grid cells link to a color pair comparison page", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/")
 
-      assert html =~ ~s(href="/pair?a=%23FF6B6B&amp;b=%23009494")
+      assert html =~ ~s(href="/pair?a=%23FF6B6B&amp;b=%23009494&amp;sheet_id=sheet-)
+      assert html =~ ~s(&amp;profile_id=epson-p900-ultrapremium-luster-oem)
+      assert html =~ ~s(&amp;printer_make_model=Epson+SureColor+P900)
+      assert html =~ ~s(&amp;paper_type=Ultra+Premium+Luster)
+      assert html =~ ~s(&amp;ink_type=OEM+UltraChrome+PRO10)
       assert html =~ ~s(aria-label="Compare #FF6B6B and #009494")
-      assert html =~ ~s(href="/pair?a=%23FF6B6B&amp;b=%23B1323B")
+      assert html =~ ~s(href="/pair?a=%23FF6B6B&amp;b=%23B1323B&amp;sheet_id=sheet-)
       assert html =~ ~s(aria-label="Compare #FF6B6B and #B1323B")
     end
 
@@ -161,6 +165,16 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       assert html =~ "RGB"
       assert html =~ "HSL"
       assert html =~ "HSV"
+    end
+
+    test "renders printer profile controls and default profile metadata", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      assert html =~ "Printer Profile"
+      assert html =~ "Active printer profile"
+      assert html =~ "Create Printer Profile"
+      assert html =~ "Epson SureColor P900 on Ultra Premium Luster"
+      assert html =~ "Sheet sheet-"
     end
 
     test "validates color input format", %{conn: conn} do
@@ -613,6 +627,40 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       assert print_section =~ ~s(class="absolute inset-0 triangle-top-left")
       assert print_section =~ ~s(class="absolute inset-0 triangle-bottom-right")
       assert print_section =~ ~s(class="absolute inset-0 triangle-diagonal-split")
+    end
+
+    test "creating a printer profile selects it for generated sheets and pair links", %{
+      conn: conn
+    } do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      view
+      |> form("form[phx-submit='create_printer_profile']", %{
+        "profile" => %{
+          "printer_make_model" => "HP DesignJet Z9+",
+          "paper_type" => "Photo Rag",
+          "ink_type" => "OEM pigment",
+          "icc_profile" => "Z9 Photo Rag",
+          "print_settings" => "Best",
+          "driver_name" => "HP Driver",
+          "driver_version" => "61.3",
+          "calibration_date" => "2026-07-10",
+          "calibration_version" => "rag-1",
+          "notes" => "Studio profile"
+        }
+      })
+      |> render_submit()
+
+      html = render(view)
+
+      assert html =~ "HP DesignJet Z9+ on Photo Rag"
+      assert html =~ "Sheet sheet-"
+      assert html =~ "for HP DesignJet Z9+ on Photo Rag"
+      assert html =~ "printer_make_model=HP+DesignJet+Z9%2B"
+      assert html =~ "paper_type=Photo+Rag"
+      assert html =~ "ink_type=OEM+pigment"
+      assert html =~ "profile_id=profile-"
+      assert html =~ "sheet_id=sheet-"
     end
   end
 end
