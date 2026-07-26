@@ -9,6 +9,7 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       assert html =~ "Color Matching Grid"
       assert html =~ "Manage Colors"
       assert html =~ "Grid Size: 6×6"
+      assert html =~ ~s(id="grid-palette-storage")
     end
 
     test "displays the default color palette", %{conn: conn} do
@@ -238,10 +239,10 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       assert html =~ "Grid Size: 6×6"
     end
 
-    test "disables add color button when grid is at maximum size", %{conn: conn} do
+    test "disables add color button when palette is at maximum size", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
 
-      # Change grid to maximum size
+      # Change grid to maximum size, which fills the palette to the same limit.
       view
       |> form("form[phx-change='change_grid_size']", %{"size" => "12"})
       |> render_change()
@@ -252,9 +253,29 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       |> render_change(%{"value" => "#ABCDEF"})
 
       html = render(view)
-      # Button should be disabled even with valid color when at max size
+      # Button should be disabled even with valid color when the palette is full.
       assert html =~ "disabled"
       assert html =~ "Grid Size: 12×12"
+    end
+
+    test "rejects add color submissions once palette reaches the maximum", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      for color <- ["#111111", "#222222", "#333333", "#444444", "#555555", "#666666"] do
+        view
+        |> element("form[phx-submit='add_color']")
+        |> render_submit(%{"color" => color})
+      end
+
+      html =
+        view
+        |> element("form[phx-submit='add_color']")
+        |> render_submit(%{"color" => "#777777"})
+
+      color_count = (html |> String.split("phx-value-index=") |> length()) - 1
+      assert color_count == 12
+      refute html =~ "#777777"
+      assert html =~ "Palettes are limited to 12 colors"
     end
 
     test "add color button works when grid size is less than maximum and color is valid", %{
