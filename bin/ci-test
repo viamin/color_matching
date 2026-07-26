@@ -10,12 +10,25 @@ REQUIRED_ELIXIR="1.16"
 REQUIRED_OTP="26"
 SCRIPT_PATH="${BASH_SOURCE[0]}"
 
-if [[ "${1:-}" == "--native" ]]; then
-    shift
-else
+have_ci_toolchain() {
+    command -v elixir >/dev/null 2>&1 && command -v mix >/dev/null 2>&1
+}
+
+load_toolchain_versions() {
     ELIXIR_VERSION_OUTPUT="$(elixir --version)"
     ELIXIR_VERSION="$(awk '/^Elixir/ {print $2; exit}' <<< "${ELIXIR_VERSION_OUTPUT}")"
     OTP_VERSION="$(awk '/^Erlang\/OTP/ {print $2; exit}' <<< "${ELIXIR_VERSION_OUTPUT}")"
+}
+
+if [[ "${1:-}" == "--native" ]]; then
+    shift
+else
+    if have_ci_toolchain; then
+        load_toolchain_versions
+    else
+        ELIXIR_VERSION=""
+        OTP_VERSION=""
+    fi
 
     if [[ "${ELIXIR_VERSION}" != ${REQUIRED_ELIXIR}.* || "${OTP_VERSION}" != "${REQUIRED_OTP}" ]]; then
         if command -v mise >/dev/null 2>&1; then
@@ -23,15 +36,19 @@ else
             CI_TEST_REEXECED=1 exec mise x "erlang@${REQUIRED_OTP}" "elixir@${REQUIRED_ELIXIR}" -- bash "${SCRIPT_PATH}" --native "$@"
         fi
 
-        echo "❌ CI uses Elixir ${REQUIRED_ELIXIR} / OTP ${REQUIRED_OTP}, but local shell has Elixir ${ELIXIR_VERSION} / OTP ${OTP_VERSION}."
+        if [[ -n "${ELIXIR_VERSION}" && -n "${OTP_VERSION}" ]]; then
+            echo "❌ CI uses Elixir ${REQUIRED_ELIXIR} / OTP ${REQUIRED_OTP}, but local shell has Elixir ${ELIXIR_VERSION} / OTP ${OTP_VERSION}."
+        else
+            echo "❌ Elixir/mix are not available in the current shell."
+            echo "   CI uses Elixir ${REQUIRED_ELIXIR} / OTP ${REQUIRED_OTP}."
+        fi
+
         echo "   Install/use the CI toolchain, or install mise so this script can run with the pinned versions automatically."
         exit 1
     fi
 fi
 
-ELIXIR_VERSION_OUTPUT="$(elixir --version)"
-ELIXIR_VERSION="$(awk '/^Elixir/ {print $2; exit}' <<< "${ELIXIR_VERSION_OUTPUT}")"
-OTP_VERSION="$(awk '/^Erlang\/OTP/ {print $2; exit}' <<< "${ELIXIR_VERSION_OUTPUT}")"
+load_toolchain_versions
 
 export MIX_ENV=test
 export MIX_BUILD_PATH="${MIX_BUILD_PATH:-${PWD}/_build/ci-elixir-${ELIXIR_VERSION}-otp-${OTP_VERSION}}"
@@ -73,23 +90,27 @@ echo ""
 echo "🧪 Running TEST job simulation..."
 echo ""
 
-echo "1️⃣  Installing dependencies..."
+echo "1️⃣  Installing Hex and Rebar..."
+mix local.hex --force
+mix local.rebar --force
+
+echo "2️⃣  Installing dependencies..."
 mix deps.get
 
-echo "2️⃣  Compiling dependencies..."
+echo "3️⃣  Compiling dependencies..."
 mix deps.compile
 
-echo "3️⃣  Setting up assets..."
+echo "4️⃣  Setting up assets..."
 mix assets.setup
 
-echo "4️⃣  Building assets..."
+echo "5️⃣  Building assets..."
 mix assets.build
 
-run_step "5️⃣  Checking code formatting..." "Code formatting OK" "Code formatting failed" mix format --check-formatted
+run_step "6️⃣  Checking code formatting..." "Code formatting OK" "Code formatting failed" mix format --check-formatted
 
-run_step "6️⃣  Running tests with coverage..." "Tests passed" "Tests failed" mix coveralls
+run_step "7️⃣  Running tests with coverage..." "Tests passed" "Tests failed" mix coveralls
 
-run_step "7️⃣  Running Dialyzer type checking..." "Dialyzer passed" "Dialyzer failed" \
+run_step "8️⃣  Running Dialyzer type checking..." "Dialyzer passed" "Dialyzer failed" \
     bash -c 'MIX_ENV=dev mix deps.compile && MIX_ENV=dev mix compile && MIX_ENV=dev mix dialyzer'
 
 echo ""
