@@ -25,24 +25,29 @@ defmodule ColorMatching.GeneratedSheet do
 
   @spec new(map()) :: t()
   def new(attrs) when is_map(attrs) do
-    sheet = %__MODULE__{
-      id: Map.get(attrs, :id),
-      colors: Map.get(attrs, :colors) || [],
-      grid_size: Map.fetch!(attrs, :grid_size),
-      palette_name: Map.get(attrs, :palette_name),
-      printer_profile: Map.fetch!(attrs, :printer_profile)
-    }
+    colors = Map.get(attrs, :colors) || []
+    grid_size = Map.fetch!(attrs, :grid_size)
+    palette_name = Map.get(attrs, :palette_name)
+    printer_profile = Map.fetch!(attrs, :printer_profile)
 
-    %{sheet | id: sheet.id || sheet_id(sheet)}
+    id = Map.get(attrs, :id) || sheet_id(colors, grid_size, palette_name, printer_profile)
+
+    %__MODULE__{
+      id: id,
+      colors: colors,
+      grid_size: grid_size,
+      palette_name: palette_name,
+      printer_profile: printer_profile
+    }
   end
 
-  defp sheet_id(%__MODULE__{} = sheet) do
+  defp sheet_id(colors, grid_size, palette_name, printer_profile) do
     material =
       [
-        Enum.join(sheet.colors, ","),
-        Integer.to_string(sheet.grid_size),
-        sheet.palette_name || "",
-        sheet.printer_profile.id
+        Enum.join(colors, ","),
+        Integer.to_string(grid_size),
+        palette_name || "",
+        printer_profile.id
       ]
       |> Enum.join("|")
 
