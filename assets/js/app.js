@@ -27,10 +27,16 @@ let Hooks = {}
 
 Hooks.PaletteStorage = {
   mounted() {
-    this.loadSavedPalettes()
-    this.loadActivePalette()
-    this.loadPrinterProfiles()
-    this.loadActivePrinterProfile()
+    if (this.shouldLoadPalettes()) {
+      this.loadSavedPalettes()
+      this.loadActivePalette()
+    }
+
+    if (this.shouldLoadPrinterProfiles()) {
+      this.loadPrinterProfiles()
+      this.loadActivePrinterProfile()
+    }
+
     this.loadDisplayFormatPreference()
 
     this.handleEvent("save_palette", (palette) => {
@@ -60,6 +66,14 @@ Hooks.PaletteStorage = {
     this.handleEvent("set_active_printer_profile", ({profile_id}) => {
       this.storeActivePrinterProfile(profile_id)
     })
+  },
+
+  shouldLoadPalettes() {
+    return this.el.dataset.loadPalettes !== "false"
+  },
+
+  shouldLoadPrinterProfiles() {
+    return this.el.dataset.loadPrinterProfiles !== "false"
   },
 
   loadSavedPalettes() {

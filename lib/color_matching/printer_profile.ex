@@ -80,24 +80,7 @@ defmodule ColorMatching.PrinterProfile do
 
   @spec to_query_params(t()) :: keyword(String.t())
   def to_query_params(%__MODULE__{} = profile) do
-    required = [
-      profile_id: profile.id,
-      printer_make_model: profile.printer_make_model,
-      paper_type: profile.paper_type,
-      ink_type: profile.ink_type
-    ]
-
-    optional = [
-      icc_profile: profile.icc_profile,
-      print_settings: profile.print_settings,
-      driver_name: profile.driver_name,
-      driver_version: profile.driver_version,
-      calibration_date: profile.calibration_date,
-      calibration_version: profile.calibration_version,
-      notes: profile.notes
-    ]
-
-    required ++ Enum.reject(optional, fn {_k, v} -> is_nil(v) end)
+    [profile_id: profile.id]
   end
 
   @spec default_profiles() :: [t()]
@@ -132,31 +115,17 @@ defmodule ColorMatching.PrinterProfile do
     ]
   end
 
-  @spec from_query_params(map()) :: t() | nil
-  def from_query_params(params) when is_map(params) do
+  @spec from_query_params(map(), [t()]) :: t() | nil
+  def from_query_params(params, printer_profiles \\ default_profiles())
+  def from_query_params(params, printer_profiles) when is_map(params) and is_list(printer_profiles) do
     profile_id = fetch(params, :profile_id)
-    printer_make_model = fetch(params, :printer_make_model)
-    paper_type = fetch(params, :paper_type)
-    ink_type = fetch(params, :ink_type)
 
-    if Enum.all?([profile_id, printer_make_model, paper_type, ink_type], &is_binary/1) do
-      new(%{
-        id: profile_id,
-        printer_make_model: printer_make_model,
-        paper_type: paper_type,
-        ink_type: ink_type,
-        icc_profile: fetch(params, :icc_profile),
-        print_settings: fetch(params, :print_settings),
-        driver_name: fetch(params, :driver_name),
-        driver_version: fetch(params, :driver_version),
-        calibration_date: fetch(params, :calibration_date),
-        calibration_version: fetch(params, :calibration_version),
-        notes: fetch(params, :notes)
-      })
+    if is_binary(profile_id) do
+      Enum.find(printer_profiles, &(&1.id == profile_id))
     end
   end
 
-  def from_query_params(_params), do: nil
+  def from_query_params(_params, _printer_profiles), do: nil
 
   defp validate_required(attrs, key, label) do
     value =

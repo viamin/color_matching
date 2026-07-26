@@ -85,7 +85,7 @@ defmodule ColorMatching.PrinterProfileTest do
         })
 
       params = profile |> PrinterProfile.to_query_params() |> Map.new()
-      rebuilt = PrinterProfile.from_query_params(params)
+      rebuilt = PrinterProfile.from_query_params(params, [profile])
 
       assert rebuilt.id == "profile-demo"
       assert rebuilt.printer_make_model == "Epson SureColor P700"
@@ -93,7 +93,7 @@ defmodule ColorMatching.PrinterProfileTest do
       assert rebuilt.ink_type == "OEM pigment"
     end
 
-    test "query params round-trip preserves all optional profile metadata" do
+    test "query params do not expose optional profile metadata" do
       profile =
         PrinterProfile.new(%{
           id: "profile-full",
@@ -110,16 +110,10 @@ defmodule ColorMatching.PrinterProfileTest do
         })
 
       params = profile |> PrinterProfile.to_query_params() |> Map.new()
-      rebuilt = PrinterProfile.from_query_params(params)
 
-      assert rebuilt.id == "profile-full"
-      assert rebuilt.icc_profile == "SC-P900 Premium Luster"
-      assert rebuilt.print_settings == "1440 dpi, high quality"
-      assert rebuilt.driver_name == "Epson macOS Driver"
-      assert rebuilt.driver_version == "15.4"
-      assert rebuilt.calibration_date == "2026-07-01"
-      assert rebuilt.calibration_version == "baseline-1"
-      assert rebuilt.notes == "Reference profile"
+      assert params == %{"profile_id" => "profile-full"}
+      refute Map.has_key?(params, "notes")
+      refute Map.has_key?(params, "icc_profile")
     end
   end
 end

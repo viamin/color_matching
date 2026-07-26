@@ -4,13 +4,36 @@ defmodule ColorMatchingWeb.ColorPairLive do
   alias ColorMatching.{ColorFormat, MeasuredColorPair, PrinterProfile}
 
   def mount(params, _session, socket) do
-    {:ok, assign_pair(socket, params)}
+    printer_profiles = PrinterProfile.default_profiles()
+
+    {:ok,
+     socket
+     |> assign(:pair_params, params)
+     |> assign(:printer_profiles, printer_profiles)
+     |> assign_pair(params, printer_profiles)}
   end
 
-  defp assign_pair(socket, %{"a" => color_a, "b" => color_b} = params) do
+  def handle_event("printer_profiles_loaded", %{"profiles" => profiles}, socket)
+      when is_list(profiles) do
+    printer_profiles =
+      profiles
+      |> Enum.map(&build_printer_profile/1)
+      |> Enum.reject(&is_nil/1)
+      |> merge_default_printer_profiles()
+
+    {:noreply,
+     socket
+     |> assign(:printer_profiles, printer_profiles)
+     |> assign_pair(socket.assigns.pair_params, printer_profiles)}
+  end
+
+  def handle_event("printer_profiles_loaded", _params, socket), do: {:noreply, socket}
+  def handle_event("active_printer_profile_loaded", _params, socket), do: {:noreply, socket}
+
+  defp assign_pair(socket, %{"a" => color_a, "b" => color_b} = params, printer_profiles) do
     with {:ok, first} <- build_color_details(color_a),
          {:ok, second} <- build_color_details(color_b) do
-      printer_profile = PrinterProfile.from_query_params(params)
+      printer_profile = PrinterProfile.from_query_params(params, printer_profiles)
 
       socket
       |> assign(:valid_pair?, true)
@@ -23,7 +46,7 @@ defmodule ColorMatchingWeb.ColorPairLive do
     end
   end
 
-  defp assign_pair(socket, _params) do
+  defp assign_pair(socket, _params, _printer_profiles) do
     assign_invalid_pair(socket, "Select a grid square to compare its color pair.")
   end
 
@@ -53,9 +76,31 @@ defmodule ColorMatchingWeb.ColorPairLive do
 
   defp build_measurement_context(_params, _printer_profile), do: nil
 
+  defp build_printer_profile(params) when is_map(params) do
+    case PrinterProfile.validate(params) do
+      {:ok, printer_profile} -> printer_profile
+      {:error, _message} -> nil
+    end
+  end
+
+  defp build_printer_profile(_params), do: nil
+
+  defp merge_default_printer_profiles(printer_profiles) do
+    existing_ids = MapSet.new(printer_profiles, & &1.id)
+
+    printer_profiles ++
+      Enum.reject(PrinterProfile.default_profiles(), &MapSet.member?(existing_ids, &1.id))
+  end
+
   def render(assigns) do
     ~H"""
-    <div class="mx-auto max-w-5xl p-6">
+    <div
+      id="pair-printer-profile-storage"
+      class="mx-auto max-w-5xl p-6"
+      phx-hook="PaletteStorage"
+      data-load-palettes="false"
+      data-load-printer-profiles="true"
+    >
       <.link
         navigate={~p"/"}
         class="mb-6 inline-flex text-sm font-medium text-blue-700 hover:text-blue-900"

@@ -371,6 +371,8 @@ defmodule ColorMatchingWeb.ColorGridLive do
       class="max-w-6xl mx-auto p-6"
       phx-hook="PaletteStorage"
       id="grid-palette-storage"
+      data-load-palettes="true"
+      data-load-printer-profiles="true"
       data-load-display-format="true"
     >
       <h1 class="text-3xl font-bold text-gray-900 mb-4 no-print">Color Matching Grid</h1>
