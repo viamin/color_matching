@@ -1,19 +1,45 @@
 defmodule ColorMatchingWeb.ColorPairLive do
   use ColorMatchingWeb, :live_view
 
-  alias ColorMatching.ColorFormat
+  alias ColorMatching.{ColorFormat, MeasuredColorPair, PrinterProfile}
 
   def mount(params, _session, socket) do
-    {:ok, assign_pair(socket, params)}
+    printer_profiles = PrinterProfile.default_profiles()
+
+    {:ok,
+     socket
+     |> assign(:pair_params, params)
+     |> assign(:printer_profiles, printer_profiles)
+     |> assign_pair(params, printer_profiles)}
   end
 
-  defp assign_pair(socket, %{"a" => color_a, "b" => color_b}) do
+  def handle_event("printer_profiles_loaded", %{"profiles" => profiles}, socket)
+      when is_list(profiles) do
+    printer_profiles =
+      profiles
+      |> Enum.map(&PrinterProfile.from_map/1)
+      |> Enum.reject(&is_nil/1)
+      |> PrinterProfile.merge_with_defaults()
+
+    {:noreply,
+     socket
+     |> assign(:printer_profiles, printer_profiles)
+     |> assign_pair(socket.assigns.pair_params, printer_profiles)}
+  end
+
+  def handle_event("printer_profiles_loaded", _params, socket), do: {:noreply, socket}
+  def handle_event("active_printer_profile_loaded", _params, socket), do: {:noreply, socket}
+
+  defp assign_pair(socket, %{"a" => color_a, "b" => color_b} = params, printer_profiles) do
     with {:ok, first} <- build_color_details(color_a),
          {:ok, second} <- build_color_details(color_b),
          {:ok, pair_metrics} <- ColorFormat.format_pair_metrics(first.hex, second.hex) do
+      printer_profile = PrinterProfile.from_query_params(params, printer_profiles)
+
       socket
       |> assign(:valid_pair?, true)
       |> assign(:colors, [first, second])
+      |> assign(:measurement_context, build_measurement_context(params, printer_profile))
       |> assign(:pair_metrics, pair_metrics)
       |> assign(:error_message, nil)
     else
@@ -22,7 +48,7 @@ defmodule ColorMatchingWeb.ColorPairLive do
     end
   end
 
-  defp assign_pair(socket, _params) do
+  defp assign_pair(socket, _params, _printer_profiles) do
     assign_invalid_pair(socket, "Select a grid square to compare its color pair.")
   end
 
@@ -30,6 +56,7 @@ defmodule ColorMatchingWeb.ColorPairLive do
     socket
     |> assign(:valid_pair?, false)
     |> assign(:colors, [])
+    |> assign(:measurement_context, nil)
     |> assign(:pair_metrics, [])
     |> assign(:error_message, reason)
   end
@@ -41,9 +68,26 @@ defmodule ColorMatchingWeb.ColorPairLive do
     end
   end
 
+  defp build_measurement_context(params, %PrinterProfile{} = printer_profile) do
+    MeasuredColorPair.new(%{
+      color_a: params["a"],
+      color_b: params["b"],
+      printer_profile: printer_profile,
+      generated_sheet_id: params["sheet_id"]
+    })
+  end
+
+  defp build_measurement_context(_params, _printer_profile), do: nil
+
   def render(assigns) do
     ~H"""
-    <div class="mx-auto max-w-5xl p-6">
+    <div
+      id="pair-printer-profile-storage"
+      class="mx-auto max-w-5xl p-6"
+      phx-hook="PaletteStorage"
+      data-load-palettes="false"
+      data-load-printer-profiles="true"
+    >
       <.link
         navigate={~p"/"}
         class="mb-6 inline-flex text-sm font-medium text-blue-700 hover:text-blue-900"
@@ -53,6 +97,18 @@ defmodule ColorMatchingWeb.ColorPairLive do
 
       <%= if @valid_pair? do %>
         <h1 class="mb-6 text-3xl font-bold text-gray-900">Color Pair</h1>
+
+        <%= if @measurement_context do %>
+          <section class="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
+            <div class="font-semibold">Measurement Context</div>
+            <div>
+              Printer profile: {PrinterProfile.display_name(@measurement_context.printer_profile)}
+            </div>
+            <div :if={@measurement_context.generated_sheet_id}>
+              Generated sheet: {@measurement_context.generated_sheet_id}
+            </div>
+          </section>
+        <% end %>
 
         <div class="mb-8 grid grid-cols-1 overflow-hidden rounded-lg border border-gray-200 md:grid-cols-2">
           <%= for color <- @colors do %>

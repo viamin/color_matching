@@ -27,8 +27,16 @@ let Hooks = {}
 
 Hooks.PaletteStorage = {
   mounted() {
-    this.loadSavedPalettes()
-    this.loadActivePalette()
+    if (this.shouldLoadPalettes()) {
+      this.loadSavedPalettes()
+      this.loadActivePalette()
+    }
+
+    if (this.shouldLoadPrinterProfiles()) {
+      this.loadPrinterProfiles()
+      this.loadActivePrinterProfile()
+    }
+
     this.loadDisplayFormatPreference()
 
     this.handleEvent("save_palette", (palette) => {
@@ -50,6 +58,22 @@ Hooks.PaletteStorage = {
     this.handleEvent("set_display_format_preference", ({format}) => {
       this.storeDisplayFormatPreference(format)
     })
+
+    this.handleEvent("save_printer_profiles", ({profiles}) => {
+      this.storePrinterProfiles(profiles)
+    })
+
+    this.handleEvent("set_active_printer_profile", ({profile_id}) => {
+      this.storeActivePrinterProfile(profile_id)
+    })
+  },
+
+  shouldLoadPalettes() {
+    return this.el.dataset.loadPalettes !== "false"
+  },
+
+  shouldLoadPrinterProfiles() {
+    return this.el.dataset.loadPrinterProfiles !== "false"
   },
 
   loadSavedPalettes() {
@@ -83,6 +107,47 @@ Hooks.PaletteStorage = {
       localStorage.setItem('color_matching_active_palette', JSON.stringify(palette))
     } catch (e) {
       console.error("Error storing active palette:", e)
+    }
+  },
+
+  loadPrinterProfiles() {
+    try {
+      const saved = localStorage.getItem('color_matching_printer_profiles')
+      const profiles = saved ? JSON.parse(saved) : null
+      this.pushEvent("printer_profiles_loaded", {profiles})
+    } catch (e) {
+      console.error("Error loading printer profiles:", e)
+      this.pushEvent("printer_profiles_loaded", {profiles: null})
+    }
+  },
+
+  storePrinterProfiles(profiles) {
+    try {
+      localStorage.setItem('color_matching_printer_profiles', JSON.stringify(profiles))
+    } catch (e) {
+      console.error("Error storing printer profiles:", e)
+    }
+  },
+
+  loadActivePrinterProfile() {
+    try {
+      const profileId = localStorage.getItem('color_matching_active_printer_profile_id')
+      this.pushEvent("active_printer_profile_loaded", {profile_id: profileId})
+    } catch (e) {
+      console.error("Error loading active printer profile:", e)
+      this.pushEvent("active_printer_profile_loaded", {profile_id: null})
+    }
+  },
+
+  storeActivePrinterProfile(profileId) {
+    try {
+      if (profileId) {
+        localStorage.setItem('color_matching_active_printer_profile_id', profileId)
+      } else {
+        localStorage.removeItem('color_matching_active_printer_profile_id')
+      }
+    } catch (e) {
+      console.error("Error storing active printer profile:", e)
     }
   },
 

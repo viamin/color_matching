@@ -35,5 +35,34 @@ defmodule ColorMatchingWeb.ColorPairLiveTest do
       assert html =~ "Color Pair"
       assert html =~ "Hex color must start with # followed by 3 or 6 hex digits"
     end
+
+    test "renders default printer profile and generated sheet context from profile_id", %{
+      conn: conn
+    } do
+      {:ok, _view, html} =
+        live(
+          conn,
+          "/pair?a=%23ABCDEF&b=%23123456&sheet_id=sheet-demo&profile_id=epson-p900-ultrapremium-luster-oem"
+        )
+
+      assert html =~ "Measurement Context"
+      assert html =~ "Epson SureColor P900 on Ultra Premium Luster"
+      assert html =~ "Generated sheet: sheet-demo"
+    end
+
+    test "rebuilds custom printer profile context directly from query params", %{conn: conn} do
+      {:ok, _view, html} =
+        live(
+          conn,
+          "/pair?a=%23ABCDEF&b=%23123456&sheet_id=sheet-demo&profile_id=profile-demo" <>
+            "&profile_printer_make_model=Epson+SureColor+P900" <>
+            "&profile_paper_type=Premium+Luster" <>
+            "&profile_ink_type=OEM+pigment"
+        )
+
+      assert html =~ "Measurement Context"
+      assert html =~ "Epson SureColor P900 on Premium Luster"
+      assert html =~ "Generated sheet: sheet-demo"
+    end
   end
 end
