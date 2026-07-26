@@ -11,16 +11,16 @@ defmodule ColorMatching.PrinterProfile do
   @enforce_keys [:id, :printer_make_model, :paper_type, :ink_type]
   @derive Jason.Encoder
   @query_param_fields [
-    {:id, :profile_id, "profile_id"},
-    {:printer_make_model, :profile_printer_make_model, "profile_printer_make_model"},
-    {:paper_type, :profile_paper_type, "profile_paper_type"},
-    {:ink_type, :profile_ink_type, "profile_ink_type"},
-    {:icc_profile, :profile_icc_profile, "profile_icc_profile"},
-    {:print_settings, :profile_print_settings, "profile_print_settings"},
-    {:driver_name, :profile_driver_name, "profile_driver_name"},
-    {:driver_version, :profile_driver_version, "profile_driver_version"},
-    {:calibration_date, :profile_calibration_date, "profile_calibration_date"},
-    {:calibration_version, :profile_calibration_version, "profile_calibration_version"}
+    {:id, :profile_id},
+    {:printer_make_model, :profile_printer_make_model},
+    {:paper_type, :profile_paper_type},
+    {:ink_type, :profile_ink_type},
+    {:icc_profile, :profile_icc_profile},
+    {:print_settings, :profile_print_settings},
+    {:driver_name, :profile_driver_name},
+    {:driver_version, :profile_driver_version},
+    {:calibration_date, :profile_calibration_date},
+    {:calibration_version, :profile_calibration_version}
   ]
 
   defstruct id: nil,
@@ -103,7 +103,7 @@ defmodule ColorMatching.PrinterProfile do
 
   @spec to_query_params(t()) :: keyword(String.t())
   def to_query_params(%__MODULE__{} = profile) do
-    Enum.reduce(@query_param_fields, [], fn {field, atom_key, _string_key}, params ->
+    Enum.reduce(@query_param_fields, [], fn {field, atom_key}, params ->
       case Map.get(profile, field) do
         nil -> params
         value -> [{atom_key, value} | params]
@@ -171,7 +171,7 @@ defmodule ColorMatching.PrinterProfile do
 
   defp profile_from_query_params(params) when is_map(params) do
     attrs =
-      Enum.reduce(@query_param_fields, %{}, fn {field, atom_key, _string_key}, acc ->
+      Enum.reduce(@query_param_fields, %{}, fn {field, atom_key}, acc ->
         case fetch(params, atom_key) do
           value when is_binary(value) and value != "" -> Map.put(acc, field, value)
           _value -> acc
