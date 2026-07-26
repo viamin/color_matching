@@ -127,11 +127,12 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
     test "screen grid cells link to a color pair comparison page", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/")
 
+      [default_profile | _] = ColorMatching.PrinterProfile.default_profiles()
       assert html =~ ~s(href="/pair?a=%23FF6B6B&amp;b=%23009494&amp;sheet_id=sheet-)
-      assert html =~ ~s(&amp;profile_id=epson-p900-ultrapremium-luster-oem)
-      assert html =~ ~s(&amp;printer_make_model=Epson+SureColor+P900)
-      assert html =~ ~s(&amp;paper_type=Ultra+Premium+Luster)
-      assert html =~ ~s(&amp;ink_type=OEM+UltraChrome+PRO10)
+      assert html =~ ~s(&amp;profile_id=#{default_profile.id})
+      assert html =~ URI.encode_query(printer_make_model: default_profile.printer_make_model)
+      assert html =~ URI.encode_query(paper_type: default_profile.paper_type)
+      assert html =~ URI.encode_query(ink_type: default_profile.ink_type)
       assert html =~ ~s(aria-label="Compare #FF6B6B and #009494")
       assert html =~ ~s(href="/pair?a=%23FF6B6B&amp;b=%23B1323B&amp;sheet_id=sheet-)
       assert html =~ ~s(aria-label="Compare #FF6B6B and #B1323B")

@@ -14,7 +14,8 @@ defmodule ColorMatchingWeb.ColorGridLive do
   @max_grid_colors 12
 
   def mount(_params, _session, socket) do
-    [default_printer_profile | _] = PrinterProfile.default_profiles()
+    printer_profiles = PrinterProfile.default_profiles()
+    [default_printer_profile | _] = printer_profiles
 
     # NOTE: intentionally do not `push_active_palette/1` here. On a hard
     # refresh the PaletteStorage hook hydrates the saved palette from
@@ -28,7 +29,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
      |> assign(:grid_size, @min_grid_size)
      |> assign(:new_color, "")
      |> assign(:active_palette, nil)
-     |> assign(:printer_profiles, PrinterProfile.default_profiles())
+     |> assign(:printer_profiles, printer_profiles)
      |> assign(:active_printer_profile, default_printer_profile)
      |> assign(:printer_profile_form, empty_printer_profile_form())
      |> assign(:display_format, ColorFormat.default_display_format())
