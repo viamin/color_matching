@@ -9,6 +9,7 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       assert html =~ "Color Matching Grid"
       assert html =~ "Manage Colors"
       assert html =~ "Grid Size: 6×6"
+      assert html =~ ~s(id="grid-palette-storage")
     end
 
     test "displays the default color palette", %{conn: conn} do
@@ -120,7 +121,16 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       assert html =~ ~s(class="grid gap-0 w-full h-full")
       assert html =~ ~s(class="grid gap-0 no-print")
       assert html =~ ~s(class="relative overflow-hidden print-cell")
-      assert html =~ ~s(class="relative overflow-hidden w-16 h-16")
+      assert html =~ ~s(class="relative overflow-hidden h-full w-full")
+    end
+
+    test "screen grid cells link to a color pair comparison page", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      assert html =~ ~s(href="/pair?a=%23FF6B6B&amp;b=%23009494")
+      assert html =~ ~s(aria-label="Compare #FF6B6B and #009494")
+      assert html =~ ~s(href="/pair?a=%23FF6B6B&amp;b=%23B1323B")
+      assert html =~ ~s(aria-label="Compare #FF6B6B and #B1323B")
     end
 
     test "links to palette management", %{conn: conn} do
@@ -227,10 +237,10 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       assert html =~ "Grid Size: 6×6"
     end
 
-    test "disables add color button when grid is at maximum size", %{conn: conn} do
+    test "disables add color button when palette is at maximum size", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
 
-      # Change grid to maximum size
+      # Change grid to maximum size, which fills the palette to the same limit.
       view
       |> form("form[phx-change='change_grid_size']", %{"size" => "12"})
       |> render_change()
@@ -241,9 +251,29 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       |> render_change(%{"value" => "#ABCDEF"})
 
       html = render(view)
-      # Button should be disabled even with valid color when at max size
+      # Button should be disabled even with valid color when the palette is full.
       assert html =~ "disabled"
       assert html =~ "Grid Size: 12×12"
+    end
+
+    test "rejects add color submissions once palette reaches the maximum", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      for color <- ["#111111", "#222222", "#333333", "#444444", "#555555", "#666666"] do
+        view
+        |> element("form[phx-submit='add_color']")
+        |> render_submit(%{"color" => color})
+      end
+
+      html =
+        view
+        |> element("form[phx-submit='add_color']")
+        |> render_submit(%{"color" => "#777777"})
+
+      color_count = (html |> String.split("phx-value-index=") |> length()) - 1
+      assert color_count == 12
+      refute html =~ "#777777"
+      assert html =~ "Palettes are limited to 12 colors"
     end
 
     test "add color button works when grid size is less than maximum and color is valid", %{

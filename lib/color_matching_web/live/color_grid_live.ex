@@ -36,32 +36,42 @@ defmodule ColorMatchingWeb.ColorGridLive do
     # Get color from either 'color' or 'value' parameter
     raw_color = params["color"] || params["value"] || socket.assigns.new_color
 
-    if raw_color && raw_color != "" do
-      case ColorFormat.normalize_hex(raw_color) do
-        {:ok, color} ->
-          current_size = socket.assigns.grid_size
-          max_size = @max_grid_colors
-          colors = socket.assigns.colors ++ [color]
-          new_size = min(max(length(colors), current_size + 1), max_size)
+    cond do
+      length(socket.assigns.colors) >= @max_grid_colors ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "Palettes are limited to #{@max_grid_colors} colors so the grid can render every combination."
+         )}
 
-          {:noreply,
-           socket
-           |> assign(:colors, colors)
-           |> assign(:grid_size, new_size)
-           |> assign(:new_color, "")
-           |> assign(:active_palette, nil)
-           |> assign_grid()
-           |> push_active_palette()}
+      raw_color && raw_color != "" ->
+        case ColorFormat.normalize_hex(raw_color) do
+          {:ok, color} ->
+            current_size = socket.assigns.grid_size
+            max_size = @max_grid_colors
+            colors = socket.assigns.colors ++ [color]
+            new_size = min(max(length(colors), current_size + 1), max_size)
 
-        {:error, reason} ->
-          # Reject invalid hex at the boundary so downstream renderers
-          # (Grid.new, ColorUtils.invert_color/1) never see an unparseable
-          # color. ColorUtils.invert_color/1 now also tolerates bad input as
-          # defense in depth, but normalizing here keeps storage clean.
-          {:noreply, put_flash(socket, :error, reason)}
-      end
-    else
-      {:noreply, socket}
+            {:noreply,
+             socket
+             |> assign(:colors, colors)
+             |> assign(:grid_size, new_size)
+             |> assign(:new_color, "")
+             |> assign(:active_palette, nil)
+             |> assign_grid()
+             |> push_active_palette()}
+
+          {:error, reason} ->
+            # Reject invalid hex at the boundary so downstream renderers
+            # (Grid.new, ColorUtils.invert_color/1) never see an unparseable
+            # color. ColorUtils.invert_color/1 now also tolerates bad input as
+            # defense in depth, but normalizing here keeps storage clean.
+            {:noreply, put_flash(socket, :error, reason)}
+        end
+
+      true ->
+        {:noreply, socket}
     end
   end
 
@@ -192,12 +202,18 @@ defmodule ColorMatchingWeb.ColorGridLive do
     end
   end
 
+  defp pair_second_color(%{is_diagonal: true, bottom_right_color: color}) do
+    ColorUtils.invert_color(color)
+  end
+
+  defp pair_second_color(%{bottom_right_color: color}), do: color
+
   def render(assigns) do
     ~H"""
     <div
       class="max-w-6xl mx-auto p-6"
       phx-hook="PaletteStorage"
-      id="palette-storage"
+      id="grid-palette-storage"
       data-load-display-format="true"
     >
       <h1 class="text-3xl font-bold text-gray-900 mb-4 no-print">Color Matching Grid</h1>
@@ -332,7 +348,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
           />
           <button
             type="submit"
-            disabled={@new_color == "" || @grid_size >= @max_grid_colors}
+            disabled={@new_color == "" || length(@colors) >= @max_grid_colors}
             class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
           >
             Add Color
@@ -417,7 +433,13 @@ defmodule ColorMatchingWeb.ColorGridLive do
         >
           <%= for row <- @grid.grid do %>
             <%= for cell <- row do %>
-              <.color_cell cell={cell} class="w-16 h-16" />
+              <.link
+                navigate={~p"/pair?#{[a: cell.top_left_color, b: pair_second_color(cell)]}"}
+                class="block aspect-square focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                aria-label={"Compare #{cell.top_left_color} and #{pair_second_color(cell)}"}
+              >
+                <.color_cell cell={cell} class="h-full w-full" />
+              </.link>
             <% end %>
           <% end %>
         </div>
