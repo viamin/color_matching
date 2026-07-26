@@ -663,5 +663,77 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       assert html =~ "profile_id=profile-"
       assert html =~ "sheet_id=sheet-"
     end
+
+    test "creating a printer profile persists it and marks it active for future mounts", %{
+      conn: conn
+    } do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      view
+      |> form("form[phx-submit='create_printer_profile']", %{
+        "profile" => %{
+          "printer_make_model" => "HP DesignJet Z9+",
+          "paper_type" => "Photo Rag",
+          "ink_type" => "OEM pigment",
+          "icc_profile" => "Z9 Photo Rag",
+          "print_settings" => "Best",
+          "driver_name" => "HP Driver",
+          "driver_version" => "61.3",
+          "calibration_date" => "2026-07-10",
+          "calibration_version" => "rag-1",
+          "notes" => "Studio profile"
+        }
+      })
+      |> render_submit()
+
+      assert_push_event(view, "save_printer_profiles", %{profiles: profiles})
+      assert_push_event(view, "set_active_printer_profile", %{profile_id: active_profile_id})
+
+      custom_profile =
+        Enum.find(profiles, fn profile ->
+          (Map.get(profile, "printer_make_model") || Map.get(profile, :printer_make_model)) ==
+            "HP DesignJet Z9+"
+        end)
+
+      assert (Map.get(custom_profile, "paper_type") || Map.get(custom_profile, :paper_type)) ==
+               "Photo Rag"
+
+      assert (Map.get(custom_profile, "ink_type") || Map.get(custom_profile, :ink_type)) ==
+               "OEM pigment"
+
+      assert active_profile_id == (Map.get(custom_profile, "id") || Map.get(custom_profile, :id))
+    end
+
+    test "hydrates persisted printer profiles and active selection from the storage hook", %{
+      conn: conn
+    } do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      persisted_profile = %{
+        "id" => "profile-studio-rag",
+        "printer_make_model" => "HP DesignJet Z9+",
+        "paper_type" => "Photo Rag",
+        "ink_type" => "OEM pigment",
+        "icc_profile" => "Z9 Photo Rag",
+        "print_settings" => "Best",
+        "driver_name" => "HP Driver",
+        "driver_version" => "61.3",
+        "calibration_date" => "2026-07-10",
+        "calibration_version" => "rag-1",
+        "notes" => "Studio profile"
+      }
+
+      render_hook(view, "printer_profiles_loaded", %{"profiles" => [persisted_profile]})
+
+      html =
+        render_hook(view, "active_printer_profile_loaded", %{
+          "profile_id" => persisted_profile["id"]
+        })
+
+      assert html =~ "HP DesignJet Z9+ on Photo Rag"
+      assert html =~ "ICC: Z9 Photo Rag."
+      assert html =~ "Calibration: rag-1."
+      assert html =~ ~s(value="#{persisted_profile["id"]}" selected)
+    end
   end
 end

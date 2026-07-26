@@ -142,6 +142,8 @@ defmodule ColorMatchingWeb.ColorGridLive do
          |> assign(:active_printer_profile, printer_profile)
          |> assign(:printer_profile_form, empty_printer_profile_form())
          |> assign_grid()
+         |> persist_printer_profiles()
+         |> persist_active_printer_profile()
          |> put_flash(
            :info,
            "Created printer profile #{PrinterProfile.display_name(printer_profile)}"
@@ -163,7 +165,8 @@ defmodule ColorMatchingWeb.ColorGridLive do
     {:noreply,
      socket
      |> assign(:active_printer_profile, printer_profile)
-     |> assign_grid()}
+     |> assign_grid()
+     |> persist_active_printer_profile()}
   end
 
   def handle_event("set_display_format", %{"format" => format}, socket) do
@@ -212,6 +215,37 @@ defmodule ColorMatchingWeb.ColorGridLive do
 
   def handle_event("active_palette_loaded", _params, socket), do: {:noreply, socket}
 
+  def handle_event("printer_profiles_loaded", %{"profiles" => profiles}, socket)
+      when is_list(profiles) do
+    printer_profiles =
+      profiles
+      |> Enum.map(&build_printer_profile/1)
+      |> Enum.reject(&is_nil/1)
+      |> merge_default_printer_profiles()
+
+    {:noreply,
+     socket
+     |> assign(:printer_profiles, printer_profiles)
+     |> assign(:active_printer_profile, active_printer_profile(printer_profiles, socket.assigns))
+     |> assign_grid()}
+  end
+
+  def handle_event("printer_profiles_loaded", _params, socket), do: {:noreply, socket}
+
+  def handle_event("active_printer_profile_loaded", %{"profile_id" => profile_id}, socket)
+      when is_binary(profile_id) and profile_id != "" do
+    printer_profile =
+      Enum.find(socket.assigns.printer_profiles, &(&1.id == profile_id)) ||
+        socket.assigns.active_printer_profile
+
+    {:noreply,
+     socket
+     |> assign(:active_printer_profile, printer_profile)
+     |> assign_grid()}
+  end
+
+  def handle_event("active_printer_profile_loaded", _params, socket), do: {:noreply, socket}
+
   defp assign_grid(socket) do
     grid = Grid.new(socket.assigns.colors, socket.assigns.grid_size)
 
@@ -244,6 +278,18 @@ defmodule ColorMatchingWeb.ColorGridLive do
       name: active && active.name,
       colors: socket.assigns.colors,
       is_preset: (active && active.is_preset) || false
+    })
+  end
+
+  defp persist_printer_profiles(socket) do
+    push_event(socket, "save_printer_profiles", %{
+      profiles: Enum.map(socket.assigns.printer_profiles, &Map.from_struct/1)
+    })
+  end
+
+  defp persist_active_printer_profile(socket) do
+    push_event(socket, "set_active_printer_profile", %{
+      profile_id: socket.assigns.active_printer_profile.id
     })
   end
 
@@ -296,6 +342,27 @@ defmodule ColorMatchingWeb.ColorGridLive do
 
   defp upsert_printer_profile(printer_profiles, printer_profile) do
     [printer_profile | Enum.reject(printer_profiles, &(&1.id == printer_profile.id))]
+  end
+
+  defp build_printer_profile(params) when is_map(params) do
+    case PrinterProfile.validate(params) do
+      {:ok, printer_profile} -> printer_profile
+      {:error, _message} -> nil
+    end
+  end
+
+  defp build_printer_profile(_params), do: nil
+
+  defp merge_default_printer_profiles(printer_profiles) do
+    existing_ids = MapSet.new(printer_profiles, & &1.id)
+
+    printer_profiles ++
+      Enum.reject(PrinterProfile.default_profiles(), &MapSet.member?(existing_ids, &1.id))
+  end
+
+  defp active_printer_profile(printer_profiles, assigns) do
+    Enum.find(printer_profiles, &(&1.id == assigns.active_printer_profile.id)) ||
+      List.first(printer_profiles)
   end
 
   def render(assigns) do
