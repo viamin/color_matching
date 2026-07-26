@@ -118,9 +118,9 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
     test "renders edge-to-edge swatches without grid gaps or borders", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/")
 
-      assert html =~ ~s(class="grid gap-0 w-full h-full")
+      assert html =~ ~s(class="print-color-grid grid gap-0 w-full h-full")
       assert html =~ ~s(class="grid gap-0 no-print")
-      assert html =~ ~s(class="relative overflow-hidden print-cell")
+      assert html =~ ~s(class="relative overflow-hidden print-grid-cell print-cell")
       assert html =~ ~s(class="relative overflow-hidden h-full w-full")
     end
 
@@ -131,6 +131,17 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       assert html =~ ~s(aria-label="Compare #FF6B6B and #009494")
       assert html =~ ~s(href="/pair?a=%23FF6B6B&amp;b=%23B1323B")
       assert html =~ ~s(aria-label="Compare #FF6B6B and #B1323B")
+    end
+
+    test "print stylesheet removes swatch chrome from the print grid" do
+      css = File.read!("assets/css/app.css")
+
+      assert css =~ ".print-grid-cell {"
+      assert css =~ "border: 0 !important;"
+      assert css =~ "margin: 0 !important;"
+      assert css =~ "padding: 0 !important;"
+      assert css =~ ".print-color-grid {"
+      assert css =~ "gap: 0 !important;"
     end
 
     test "links to palette management", %{conn: conn} do

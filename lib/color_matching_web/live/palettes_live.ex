@@ -57,8 +57,8 @@ defmodule ColorMatchingWeb.PalettesLive do
     {:noreply, assign(socket, :active_palette_hydrated, true)}
   end
 
-  def handle_event("update_new_palette_name", %{"value" => value}, socket) do
-    {:noreply, assign(socket, :new_palette_name, value)}
+  def handle_event("update_new_palette_name", params, socket) do
+    {:noreply, assign(socket, :new_palette_name, input_value(params, "name"))}
   end
 
   def handle_event("create_palette", %{"name" => name}, socket) do
@@ -183,8 +183,8 @@ defmodule ColorMatchingWeb.PalettesLive do
     {:noreply, put_flash(socket, :info, "Deleted \"#{name}\"")}
   end
 
-  def handle_event("update_editor_name_input", %{"value" => value}, socket) do
-    {:noreply, assign(socket, :editing_name, value)}
+  def handle_event("update_editor_name_input", params, socket) do
+    {:noreply, assign(socket, :editing_name, input_value(params, "name"))}
   end
 
   def handle_event("rename_palette", %{"name" => name}, socket) do
@@ -252,8 +252,8 @@ defmodule ColorMatchingWeb.PalettesLive do
     end
   end
 
-  def handle_event("update_new_color_value", %{"value" => value}, socket) do
-    {:noreply, assign(socket, :new_color_value, value)}
+  def handle_event("update_new_color_value", params, socket) do
+    {:noreply, assign(socket, :new_color_value, input_value(params, "color"))}
   end
 
   def handle_event("add_editor_color", %{"color" => color}, socket) do
@@ -320,7 +320,11 @@ defmodule ColorMatchingWeb.PalettesLive do
 
   def render(assigns) do
     ~H"""
-    <div class="max-w-7xl mx-auto p-6 space-y-6" phx-hook="PaletteStorage" id="palette-storage">
+    <div
+      class="max-w-7xl mx-auto p-6 space-y-6"
+      phx-hook="PaletteStorage"
+      id="palettes-palette-storage"
+    >
       <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 class="text-3xl font-bold text-gray-900">Palette Management</h1>
@@ -838,6 +842,10 @@ defmodule ColorMatchingWeb.PalettesLive do
   end
 
   defp move_color(colors, _index, _direction), do: colors
+
+  defp input_value(params, field) do
+    Map.get(params, field) || Map.get(params, "value") || ""
+  end
 
   defp put_in_editor_input(socket, index, format, value) do
     current_row = Map.get(socket.assigns.editor_inputs, index, %{})

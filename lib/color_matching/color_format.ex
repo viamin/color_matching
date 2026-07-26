@@ -1,7 +1,7 @@
 defmodule ColorMatching.ColorFormat do
   @moduledoc """
   Conversion and validation utilities for working with a single color across
-  multiple representations.
+  multiple representations: HEX, RGB, HSL, and HSV/HSB.
 
   The canonical internal color format used throughout the application remains
   a 6-digit hex string prefixed with `#` (e.g. `"#FF6B6B"`), matching the
