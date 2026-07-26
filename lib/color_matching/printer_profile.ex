@@ -20,8 +20,7 @@ defmodule ColorMatching.PrinterProfile do
     {:driver_name, :profile_driver_name, "profile_driver_name"},
     {:driver_version, :profile_driver_version, "profile_driver_version"},
     {:calibration_date, :profile_calibration_date, "profile_calibration_date"},
-    {:calibration_version, :profile_calibration_version, "profile_calibration_version"},
-    {:notes, :profile_notes, "profile_notes"}
+    {:calibration_version, :profile_calibration_version, "profile_calibration_version"}
   ]
 
   defstruct id: nil,
@@ -155,7 +154,9 @@ defmodule ColorMatching.PrinterProfile do
 
   @spec from_query_params(map(), [t()]) :: t() | nil
   def from_query_params(params, printer_profiles \\ default_profiles())
-  def from_query_params(params, printer_profiles) when is_map(params) and is_list(printer_profiles) do
+
+  def from_query_params(params, printer_profiles)
+      when is_map(params) and is_list(printer_profiles) do
     profile_id = fetch(params, :profile_id)
 
     Enum.find(printer_profiles, &(&1.id == profile_id)) || profile_from_query_params(params)
@@ -165,8 +166,8 @@ defmodule ColorMatching.PrinterProfile do
 
   defp profile_from_query_params(params) when is_map(params) do
     attrs =
-      Enum.reduce(@query_param_fields, %{}, fn {field, _atom_key, string_key}, acc ->
-        case fetch(params, string_key) do
+      Enum.reduce(@query_param_fields, %{}, fn {field, atom_key, _string_key}, acc ->
+        case fetch(params, atom_key) do
           value when is_binary(value) and value != "" -> Map.put(acc, field, value)
           _value -> acc
         end
@@ -214,7 +215,8 @@ defmodule ColorMatching.PrinterProfile do
   defp fetch(map, key) do
     case Map.fetch(map, key) do
       {:ok, value} -> value
-      :error -> Map.get(map, Atom.to_string(key))
+      :error when is_atom(key) -> Map.get(map, Atom.to_string(key))
+      :error -> nil
     end
   end
 

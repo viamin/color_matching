@@ -45,8 +45,7 @@ defmodule ColorMatchingWeb.ColorPairLiveTest do
           "/pair?a=%23ABCDEF&b=%23123456&sheet_id=sheet-demo&profile_id=profile-demo" <>
             "&profile_printer_make_model=Epson+SureColor+P900" <>
             "&profile_paper_type=Premium+Luster" <>
-            "&profile_ink_type=OEM+pigment" <>
-            "&profile_notes=Private+note"
+            "&profile_ink_type=OEM+pigment"
         )
 
       assert html =~ "Measurement Context"

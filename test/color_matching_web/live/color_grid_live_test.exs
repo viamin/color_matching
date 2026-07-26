@@ -130,14 +130,13 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       [default_profile | _] = ColorMatching.PrinterProfile.default_profiles()
       assert html =~ ~s(href="/pair?a=%23FF6B6B&amp;b=%23009494&amp;sheet_id=sheet-)
       assert html =~ ~s(&amp;profile_id=#{default_profile.id})
+
       assert html =~
-               URI.encode_query(
-                 profile_printer_make_model: default_profile.printer_make_model
-               )
+               URI.encode_query(profile_printer_make_model: default_profile.printer_make_model)
 
       assert html =~ URI.encode_query(profile_paper_type: default_profile.paper_type)
       assert html =~ URI.encode_query(profile_ink_type: default_profile.ink_type)
-      assert html =~ URI.encode_query(profile_notes: default_profile.notes)
+      refute html =~ "profile_notes="
       assert html =~ ~s(aria-label="Compare #FF6B6B and #009494")
       assert html =~ ~s(href="/pair?a=%23FF6B6B&amp;b=%23B1323B&amp;sheet_id=sheet-)
       assert html =~ ~s(aria-label="Compare #FF6B6B and #B1323B")
@@ -664,7 +663,7 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       assert html =~ "for HP DesignJet Z9+ on Photo Rag"
       assert html =~ "profile_id=profile-"
       assert html =~ "sheet_id=sheet-"
-      assert html =~ "profile_notes=Studio+profile"
+      refute html =~ "profile_notes="
       assert html =~ "profile_printer_make_model=HP+DesignJet+Z9%2B"
     end
 

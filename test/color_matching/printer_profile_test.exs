@@ -152,7 +152,7 @@ defmodule ColorMatching.PrinterProfileTest do
       assert rebuilt.driver_version == "15.4"
       assert rebuilt.calibration_date == "2026-07-01"
       assert rebuilt.calibration_version == "baseline-1"
-      assert rebuilt.notes == "Reference profile"
+      assert rebuilt.notes == nil
     end
 
     test "query params include enough data to rebuild a custom profile anywhere" do
@@ -174,18 +174,42 @@ defmodule ColorMatching.PrinterProfileTest do
       params = profile |> PrinterProfile.to_query_params() |> Map.new()
 
       assert params == %{
-               "profile_calibration_date" => "2026-07-01",
-               "profile_calibration_version" => "baseline-1",
-               "profile_driver_name" => "Epson macOS Driver",
-               "profile_driver_version" => "15.4",
-               "profile_icc_profile" => "SC-P900 Premium Luster",
-               "profile_id" => "profile-full",
-               "profile_ink_type" => "OEM UltraChrome PRO10",
-               "profile_notes" => "Reference profile",
-               "profile_paper_type" => "Ultra Premium Luster",
-               "profile_print_settings" => "1440 dpi, high quality",
-               "profile_printer_make_model" => "Epson SureColor P900"
+               profile_calibration_date: "2026-07-01",
+               profile_calibration_version: "baseline-1",
+               profile_driver_name: "Epson macOS Driver",
+               profile_driver_version: "15.4",
+               profile_icc_profile: "SC-P900 Premium Luster",
+               profile_id: "profile-full",
+               profile_ink_type: "OEM UltraChrome PRO10",
+               profile_paper_type: "Ultra Premium Luster",
+               profile_print_settings: "1440 dpi, high quality",
+               profile_printer_make_model: "Epson SureColor P900"
              }
+    end
+
+    test "query params tolerate missing optional string keys" do
+      rebuilt =
+        PrinterProfile.from_query_params(
+          %{
+            "profile_id" => "profile-demo",
+            "profile_printer_make_model" => "Epson SureColor P700",
+            "profile_paper_type" => "Baryta",
+            "profile_ink_type" => "OEM pigment"
+          },
+          []
+        )
+
+      assert rebuilt.id == "profile-demo"
+      assert rebuilt.printer_make_model == "Epson SureColor P700"
+      assert rebuilt.paper_type == "Baryta"
+      assert rebuilt.ink_type == "OEM pigment"
+      assert rebuilt.icc_profile == nil
+      assert rebuilt.print_settings == nil
+      assert rebuilt.driver_name == nil
+      assert rebuilt.driver_version == nil
+      assert rebuilt.calibration_date == nil
+      assert rebuilt.calibration_version == nil
+      assert rebuilt.notes == nil
     end
   end
 end
