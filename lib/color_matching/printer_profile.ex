@@ -73,6 +73,16 @@ defmodule ColorMatching.PrinterProfile do
 
   def validate(_attrs), do: {:error, "Printer profile attributes must be a map"}
 
+  @spec from_map(map()) :: t() | nil
+  def from_map(attrs) when is_map(attrs) do
+    case validate(attrs) do
+      {:ok, printer_profile} -> printer_profile
+      {:error, _message} -> nil
+    end
+  end
+
+  def from_map(_attrs), do: nil
+
   @spec display_name(t()) :: String.t()
   def display_name(%__MODULE__{} = profile) do
     "#{profile.printer_make_model} on #{profile.paper_type}"
@@ -113,6 +123,14 @@ defmodule ColorMatching.PrinterProfile do
         notes: "Use only for exploratory matte runs"
       })
     ]
+  end
+
+  @spec merge_with_defaults([t()]) :: [t()]
+  def merge_with_defaults(printer_profiles) when is_list(printer_profiles) do
+    existing_ids = MapSet.new(printer_profiles, & &1.id)
+
+    printer_profiles ++
+      Enum.reject(default_profiles(), &MapSet.member?(existing_ids, &1.id))
   end
 
   @spec from_query_params(map(), [t()]) :: t() | nil

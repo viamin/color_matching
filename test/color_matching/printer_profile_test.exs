@@ -38,6 +38,54 @@ defmodule ColorMatching.PrinterProfileTest do
     end
   end
 
+  describe "from_map/1" do
+    test "builds a printer profile from valid map attributes" do
+      profile =
+        PrinterProfile.from_map(%{
+          "printer_make_model" => "Epson SureColor P900",
+          "paper_type" => "Premium Luster",
+          "ink_type" => "OEM pigment",
+          "notes" => "Fresh nozzle check"
+        })
+
+      assert %PrinterProfile{} = profile
+      assert profile.printer_make_model == "Epson SureColor P900"
+      assert profile.paper_type == "Premium Luster"
+      assert profile.ink_type == "OEM pigment"
+      assert profile.notes == "Fresh nozzle check"
+    end
+
+    test "returns nil for invalid printer profile attributes" do
+      assert is_nil(PrinterProfile.from_map(%{"paper_type" => "Matte", "ink_type" => "OEM"}))
+      assert is_nil(PrinterProfile.from_map("not-a-map"))
+    end
+  end
+
+  describe "merge_with_defaults/1" do
+    test "preserves custom profiles and appends missing defaults without duplicates" do
+      custom_profile =
+        PrinterProfile.new(%{
+          id: "profile-custom",
+          printer_make_model: "Canon PRO-1000",
+          paper_type: "Fine Art",
+          ink_type: "OEM pigment"
+        })
+
+      [default_profile | _] = PrinterProfile.default_profiles()
+
+      merged =
+        PrinterProfile.merge_with_defaults([
+          custom_profile,
+          default_profile
+        ])
+
+      assert Enum.take(merged, 2) == [custom_profile, default_profile]
+      assert Enum.count(merged, &(&1.id == custom_profile.id)) == 1
+      assert Enum.count(merged, &(&1.id == default_profile.id)) == 1
+      assert length(merged) == length(PrinterProfile.default_profiles()) + 1
+    end
+  end
+
   describe "associations" do
     test "generated sheets and measured pairs retain printer profile context" do
       profile =

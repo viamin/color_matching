@@ -17,9 +17,9 @@ defmodule ColorMatchingWeb.ColorPairLive do
       when is_list(profiles) do
     printer_profiles =
       profiles
-      |> Enum.map(&build_printer_profile/1)
+      |> Enum.map(&PrinterProfile.from_map/1)
       |> Enum.reject(&is_nil/1)
-      |> merge_default_printer_profiles()
+      |> PrinterProfile.merge_with_defaults()
 
     {:noreply,
      socket
@@ -75,22 +75,6 @@ defmodule ColorMatchingWeb.ColorPairLive do
   end
 
   defp build_measurement_context(_params, _printer_profile), do: nil
-
-  defp build_printer_profile(params) when is_map(params) do
-    case PrinterProfile.validate(params) do
-      {:ok, printer_profile} -> printer_profile
-      {:error, _message} -> nil
-    end
-  end
-
-  defp build_printer_profile(_params), do: nil
-
-  defp merge_default_printer_profiles(printer_profiles) do
-    existing_ids = MapSet.new(printer_profiles, & &1.id)
-
-    printer_profiles ++
-      Enum.reject(PrinterProfile.default_profiles(), &MapSet.member?(existing_ids, &1.id))
-  end
 
   def render(assigns) do
     ~H"""
