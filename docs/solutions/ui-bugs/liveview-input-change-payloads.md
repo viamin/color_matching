@@ -4,7 +4,7 @@ date: 2026-07-25
 category: ui-bugs
 module: ColorMatchingWeb.PalettesLive
 problem_type: ui_bug
-component: tooling
+component: palettes
 symptoms:
   - "Typing in the palette name field crashed the PalettesLive process"
   - "The Create button became disabled again after hydration"
@@ -82,4 +82,4 @@ Accepting params and extracting either the named field or `"value"` prevents a `
 
 ## Related Issues
 
-- This is currently the only `docs/solutions/` entry in the repo.
+- The hydration issue that preceded this incident (palette-storage hook needing a page-specific id) is tracked in the same incident branch.
