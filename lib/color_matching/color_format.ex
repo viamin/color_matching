@@ -462,6 +462,25 @@ defmodule ColorMatching.ColorFormat do
 
   def format_color(_color, _format), do: {:error, "Unsupported color display format"}
 
+  @doc """
+  Returns every supported display representation for a hex color.
+  """
+  @spec format_all(String.t()) :: {:ok, [{String.t(), String.t()}]} | {:error, String.t()}
+  def format_all(color) do
+    with {:ok, normalized} <- normalize_hex(color),
+         {:ok, rgb} <- format_color(normalized, :rgb),
+         {:ok, hsl} <- format_color(normalized, :hsl),
+         {:ok, hsv} <- format_color(normalized, :hsv) do
+      {:ok,
+       [
+         {"HEX", normalized},
+         {"RGB", rgb},
+         {"HSL", hsl},
+         {"HSV", hsv}
+       ]}
+    end
+  end
+
   # ---------------------------------------------------------------------
   # Shared helpers
   # ---------------------------------------------------------------------

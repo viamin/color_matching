@@ -192,6 +192,12 @@ defmodule ColorMatchingWeb.ColorGridLive do
     end
   end
 
+  defp pair_second_color(%{is_diagonal: true, bottom_right_color: color}) do
+    ColorUtils.invert_color(color)
+  end
+
+  defp pair_second_color(%{bottom_right_color: color}), do: color
+
   def render(assigns) do
     ~H"""
     <div
@@ -417,7 +423,13 @@ defmodule ColorMatchingWeb.ColorGridLive do
         >
           <%= for row <- @grid.grid do %>
             <%= for cell <- row do %>
-              <.color_cell cell={cell} class="w-16 h-16" />
+              <.link
+                navigate={~p"/pair?#{[a: cell.top_left_color, b: pair_second_color(cell)]}"}
+                class="block aspect-square focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                aria-label={"Compare #{cell.top_left_color} and #{pair_second_color(cell)}"}
+              >
+                <.color_cell cell={cell} class="h-full w-full" />
+              </.link>
             <% end %>
           <% end %>
         </div>

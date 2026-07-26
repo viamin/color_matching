@@ -19,6 +19,7 @@ defmodule ColorMatchingWeb.Router do
 
     live "/", ColorGridLive
     live "/palettes", PalettesLive
+    live "/pair", ColorPairLive
     get "/home", PageController, :home
   end
 

@@ -120,7 +120,16 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       assert html =~ ~s(class="grid gap-0 w-full h-full")
       assert html =~ ~s(class="grid gap-0 no-print")
       assert html =~ ~s(class="relative overflow-hidden print-cell")
-      assert html =~ ~s(class="relative overflow-hidden w-16 h-16")
+      assert html =~ ~s(class="relative overflow-hidden h-full w-full")
+    end
+
+    test "screen grid cells link to a color pair comparison page", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      assert html =~ ~s(href="/pair?a=%23FF6B6B&amp;b=%23009494")
+      assert html =~ ~s(aria-label="Compare #FF6B6B and #009494")
+      assert html =~ ~s(href="/pair?a=%23FF6B6B&amp;b=%23B1323B")
+      assert html =~ ~s(aria-label="Compare #FF6B6B and #B1323B")
     end
 
     test "links to palette management", %{conn: conn} do
