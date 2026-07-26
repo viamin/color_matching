@@ -495,21 +495,8 @@ defmodule ColorMatching.ColorFormat do
   @spec format_all(String.t()) :: {:ok, [{String.t(), String.t()}]} | {:error, String.t()}
   def format_all(color) do
     case normalize_hex(color) do
-      {:ok, normalized} ->
-        @representation_specs
-        |> Enum.reduce_while({:ok, []}, fn {label, representation}, {:ok, formats} ->
-          case format_representation(normalized, representation) do
-            {:ok, value} -> {:cont, {:ok, [{label, value} | formats]}}
-            {:error, reason} -> {:halt, {:error, reason}}
-          end
-        end)
-        |> case do
-          {:ok, formats} -> {:ok, Enum.reverse(formats)}
-          error -> error
-        end
-
-      {:error, reason} ->
-        {:error, reason}
+      {:ok, normalized} -> format_all_representations(normalized)
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -529,6 +516,20 @@ defmodule ColorMatching.ColorFormat do
   # ---------------------------------------------------------------------
   # Shared helpers
   # ---------------------------------------------------------------------
+
+  defp format_all_representations(color) do
+    @representation_specs
+    |> Enum.reduce_while({:ok, []}, fn {label, representation}, {:ok, formats} ->
+      case format_representation(color, representation) do
+        {:ok, value} -> {:cont, {:ok, [{label, value} | formats]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:ok, formats} -> {:ok, Enum.reverse(formats)}
+      error -> error
+    end
+  end
 
   @spec format_representation(String.t(), atom()) :: {:ok, String.t()} | {:error, String.t()}
   defp format_representation(color, :hex), do: normalize_hex(color)
