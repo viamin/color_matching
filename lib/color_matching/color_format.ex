@@ -483,18 +483,22 @@ defmodule ColorMatching.ColorFormat do
   """
   @spec format_all(String.t()) :: {:ok, [{String.t(), String.t()}]} | {:error, String.t()}
   def format_all(color) do
-    with {:ok, normalized} <- normalize_hex(color) do
-      @representation_specs
-      |> Enum.reduce_while({:ok, []}, fn {label, representation}, {:ok, formats} ->
-        case format_representation(normalized, representation) do
-          {:ok, value} -> {:cont, {:ok, [{label, value} | formats]}}
-          {:error, reason} -> {:halt, {:error, reason}}
+    case normalize_hex(color) do
+      {:ok, normalized} ->
+        @representation_specs
+        |> Enum.reduce_while({:ok, []}, fn {label, representation}, {:ok, formats} ->
+          case format_representation(normalized, representation) do
+            {:ok, value} -> {:cont, {:ok, [{label, value} | formats]}}
+            {:error, reason} -> {:halt, {:error, reason}}
+          end
+        end)
+        |> case do
+          {:ok, formats} -> {:ok, Enum.reverse(formats)}
+          error -> error
         end
-      end)
-      |> case do
-        {:ok, formats} -> {:ok, Enum.reverse(formats)}
-        error -> error
-      end
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -522,55 +526,74 @@ defmodule ColorMatching.ColorFormat do
   defp format_representation(color, :hsv), do: format_color(color, :hsv)
 
   defp format_representation(color, :linear_rgb) do
-    with {:ok, rgb} <- ColorSpace.hex_to_linear_rgb(color) do
-      {:ok, format_tuple(rgb, {"R", "G", "B"})}
+    case ColorSpace.hex_to_linear_rgb(color) do
+      {:ok, rgb} -> {:ok, format_tuple(rgb, {"R", "G", "B"})}
+      {:error, reason} -> {:error, reason}
     end
   end
 
   defp format_representation(color, :xyz) do
-    with {:ok, xyz} <- ColorSpace.hex_to_xyz(color) do
-      {:ok, format_tuple(xyz, {"X", "Y", "Z"})}
+    case ColorSpace.hex_to_xyz(color) do
+      {:ok, xyz} -> {:ok, format_tuple(xyz, {"X", "Y", "Z"})}
+      {:error, reason} -> {:error, reason}
     end
   end
 
   defp format_representation(color, :lab) do
-    with {:ok, lab} <- ColorSpace.hex_to_lab(color) do
-      {:ok, format_tuple(lab, {"L*", "a*", "b*"})}
+    case ColorSpace.hex_to_lab(color) do
+      {:ok, lab} -> {:ok, format_tuple(lab, {"L*", "a*", "b*"})}
+      {:error, reason} -> {:error, reason}
     end
   end
 
   defp format_representation(color, :lch) do
-    with {:ok, {l, c, h}} <- ColorSpace.hex_to_lch(color) do
-      {:ok, "L*: #{format_float(l)}, C*: #{format_float(c)}, h°: #{format_float(h)}"}
+    case ColorSpace.hex_to_lch(color) do
+      {:ok, {l, c, h}} ->
+        {:ok, "L*: #{format_float(l)}, C*: #{format_float(c)}, h°: #{format_float(h)}"}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
   defp format_representation(color, :xyy) do
-    with {:ok, xyy} <- ColorSpace.hex_to_xyy(color) do
-      {:ok, format_tuple(xyy, {"x", "y", "Y"})}
+    case ColorSpace.hex_to_xyy(color) do
+      {:ok, xyy} -> {:ok, format_tuple(xyy, {"x", "y", "Y"})}
+      {:error, reason} -> {:error, reason}
     end
   end
 
   defp format_representation(color, :oklab) do
-    with {:ok, lab} <- ColorSpace.hex_to_oklab(color) do
-      {:ok, format_tuple(lab, {"L", "a", "b"})}
+    case ColorSpace.hex_to_oklab(color) do
+      {:ok, lab} -> {:ok, format_tuple(lab, {"L", "a", "b"})}
+      {:error, reason} -> {:error, reason}
     end
   end
 
   defp format_representation(color, :oklch) do
-    with {:ok, {l, c, h}} <- ColorSpace.hex_to_oklch(color) do
-      {:ok, "L: #{format_float(l)}, C: #{format_float(c)}, h°: #{format_float(h)}"}
+    case ColorSpace.hex_to_oklch(color) do
+      {:ok, {l, c, h}} ->
+        {:ok, "L: #{format_float(l)}, C: #{format_float(c)}, h°: #{format_float(h)}"}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
   defp format_representation(color, :relative_luminance) do
-    with {:ok, luminance} <- ColorSpace.relative_luminance(color) do
-      {:ok, format_float(luminance)}
+    case ColorSpace.relative_luminance(color) do
+      {:ok, luminance} -> {:ok, format_float(luminance)}
+      {:error, reason} -> {:error, reason}
     end
   end
 
   defp format_tuple({first, second, third}, {first_label, second_label, third_label}) do
-    "#{first_label}: #{format_float(first)}, #{second_label}: #{format_float(second)}, #{third_label}: #{format_float(third)}"
+    [
+      "#{first_label}: #{format_float(first)}",
+      "#{second_label}: #{format_float(second)}",
+      "#{third_label}: #{format_float(third)}"
+    ]
+    |> Enum.join(", ")
   end
 
   defp format_float(value) do

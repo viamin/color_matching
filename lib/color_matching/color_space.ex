@@ -52,8 +52,9 @@ defmodule ColorMatching.ColorSpace do
 
   @spec hex_to_lch(String.t()) :: {:ok, lch()} | {:error, String.t()}
   def hex_to_lch(hex) do
-    with {:ok, lab} <- hex_to_lab(hex) do
-      {:ok, lab_to_lch(lab)}
+    case hex_to_lab(hex) do
+      {:ok, lab} -> {:ok, lab_to_lch(lab)}
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -92,8 +93,9 @@ defmodule ColorMatching.ColorSpace do
 
   @spec hex_to_oklch(String.t()) :: {:ok, lch()} | {:error, String.t()}
   def hex_to_oklch(hex) do
-    with {:ok, oklab} <- hex_to_oklab(hex) do
-      {:ok, lab_to_lch(oklab)}
+    case hex_to_oklab(hex) do
+      {:ok, oklab} -> {:ok, lab_to_lch(oklab)}
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -102,8 +104,9 @@ defmodule ColorMatching.ColorSpace do
   """
   @spec relative_luminance(String.t()) :: {:ok, float()} | {:error, String.t()}
   def relative_luminance(hex) do
-    with {:ok, {_x, y, _z}} <- hex_to_xyz(hex) do
-      {:ok, y}
+    case hex_to_xyz(hex) do
+      {:ok, {_x, y, _z}} -> {:ok, y}
+      {:error, reason} -> {:error, reason}
     end
   end
 
