@@ -84,6 +84,26 @@ defmodule ColorMatching.PrinterProfileTest do
       assert Enum.count(merged, &(&1.id == default_profile.id)) == 1
       assert length(merged) == length(PrinterProfile.default_profiles()) + 1
     end
+
+    test "prefers canonical built-in profiles over persisted copies with default ids" do
+      [default_profile | _] = PrinterProfile.default_profiles()
+
+      stale_persisted_copy =
+        PrinterProfile.new(%{
+          id: default_profile.id,
+          printer_make_model: default_profile.printer_make_model,
+          paper_type: default_profile.paper_type,
+          ink_type: default_profile.ink_type,
+          icc_profile: "Outdated ICC",
+          driver_version: "0.9",
+          calibration_version: "stale-local-copy"
+        })
+
+      merged = PrinterProfile.merge_with_defaults([stale_persisted_copy])
+
+      assert Enum.count(merged, &(&1.id == default_profile.id)) == 1
+      assert Enum.find(merged, &(&1.id == default_profile.id)) == default_profile
+    end
   end
 
   describe "associations" do

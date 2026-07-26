@@ -146,10 +146,15 @@ defmodule ColorMatching.PrinterProfile do
 
   @spec merge_with_defaults([t()]) :: [t()]
   def merge_with_defaults(printer_profiles) when is_list(printer_profiles) do
-    existing_ids = MapSet.new(printer_profiles, & &1.id)
+    default_profiles = default_profiles()
+    default_ids = MapSet.new(default_profiles, & &1.id)
 
-    printer_profiles ++
-      Enum.reject(default_profiles(), &MapSet.member?(existing_ids, &1.id))
+    custom_profiles =
+      Enum.reject(printer_profiles, fn profile ->
+        MapSet.member?(default_ids, profile.id)
+      end)
+
+    custom_profiles ++ default_profiles
   end
 
   @spec from_query_params(map(), [t()]) :: t() | nil
