@@ -22,31 +22,43 @@ defmodule ColorMatching.ColorSpace do
 
   @spec hex_to_linear_rgb(String.t()) :: {:ok, linear_rgb()} | {:error, String.t()}
   def hex_to_linear_rgb(hex) do
-    with {:ok, {r, g, b}} <- ColorFormat.hex_to_rgb(hex) do
-      {:ok, {srgb_channel_to_linear(r), srgb_channel_to_linear(g), srgb_channel_to_linear(b)}}
+    case ColorFormat.hex_to_rgb(hex) do
+      {:ok, {r, g, b}} ->
+        {:ok, {srgb_channel_to_linear(r), srgb_channel_to_linear(g), srgb_channel_to_linear(b)}}
+
+      error ->
+        error
     end
   end
 
   @spec hex_to_xyz(String.t()) :: {:ok, xyz()} | {:error, String.t()}
   def hex_to_xyz(hex) do
-    with {:ok, {r, g, b}} <- hex_to_linear_rgb(hex) do
-      {:ok,
-       {
-         0.4124564 * r + 0.3575761 * g + 0.1804375 * b,
-         0.2126729 * r + 0.7151522 * g + 0.072175 * b,
-         0.0193339 * r + 0.119192 * g + 0.9503041 * b
-       }}
+    case hex_to_linear_rgb(hex) do
+      {:ok, {r, g, b}} ->
+        {:ok,
+         {
+           0.4124564 * r + 0.3575761 * g + 0.1804375 * b,
+           0.2126729 * r + 0.7151522 * g + 0.072175 * b,
+           0.0193339 * r + 0.119192 * g + 0.9503041 * b
+         }}
+
+      error ->
+        error
     end
   end
 
   @spec hex_to_lab(String.t()) :: {:ok, lab()} | {:error, String.t()}
   def hex_to_lab(hex) do
-    with {:ok, {x, y, z}} <- hex_to_xyz(hex) do
-      fx = lab_f(x / @d65_x)
-      fy = lab_f(y / @d65_y)
-      fz = lab_f(z / @d65_z)
+    case hex_to_xyz(hex) do
+      {:ok, {x, y, z}} ->
+        fx = lab_f(x / @d65_x)
+        fy = lab_f(y / @d65_y)
+        fz = lab_f(z / @d65_z)
 
-      {:ok, {116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)}}
+        {:ok, {116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)}}
+
+      error ->
+        error
     end
   end
 
@@ -60,34 +72,42 @@ defmodule ColorMatching.ColorSpace do
 
   @spec hex_to_xyy(String.t()) :: {:ok, xyy()} | {:error, String.t()}
   def hex_to_xyy(hex) do
-    with {:ok, {x, y, z}} <- hex_to_xyz(hex) do
-      sum = x + y + z
+    case hex_to_xyz(hex) do
+      {:ok, {x, y, z}} ->
+        sum = x + y + z
 
-      if sum == 0 do
-        {:ok, {0.0, 0.0, y}}
-      else
-        {:ok, {x / sum, y / sum, y}}
-      end
+        if sum == 0 do
+          {:ok, {0.0, 0.0, y}}
+        else
+          {:ok, {x / sum, y / sum, y}}
+        end
+
+      error ->
+        error
     end
   end
 
   @spec hex_to_oklab(String.t()) :: {:ok, lab()} | {:error, String.t()}
   def hex_to_oklab(hex) do
-    with {:ok, {r, g, b}} <- hex_to_linear_rgb(hex) do
-      l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b
-      m = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b
-      s = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b
+    case hex_to_linear_rgb(hex) do
+      {:ok, {r, g, b}} ->
+        l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b
+        m = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b
+        s = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b
 
-      l_ = cube_root(l)
-      m_ = cube_root(m)
-      s_ = cube_root(s)
+        l_ = cube_root(l)
+        m_ = cube_root(m)
+        s_ = cube_root(s)
 
-      {:ok,
-       {
-         0.2104542553 * l_ + 0.793617785 * m_ - 0.0040720468 * s_,
-         1.9779984951 * l_ - 2.428592205 * m_ + 0.4505937099 * s_,
-         0.0259040371 * l_ + 0.7827717662 * m_ - 0.808675766 * s_
-       }}
+        {:ok,
+         {
+           0.2104542553 * l_ + 0.793617785 * m_ - 0.0040720468 * s_,
+           1.9779984951 * l_ - 2.428592205 * m_ + 0.4505937099 * s_,
+           0.0259040371 * l_ + 0.7827717662 * m_ - 0.808675766 * s_
+         }}
+
+      error ->
+        error
     end
   end
 

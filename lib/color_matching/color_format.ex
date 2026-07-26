@@ -94,9 +94,13 @@ defmodule ColorMatching.ColorFormat do
   """
   @spec hex_to_rgb(String.t()) :: {:ok, rgb()} | {:error, String.t()}
   def hex_to_rgb(hex) do
-    with {:ok, "#" <> digits} <- normalize_hex(hex) do
-      <<r::binary-size(2), g::binary-size(2), b::binary-size(2)>> = digits
-      {:ok, {hex_byte(r), hex_byte(g), hex_byte(b)}}
+    case normalize_hex(hex) do
+      {:ok, "#" <> digits} ->
+        <<r::binary-size(2), g::binary-size(2), b::binary-size(2)>> = digits
+        {:ok, {hex_byte(r), hex_byte(g), hex_byte(b)}}
+
+      error ->
+        error
     end
   end
 
@@ -196,8 +200,9 @@ defmodule ColorMatching.ColorFormat do
   """
   @spec hex_to_hsl(String.t()) :: {:ok, hsl()} | {:error, String.t()}
   def hex_to_hsl(hex) do
-    with {:ok, rgb} <- hex_to_rgb(hex) do
-      rgb_to_hsl(rgb)
+    case hex_to_rgb(hex) do
+      {:ok, rgb} -> rgb_to_hsl(rgb)
+      error -> error
     end
   end
 
@@ -238,8 +243,9 @@ defmodule ColorMatching.ColorFormat do
   """
   @spec hsl_to_hex(hsl()) :: {:ok, String.t()} | {:error, String.t()}
   def hsl_to_hex(hsl) do
-    with {:ok, rgb} <- hsl_to_rgb(hsl) do
-      rgb_to_hex(rgb)
+    case hsl_to_rgb(hsl) do
+      {:ok, rgb} -> rgb_to_hex(rgb)
+      error -> error
     end
   end
 
@@ -320,8 +326,9 @@ defmodule ColorMatching.ColorFormat do
   """
   @spec hex_to_hsv(String.t()) :: {:ok, hsv()} | {:error, String.t()}
   def hex_to_hsv(hex) do
-    with {:ok, rgb} <- hex_to_rgb(hex) do
-      rgb_to_hsv(rgb)
+    case hex_to_rgb(hex) do
+      {:ok, rgb} -> rgb_to_hsv(rgb)
+      error -> error
     end
   end
 
@@ -357,8 +364,9 @@ defmodule ColorMatching.ColorFormat do
   """
   @spec hsv_to_hex(hsv()) :: {:ok, String.t()} | {:error, String.t()}
   def hsv_to_hex(hsv) do
-    with {:ok, rgb} <- hsv_to_rgb(hsv) do
-      rgb_to_hex(rgb)
+    case hsv_to_rgb(hsv) do
+      {:ok, rgb} -> rgb_to_hex(rgb)
+      error -> error
     end
   end
 
@@ -459,20 +467,23 @@ defmodule ColorMatching.ColorFormat do
   def format_color(color, :hex), do: normalize_hex(color)
 
   def format_color(color, :rgb) do
-    with {:ok, rgb} <- hex_to_rgb(color) do
-      {:ok, format_rgb(rgb)}
+    case hex_to_rgb(color) do
+      {:ok, rgb} -> {:ok, format_rgb(rgb)}
+      error -> error
     end
   end
 
   def format_color(color, :hsl) do
-    with {:ok, hsl} <- hex_to_hsl(color) do
-      {:ok, format_hsl(hsl)}
+    case hex_to_hsl(color) do
+      {:ok, hsl} -> {:ok, format_hsl(hsl)}
+      error -> error
     end
   end
 
   def format_color(color, :hsv) do
-    with {:ok, hsv} <- hex_to_hsv(color) do
-      {:ok, format_hsv(hsv)}
+    case hex_to_hsv(color) do
+      {:ok, hsv} -> {:ok, format_hsv(hsv)}
+      error -> error
     end
   end
 

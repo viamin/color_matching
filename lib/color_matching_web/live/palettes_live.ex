@@ -65,8 +65,8 @@ defmodule ColorMatchingWeb.PalettesLive do
     with true <- socket.assigns.active_palette_hydrated,
          :ok <- check_under_color_limit(socket.assigns.active_palette_colors),
          {:ok, validated_name} <- validate_user_palette_name(socket, name),
-         colors <- socket.assigns.active_palette_colors,
-         palette <-
+         colors = socket.assigns.active_palette_colors,
+         palette =
            Palette.new(%{
              name: validated_name,
              colors: colors,
@@ -237,7 +237,7 @@ defmodule ColorMatchingWeb.PalettesLive do
     with %Palette{} = palette <- socket.assigns.editing_palette,
          value when is_binary(value) <- get_in(socket.assigns.editor_inputs, [index, format]),
          {:ok, normalized_hex} <- parse_color_value(format, value),
-         updated_palette <- replace_palette_color(palette, index, normalized_hex) do
+         updated_palette = replace_palette_color(palette, index, normalized_hex) do
       {:noreply,
        socket
        |> clear_editor_error(index)
