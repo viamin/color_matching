@@ -19,7 +19,23 @@ defmodule ColorMatching.ColorFormat do
   @type hsv :: {0..360, 0..100, 0..100}
   @type display_format :: :hex | :rgb | :hsl | :hsv
 
+  alias ColorMatching.ColorSpace
+
   @display_formats [:hex, :rgb, :hsl, :hsv]
+  @representation_specs [
+    {"HEX", :hex},
+    {"RGB", :rgb},
+    {"HSL", :hsl},
+    {"HSV", :hsv},
+    {"Linear RGB", :linear_rgb},
+    {"CIE XYZ", :xyz},
+    {"CIE Lab", :lab},
+    {"CIE LCh", :lch},
+    {"CIE xyY", :xyy},
+    {"OKLab", :oklab},
+    {"OKLCh", :oklch},
+    {"Relative luminance (Y)", :relative_luminance}
+  ]
 
   # ---------------------------------------------------------------------
   # HEX
@@ -78,9 +94,13 @@ defmodule ColorMatching.ColorFormat do
   """
   @spec hex_to_rgb(String.t()) :: {:ok, rgb()} | {:error, String.t()}
   def hex_to_rgb(hex) do
-    with {:ok, "#" <> digits} <- normalize_hex(hex) do
-      <<r::binary-size(2), g::binary-size(2), b::binary-size(2)>> = digits
-      {:ok, {hex_byte(r), hex_byte(g), hex_byte(b)}}
+    case normalize_hex(hex) do
+      {:ok, "#" <> digits} ->
+        <<r::binary-size(2), g::binary-size(2), b::binary-size(2)>> = digits
+        {:ok, {hex_byte(r), hex_byte(g), hex_byte(b)}}
+
+      error ->
+        error
     end
   end
 
@@ -180,8 +200,9 @@ defmodule ColorMatching.ColorFormat do
   """
   @spec hex_to_hsl(String.t()) :: {:ok, hsl()} | {:error, String.t()}
   def hex_to_hsl(hex) do
-    with {:ok, rgb} <- hex_to_rgb(hex) do
-      rgb_to_hsl(rgb)
+    case hex_to_rgb(hex) do
+      {:ok, rgb} -> rgb_to_hsl(rgb)
+      error -> error
     end
   end
 
@@ -222,8 +243,9 @@ defmodule ColorMatching.ColorFormat do
   """
   @spec hsl_to_hex(hsl()) :: {:ok, String.t()} | {:error, String.t()}
   def hsl_to_hex(hsl) do
-    with {:ok, rgb} <- hsl_to_rgb(hsl) do
-      rgb_to_hex(rgb)
+    case hsl_to_rgb(hsl) do
+      {:ok, rgb} -> rgb_to_hex(rgb)
+      error -> error
     end
   end
 
@@ -304,8 +326,9 @@ defmodule ColorMatching.ColorFormat do
   """
   @spec hex_to_hsv(String.t()) :: {:ok, hsv()} | {:error, String.t()}
   def hex_to_hsv(hex) do
-    with {:ok, rgb} <- hex_to_rgb(hex) do
-      rgb_to_hsv(rgb)
+    case hex_to_rgb(hex) do
+      {:ok, rgb} -> rgb_to_hsv(rgb)
+      error -> error
     end
   end
 
@@ -341,8 +364,9 @@ defmodule ColorMatching.ColorFormat do
   """
   @spec hsv_to_hex(hsv()) :: {:ok, String.t()} | {:error, String.t()}
   def hsv_to_hex(hsv) do
-    with {:ok, rgb} <- hsv_to_rgb(hsv) do
-      rgb_to_hex(rgb)
+    case hsv_to_rgb(hsv) do
+      {:ok, rgb} -> rgb_to_hex(rgb)
+      error -> error
     end
   end
 
@@ -443,20 +467,23 @@ defmodule ColorMatching.ColorFormat do
   def format_color(color, :hex), do: normalize_hex(color)
 
   def format_color(color, :rgb) do
-    with {:ok, rgb} <- hex_to_rgb(color) do
-      {:ok, format_rgb(rgb)}
+    case hex_to_rgb(color) do
+      {:ok, rgb} -> {:ok, format_rgb(rgb)}
+      error -> error
     end
   end
 
   def format_color(color, :hsl) do
-    with {:ok, hsl} <- hex_to_hsl(color) do
-      {:ok, format_hsl(hsl)}
+    case hex_to_hsl(color) do
+      {:ok, hsl} -> {:ok, format_hsl(hsl)}
+      error -> error
     end
   end
 
   def format_color(color, :hsv) do
-    with {:ok, hsv} <- hex_to_hsv(color) do
-      {:ok, format_hsv(hsv)}
+    case hex_to_hsv(color) do
+      {:ok, hsv} -> {:ok, format_hsv(hsv)}
+      error -> error
     end
   end
 
@@ -467,23 +494,125 @@ defmodule ColorMatching.ColorFormat do
   """
   @spec format_all(String.t()) :: {:ok, [{String.t(), String.t()}]} | {:error, String.t()}
   def format_all(color) do
-    with {:ok, normalized} <- normalize_hex(color),
-         {:ok, rgb} <- format_color(normalized, :rgb),
-         {:ok, hsl} <- format_color(normalized, :hsl),
-         {:ok, hsv} <- format_color(normalized, :hsv) do
-      {:ok,
-       [
-         {"HEX", normalized},
-         {"RGB", rgb},
-         {"HSL", hsl},
-         {"HSV", hsv}
-       ]}
+    case normalize_hex(color) do
+      {:ok, normalized} -> format_all_representations(normalized)
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @doc """
+  Returns pair-level comparison metrics for two colors.
+  """
+  @spec format_pair_metrics(String.t(), String.t()) ::
+          {:ok, [{String.t(), String.t()}]} | {:error, String.t()}
+  def format_pair_metrics(first, second) do
+    with {:ok, normalized_first} <- normalize_hex(first),
+         {:ok, normalized_second} <- normalize_hex(second),
+         {:ok, delta_e} <- ColorSpace.ciede2000(normalized_first, normalized_second) do
+      {:ok, [{"CIEDE2000 (ΔE00)", format_float(delta_e)}]}
     end
   end
 
   # ---------------------------------------------------------------------
   # Shared helpers
   # ---------------------------------------------------------------------
+
+  defp format_all_representations(color) do
+    @representation_specs
+    |> Enum.reduce_while({:ok, []}, fn {label, representation}, {:ok, formats} ->
+      case format_representation(color, representation) do
+        {:ok, value} -> {:cont, {:ok, [{label, value} | formats]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:ok, formats} -> {:ok, Enum.reverse(formats)}
+      error -> error
+    end
+  end
+
+  @spec format_representation(String.t(), atom()) :: {:ok, String.t()} | {:error, String.t()}
+  defp format_representation(color, :hex), do: normalize_hex(color)
+  defp format_representation(color, :rgb), do: format_color(color, :rgb)
+  defp format_representation(color, :hsl), do: format_color(color, :hsl)
+  defp format_representation(color, :hsv), do: format_color(color, :hsv)
+
+  defp format_representation(color, :linear_rgb) do
+    case ColorSpace.hex_to_linear_rgb(color) do
+      {:ok, rgb} -> {:ok, format_tuple(rgb, {"R", "G", "B"})}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp format_representation(color, :xyz) do
+    case ColorSpace.hex_to_xyz(color) do
+      {:ok, xyz} -> {:ok, format_tuple(xyz, {"X", "Y", "Z"})}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp format_representation(color, :lab) do
+    case ColorSpace.hex_to_lab(color) do
+      {:ok, lab} -> {:ok, format_tuple(lab, {"L*", "a*", "b*"})}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp format_representation(color, :lch) do
+    case ColorSpace.hex_to_lch(color) do
+      {:ok, {l, c, h}} ->
+        {:ok, "L*: #{format_float(l)}, C*: #{format_float(c)}, h°: #{format_float(h)}"}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp format_representation(color, :xyy) do
+    case ColorSpace.hex_to_xyy(color) do
+      {:ok, xyy} -> {:ok, format_tuple(xyy, {"x", "y", "Y"})}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp format_representation(color, :oklab) do
+    case ColorSpace.hex_to_oklab(color) do
+      {:ok, lab} -> {:ok, format_tuple(lab, {"L", "a", "b"})}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp format_representation(color, :oklch) do
+    case ColorSpace.hex_to_oklch(color) do
+      {:ok, {l, c, h}} ->
+        {:ok, "L: #{format_float(l)}, C: #{format_float(c)}, h°: #{format_float(h)}"}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp format_representation(color, :relative_luminance) do
+    case ColorSpace.relative_luminance(color) do
+      {:ok, luminance} -> {:ok, format_float(luminance)}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp format_tuple({first, second, third}, {first_label, second_label, third_label}) do
+    [
+      "#{first_label}: #{format_float(first)}",
+      "#{second_label}: #{format_float(second)}",
+      "#{third_label}: #{format_float(third)}"
+    ]
+    |> Enum.join(", ")
+  end
+
+  defp format_float(value) do
+    value
+    |> Float.round(4)
+    |> :erlang.float_to_binary(decimals: 4)
+  end
 
   # Computes the hue in degrees for RGB channels already normalized to 0..1,
   # given the max channel value and the chroma (max - min).

@@ -700,10 +700,10 @@ defmodule ColorMatchingWeb.ColorGridLive do
             <%= for cell <- row do %>
               <.link
                 navigate={~p"/pair?#{pair_link_params(cell, @generated_sheet)}"}
-                class="block focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                class="block aspect-square focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                 aria-label={"Compare #{cell.top_left_color} and #{pair_second_color(cell)}"}
               >
-                <.color_cell cell={cell} class="w-16 h-16" />
+                <.color_cell cell={cell} class="h-full w-full" />
               </.link>
             <% end %>
           <% end %>

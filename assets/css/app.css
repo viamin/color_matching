@@ -138,7 +138,7 @@
     height: 100%;
     gap: 0 !important;
   }
-  
+
   /* Override any inherited sizing for print squares */
   .print-color-grid > .print-grid-cell {
     width: auto;

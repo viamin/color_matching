@@ -40,6 +40,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-build-1.16-26-
 
+      - name: Install Hex and Rebar
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
+
       - name: Install dependencies
         run: mix deps.get
 
@@ -93,6 +98,11 @@ jobs:
           key: ${{ runner.os }}-build-1.16-26-${{ hashFiles('**/mix.lock') }}
           restore-keys: |
             ${{ runner.os }}-build-1.16-26-
+
+      - name: Install Hex and Rebar
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
 
       - name: Install dependencies
         run: mix deps.get

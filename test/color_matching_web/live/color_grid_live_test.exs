@@ -121,7 +121,7 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       assert html =~ ~s(class="print-color-grid grid gap-0 w-full h-full")
       assert html =~ ~s(class="grid gap-0 no-print")
       assert html =~ ~s(class="relative overflow-hidden print-grid-cell print-cell")
-      assert html =~ ~s(class="relative overflow-hidden w-16 h-16")
+      assert html =~ ~s(class="relative overflow-hidden h-full w-full")
     end
 
     test "screen grid cells link to a color pair comparison page", %{conn: conn} do

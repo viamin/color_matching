@@ -294,10 +294,22 @@ defmodule ColorMatching.ColorFormatTest do
                   {"HEX", "#ABCDEF"},
                   {"RGB", "rgb(171, 205, 239)"},
                   {"HSL", "hsl(210, 68%, 80%)"},
-                  {"HSV", "hsv(210, 28%, 94%)"}
+                  {"HSV", "hsv(210, 28%, 94%)"},
+                  {"Linear RGB", "R: 0.4072, G: 0.6105, B: 0.8632"},
+                  {"CIE XYZ", "X: 0.5420, Y: 0.5855, Z: 0.9009"},
+                  {"CIE Lab", "L*: 81.0439, a*: -3.6627, b*: -20.4427"},
+                  {"CIE LCh", "L*: 81.0439, C*: 20.7682, h°: 259.8421"},
+                  {"CIE xyY", "x: 0.2672, y: 0.2887, Y: 0.5855"},
+                  {"OKLab", "L: 0.8350, a: -0.0220, b: -0.0560"},
+                  {"OKLCh", "L: 0.8350, C: 0.0602, h°: 248.5504"},
+                  {"Relative luminance (Y)", "0.5855"}
                 ]}
     end
 
+    test "formats pair-level comparison metrics" do
+      assert ColorFormat.format_pair_metrics("#ABCDEF", "#123456") ==
+               {:ok, [{"CIEDE2000 (ΔE00)", "59.9350"}]}
+    end
   end
 
   # Asserts that two hex colors are equal within a small per-channel
