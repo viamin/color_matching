@@ -124,6 +124,15 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       assert html =~ ~s(class="relative overflow-hidden w-16 h-16")
     end
 
+    test "screen grid cells link to a color pair comparison page", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      assert html =~ ~s(href="/pair?a=%23FF6B6B&amp;b=%23009494")
+      assert html =~ ~s(aria-label="Compare #FF6B6B and #009494")
+      assert html =~ ~s(href="/pair?a=%23FF6B6B&amp;b=%23B1323B")
+      assert html =~ ~s(aria-label="Compare #FF6B6B and #B1323B")
+    end
+
     test "print stylesheet removes swatch chrome from the print grid" do
       css = File.read!("assets/css/app.css")
 

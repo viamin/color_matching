@@ -286,6 +286,17 @@ defmodule ColorMatching.ColorFormatTest do
       assert ColorFormat.format_color("#ABCDEF", :hsl) == {:ok, "hsl(210, 68%, 80%)"}
       assert ColorFormat.format_color("#ABCDEF", :hsv) == {:ok, "hsv(210, 28%, 94%)"}
     end
+
+    test "formats every supported representation for comparison pages" do
+      assert ColorFormat.format_all("#ABCDEF") ==
+               {:ok,
+                [
+                  {"HEX", "#ABCDEF"},
+                  {"RGB", "rgb(171, 205, 239)"},
+                  {"HSL", "hsl(210, 68%, 80%)"},
+                  {"HSV", "hsv(210, 28%, 94%)"}
+                ]}
+    end
   end
 
   # Asserts that two hex colors are equal within a small per-channel
