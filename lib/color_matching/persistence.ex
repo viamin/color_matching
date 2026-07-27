@@ -6,7 +6,7 @@ defmodule ColorMatching.Persistence do
   import Ecto.Query, warn: false
 
   alias ColorMatching.PaletteStorage
-  alias ColorMatching.Persistence.{Palette, PrinterProfile}
+  alias ColorMatching.Persistence.{IlluminantMeasurement, Palette, PrinterProfile}
   alias ColorMatching.Repo
 
   @type palette_attrs :: %{
@@ -52,6 +52,108 @@ defmodule ColorMatching.Persistence do
     %PrinterProfile{}
     |> PrinterProfile.changeset(attrs)
     |> Repo.insert()
+  end
+
+  @spec create_illuminant_measurement(map()) ::
+          {:ok, IlluminantMeasurement.t()} | {:error, Ecto.Changeset.t()}
+  def create_illuminant_measurement(attrs) when is_map(attrs) do
+    %IlluminantMeasurement{}
+    |> IlluminantMeasurement.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @spec list_illuminant_measurements(integer(), integer()) :: [IlluminantMeasurement.t()]
+  def list_illuminant_measurements(palette_color_id, printer_profile_id) do
+    IlluminantMeasurement
+    |> where(
+      [measurement],
+      measurement.palette_color_id == ^palette_color_id and
+        measurement.printer_profile_id == ^printer_profile_id
+    )
+    |> order_by([measurement],
+      asc: measurement.light_source,
+      asc: fragment("CASE WHEN ? IS NULL THEN 1 ELSE 0 END", measurement.measured_at),
+      desc: measurement.measured_at,
+      desc: measurement.inserted_at,
+      desc: measurement.id
+    )
+    |> Repo.all()
+  end
+
+  @spec get_latest_illuminant_measurement(integer(), integer(), String.t()) ::
+          IlluminantMeasurement.t() | nil
+  def get_latest_illuminant_measurement(palette_color_id, printer_profile_id, light_source) do
+    palette_color_id
+    |> latest_illuminant_measurements_query(printer_profile_id, light_source)
+    |> Repo.one()
+  end
+
+  @spec latest_illuminant_measurements_by_light_source(integer(), integer()) ::
+          %{optional(String.t()) => IlluminantMeasurement.t()}
+  def latest_illuminant_measurements_by_light_source(palette_color_id, printer_profile_id) do
+    palette_color_id
+    |> latest_illuminant_measurements_query(printer_profile_id)
+    |> Repo.all()
+    |> Map.new(&{&1.light_source, &1})
+  end
+
+  @spec latest_illuminant_measurements_query(integer(), integer(), String.t() | nil) ::
+          Ecto.Query.t()
+  defp latest_illuminant_measurements_query(
+         palette_color_id,
+         printer_profile_id,
+         light_source \\ nil
+       ) do
+    ranked_measurement_ids_query =
+      palette_color_id
+      |> ranked_illuminant_measurement_ids_query(printer_profile_id, light_source)
+      |> subquery()
+
+    from(ranked_measurement in ranked_measurement_ids_query,
+      where: ranked_measurement.latest_rank == 1,
+      join: measurement in IlluminantMeasurement,
+      on: measurement.id == ranked_measurement.id,
+      order_by: [asc: measurement.light_source],
+      select: measurement
+    )
+  end
+
+  @spec ranked_illuminant_measurement_ids_query(integer(), integer(), String.t() | nil) ::
+          Ecto.Query.t()
+  defp ranked_illuminant_measurement_ids_query(
+         palette_color_id,
+         printer_profile_id,
+         light_source
+       ) do
+    IlluminantMeasurement
+    |> where(
+      [measurement],
+      measurement.palette_color_id == ^palette_color_id and
+        measurement.printer_profile_id == ^printer_profile_id
+    )
+    |> maybe_filter_light_source(light_source)
+    |> windows([measurement],
+      per_light_source: [
+        partition_by: measurement.light_source,
+        order_by: [
+          asc: fragment("CASE WHEN ? IS NULL THEN 1 ELSE 0 END", measurement.measured_at),
+          desc: measurement.measured_at,
+          desc: measurement.inserted_at,
+          desc: measurement.id
+        ]
+      ]
+    )
+    |> select([measurement], %{
+      id: measurement.id,
+      latest_rank: over(row_number(), :per_light_source)
+    })
+  end
+
+  @spec maybe_filter_light_source(Ecto.Queryable.t(), String.t() | nil) :: Ecto.Query.t()
+  defp maybe_filter_light_source(query, nil), do: query
+
+  defp maybe_filter_light_source(query, light_source) do
+    where(query, [measurement], measurement.light_source == ^light_source)
   end
 
   @doc """

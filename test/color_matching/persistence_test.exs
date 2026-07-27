@@ -78,6 +78,179 @@ defmodule ColorMatching.PersistenceTest do
     end
   end
 
+  describe "illuminant measurements" do
+    test "creates and reads persisted illuminant measurements" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      measured_at = ~U[2026-07-27 12:34:56.123456Z]
+
+      assert {:ok, measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.42,
+                 raw_measured_value: 108.0,
+                 raw_value_unit: "cd/m2",
+                 notes: "Reference white patch",
+                 measured_at: measured_at,
+                 measurement_method: "spot meter",
+                 measurement_device: "Sekonic C-800",
+                 test_run_id: "run-001"
+               })
+
+      [persisted] = Persistence.list_illuminant_measurements(color.id, printer_profile.id)
+
+      assert persisted.id == measurement.id
+      assert persisted.light_source == "white"
+      assert persisted.normalized_brightness == 0.42
+      assert persisted.raw_measured_value == 108.0
+      assert persisted.raw_value_unit == "cd/m2"
+      assert persisted.notes == "Reference white patch"
+      assert persisted.measured_at == measured_at
+      assert persisted.measurement_method == "spot meter"
+      assert persisted.measurement_device == "Sekonic C-800"
+      assert persisted.test_run_id == "run-001"
+    end
+
+    test "rejects normalized brightness outside the supported range" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:error, changeset} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "red",
+                 normalized_brightness: 1.01
+               })
+
+      assert %{normalized_brightness: ["must be less than or equal to 1.0"]} =
+               errors_on(changeset)
+
+      assert {:error, changeset} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "green",
+                 normalized_brightness: -0.01
+               })
+
+      assert %{normalized_brightness: ["must be greater than or equal to 0.0"]} =
+               errors_on(changeset)
+    end
+
+    test "preserves multiple measurements for the same light source" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, first} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "blue",
+                 normalized_brightness: 0.2,
+                 measured_at: ~U[2026-07-27 09:00:00Z]
+               })
+
+      assert {:ok, second} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "blue",
+                 normalized_brightness: 0.3,
+                 measured_at: ~U[2026-07-27 10:00:00Z]
+               })
+
+      persisted = Persistence.list_illuminant_measurements(color.id, printer_profile.id)
+
+      assert Enum.map(persisted, & &1.id) == [second.id, first.id]
+      assert Enum.map(persisted, & &1.normalized_brightness) == [0.3, 0.2]
+    end
+
+    test "returns the latest measurement for each light source deterministically" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, oldest_red} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "red",
+                 normalized_brightness: 0.15,
+                 measured_at: ~U[2026-07-27 08:00:00Z]
+               })
+
+      assert {:ok, latest_red} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "red",
+                 normalized_brightness: 0.25,
+                 measured_at: ~U[2026-07-27 11:00:00Z]
+               })
+
+      assert {:ok, first_green} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "green",
+                 normalized_brightness: 0.4,
+                 measured_at: ~U[2026-07-27 10:00:00Z]
+               })
+
+      assert {:ok, second_green} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "green",
+                 normalized_brightness: 0.45,
+                 measured_at: ~U[2026-07-27 10:00:00Z]
+               })
+
+      assert {:ok, nil_timestamp_white} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.5
+               })
+
+      assert {:ok, timestamped_white} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.55,
+                 measured_at: ~U[2026-07-27 12:00:00Z]
+               })
+
+      latest_by_light_source =
+        Persistence.latest_illuminant_measurements_by_light_source(color.id, printer_profile.id)
+
+      assert Map.keys(latest_by_light_source) |> Enum.sort() == ["green", "red", "white"]
+      assert latest_by_light_source["red"].id == latest_red.id
+      assert latest_by_light_source["red"].normalized_brightness == 0.25
+      assert latest_by_light_source["green"].id == second_green.id
+      assert latest_by_light_source["green"].normalized_brightness == 0.45
+      assert latest_by_light_source["white"].id == timestamped_white.id
+      assert latest_by_light_source["white"].normalized_brightness == 0.55
+
+      assert Persistence.get_latest_illuminant_measurement(color.id, printer_profile.id, "red").id ==
+               latest_red.id
+
+      assert Persistence.get_latest_illuminant_measurement(color.id, printer_profile.id, "green").id ==
+               second_green.id
+
+      assert Persistence.get_latest_illuminant_measurement(color.id, printer_profile.id, "white").id ==
+               timestamped_white.id
+
+      assert Persistence.get_latest_illuminant_measurement(color.id, printer_profile.id, "blue") ==
+               nil
+
+      refute latest_by_light_source["red"].id == oldest_red.id
+      refute latest_by_light_source["green"].id == first_green.id
+      refute latest_by_light_source["white"].id == nil_timestamp_white.id
+    end
+  end
+
   describe "preset palette import" do
     test "imports preset palettes for persisted workflows" do
       assert {:ok, palettes} = Persistence.import_preset_palettes()
@@ -207,5 +380,26 @@ defmodule ColorMatching.PersistenceTest do
       assert Enum.map(persisted.colors, & &1.display_label) == ["User Swatch"]
       assert Persistence.list_palettes() |> Enum.map(& &1.id) == [user_palette.id]
     end
+  end
+
+  defp persisted_measurement_fixture do
+    assert {:ok, palette} =
+             Persistence.create_palette(%{
+               name: "Measured Swatches",
+               colors: [
+                 %{hex_color: "#112233", sort_order: 0, display_label: "Patch 1"}
+               ]
+             })
+
+    assert {:ok, printer_profile} =
+             Persistence.create_printer_profile(%{
+               printer_make_model: "Epson SureColor P900",
+               paper_type: "Ultra Premium Luster",
+               ink_type: "OEM UltraChrome PRO10"
+             })
+
+    color = Persistence.get_palette!(palette.id).colors |> List.first()
+
+    %{color: color, printer_profile: printer_profile}
   end
 end
