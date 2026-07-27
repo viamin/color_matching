@@ -86,6 +86,10 @@ defmodule ColorMatching.TestSheetTest do
       assert sheet.page_height_mm == 279.4
       assert sheet.page_units == "mm"
       assert length(sheet.pairs) == 2
+      assert Enum.map(sheet.pairs, & &1.pair_id) == [
+               TestSheet.pair_id("LPSM-ABCD", 0, 0),
+               TestSheet.pair_id("LPSM-ABCD", 0, 1)
+             ]
     end
 
     test "auto-generates lookup code when not provided" do
@@ -102,7 +106,7 @@ defmodule ColorMatching.TestSheetTest do
       assert is_binary(sheet.lookup_code)
       assert String.length(sheet.lookup_code) == 9
       # Format: XXXX-XXXX
-      assert String.match?(sheet.lookup_code, ~r/^[A-Z2-9]{4}-[A-Z2-9]{4}$/)
+      assert String.match?(sheet.lookup_code, ~r/^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/)
     end
 
     test "enforces unique lookup codes" do
@@ -169,6 +173,29 @@ defmodule ColorMatching.TestSheetTest do
       assert {:error, changeset} = Persistence.create_test_sheet(attrs)
       assert changeset.errors == [] or get_in(errors_on(changeset), [:pairs]) != nil
     end
+
+    test "derives canonical pair_id from lookup_code and coordinates" do
+      palette = create_palette()
+      profile = create_printer_profile()
+
+      attrs =
+        sheet_attrs(palette, profile,
+          lookup_code: "PARK-2345",
+          pairs: [
+            %{
+              pair_id: "pair-user-supplied",
+              row: 0,
+              col: 1,
+              color_a_hex: "#FF0000",
+              color_b_hex: "#00FFFF"
+            }
+          ]
+        )
+
+      assert {:ok, sheet} = Persistence.create_test_sheet(attrs)
+
+      assert Enum.map(sheet.pairs, & &1.pair_id) == [TestSheet.pair_id("PARK-2345", 0, 1)]
+    end
   end
 
   # ---------------------------------------------------------------------------
@@ -187,6 +214,46 @@ defmodule ColorMatching.TestSheetTest do
       assert sheet.palette.id == palette.id
       assert sheet.printer_profile.id == profile.id
       assert length(sheet.pairs) == 2
+    end
+
+    test "returns pairs in stable row and column order" do
+      palette = create_palette()
+      profile = create_printer_profile()
+      lookup_code = "RDRM-2345"
+
+      {:ok, _} =
+        Persistence.create_test_sheet(
+          sheet_attrs(palette, profile,
+            lookup_code: lookup_code,
+            pairs: [
+              %{
+                pair_id: TestSheet.pair_id(lookup_code, 1, 0),
+                row: 1,
+                col: 0,
+                color_a_hex: "#00FF00",
+                color_b_hex: "#FF00FF"
+              },
+              %{
+                pair_id: TestSheet.pair_id(lookup_code, 0, 1),
+                row: 0,
+                col: 1,
+                color_a_hex: "#FF0000",
+                color_b_hex: "#00FFFF"
+              },
+              %{
+                pair_id: TestSheet.pair_id(lookup_code, 0, 0),
+                row: 0,
+                col: 0,
+                color_a_hex: "#FF0000",
+                color_b_hex: "#FF0000"
+              }
+            ]
+          )
+        )
+
+      sheet = Persistence.get_test_sheet_by_lookup_code!(lookup_code)
+
+      assert Enum.map(sheet.pairs, &{&1.row, &1.col}) == [{0, 0}, {0, 1}, {1, 0}]
     end
 
     test "raises for an unknown lookup code" do

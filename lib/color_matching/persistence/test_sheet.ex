@@ -63,7 +63,8 @@ defmodule ColorMatching.Persistence.TestSheet do
 
     has_many(:pairs, TestSheetPair,
       foreign_key: :test_sheet_id,
-      on_replace: :delete
+      on_replace: :delete,
+      preload_order: [asc: :row, asc: :col, asc: :id]
     )
 
     timestamps()
@@ -71,6 +72,11 @@ defmodule ColorMatching.Persistence.TestSheet do
 
   @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(test_sheet, attrs) do
+    attrs =
+      attrs
+      |> put_lookup_code_if_missing()
+      |> put_canonical_pair_ids()
+
     test_sheet
     |> cast(attrs, [
       :lookup_code,
@@ -84,7 +90,6 @@ defmodule ColorMatching.Persistence.TestSheet do
       :patch_layout,
       :safe_inset_mm
     ])
-    |> put_lookup_code_if_missing()
     |> validate_format(:lookup_code, ~r/^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/,
       message: "must be in XXXX-XXXX format using unambiguous characters (no 0, O, 1, I)"
     )
@@ -104,7 +109,7 @@ defmodule ColorMatching.Persistence.TestSheet do
   pair's grid coordinates without a database round-trip.
 
       iex> TestSheet.pair_id("LPSM-7K2N", 0, 1)
-      "pair-a3f2b1c4d5e6"  # example — actual value depends on HMAC
+      "pair-a3f2b1c4d5e6"  # example — actual value depends on the SHA-256 digest
   """
   @spec pair_id(String.t(), non_neg_integer(), non_neg_integer()) :: String.t()
   def pair_id(lookup_code, row, col) do
@@ -133,12 +138,51 @@ defmodule ColorMatching.Persistence.TestSheet do
     String.slice(eight, 0, 4) <> "-" <> String.slice(eight, 4, 4)
   end
 
-  @spec put_lookup_code_if_missing(Ecto.Changeset.t()) :: Ecto.Changeset.t()
-  defp put_lookup_code_if_missing(changeset) do
-    if get_field(changeset, :lookup_code) do
-      changeset
-    else
-      put_change(changeset, :lookup_code, generate_lookup_code())
+  @spec put_lookup_code_if_missing(map()) :: map()
+  defp put_lookup_code_if_missing(attrs) when is_map(attrs) do
+    case get_attr(attrs, :lookup_code) do
+      nil -> put_attr(attrs, :lookup_code, generate_lookup_code())
+      _lookup_code -> attrs
+    end
+  end
+
+  @spec put_canonical_pair_ids(map()) :: map()
+  defp put_canonical_pair_ids(attrs) when is_map(attrs) do
+    lookup_code = get_attr(attrs, :lookup_code)
+
+    case get_attr(attrs, :pairs) do
+      pairs when is_list(pairs) and is_binary(lookup_code) ->
+        canonical_pairs =
+          Enum.map(pairs, fn pair_attrs ->
+            case {get_attr(pair_attrs, :row), get_attr(pair_attrs, :col)} do
+              {row, col} when is_integer(row) and is_integer(col) ->
+                put_attr(pair_attrs, :pair_id, pair_id(lookup_code, row, col))
+
+              _ ->
+                pair_attrs
+            end
+          end)
+
+        put_attr(attrs, :pairs, canonical_pairs)
+
+      _ ->
+        attrs
+    end
+  end
+
+  @spec get_attr(map(), atom()) :: term()
+  defp get_attr(attrs, key) when is_map(attrs) and is_atom(key) do
+    Map.get(attrs, key) || Map.get(attrs, Atom.to_string(key))
+  end
+
+  @spec put_attr(map(), atom(), term()) :: map()
+  defp put_attr(attrs, key, value) when is_map(attrs) and is_atom(key) do
+    cond do
+      Map.has_key?(attrs, Atom.to_string(key)) ->
+        Map.put(attrs, Atom.to_string(key), value)
+
+      true ->
+        Map.put(attrs, key, value)
     end
   end
 end
