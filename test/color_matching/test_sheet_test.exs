@@ -181,7 +181,14 @@ defmodule ColorMatching.TestSheetTest do
         )
 
       assert {:error, changeset} = Persistence.create_test_sheet(attrs)
-      assert changeset.errors == [] or get_in(errors_on(changeset), [:pairs]) != nil
+
+      pair_errors =
+        changeset
+        |> errors_on()
+        |> Map.fetch!(:pairs)
+        |> List.first()
+
+      assert "has invalid format" in pair_errors.color_a_hex
     end
 
     test "rejects sheets without any persisted pairs" do
