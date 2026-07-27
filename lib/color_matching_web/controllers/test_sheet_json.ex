@@ -24,7 +24,7 @@ defmodule ColorMatchingWeb.TestSheetJSON do
       sheet_id: sheet.lookup_code,
       sheet_version: sheet.sheet_version,
       manifest_url: manifest_url(sheet),
-      created_at: DateTime.to_iso8601(sheet.inserted_at),
+      created_at: NaiveDateTime.to_iso8601(sheet.inserted_at) <> "Z",
       page_geometry: %{
         width_mm: sheet.page_width_mm,
         height_mm: sheet.page_height_mm,
