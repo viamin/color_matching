@@ -435,8 +435,13 @@ defmodule ColorMatching.Persistence do
   @spec normalize_measurement_key(map(), atom(), [atom() | String.t()]) :: map()
   defp normalize_measurement_key(attrs, canonical_key, source_keys) do
     case first_present_value(attrs, source_keys) do
-      nil -> attrs
-      value -> Map.put(attrs, canonical_key, value)
+      nil ->
+        attrs
+
+      value ->
+        attrs
+        |> Map.drop(source_keys)
+        |> Map.put(canonical_key, value)
     end
   end
 
