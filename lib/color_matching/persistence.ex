@@ -1,12 +1,12 @@
 defmodule ColorMatching.Persistence do
   @moduledoc """
-  Persistence boundary for palettes, palette colors, and printer profiles.
+  Persistence boundary for palettes, palette colors, printer profiles, and test sheets.
   """
 
   import Ecto.Query, warn: false
 
   alias ColorMatching.PaletteStorage
-  alias ColorMatching.Persistence.{Palette, PrinterProfile}
+  alias ColorMatching.Persistence.{Palette, PrinterProfile, TestSheet}
   alias ColorMatching.Repo
 
   @type palette_attrs :: %{
@@ -51,6 +51,44 @@ defmodule ColorMatching.Persistence do
   def create_printer_profile(attrs) when is_map(attrs) do
     %PrinterProfile{}
     |> PrinterProfile.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  # ---------------------------------------------------------------------------
+  # Test sheets
+  # ---------------------------------------------------------------------------
+
+  @spec list_test_sheets() :: [TestSheet.t()]
+  def list_test_sheets do
+    TestSheet
+    |> order_by([sheet], desc: sheet.inserted_at)
+    |> preload([:palette, :printer_profile, :pairs])
+    |> Repo.all()
+  end
+
+  @spec get_test_sheet!(integer()) :: TestSheet.t()
+  def get_test_sheet!(id) do
+    TestSheet
+    |> Repo.get!(id)
+    |> Repo.preload([:palette, :printer_profile, :pairs])
+  end
+
+  @doc """
+  Fetches a test sheet by its stable lookup code.
+
+  Raises `Ecto.NoResultsError` when no sheet with that code exists.
+  """
+  @spec get_test_sheet_by_lookup_code!(String.t()) :: TestSheet.t()
+  def get_test_sheet_by_lookup_code!(lookup_code) do
+    TestSheet
+    |> Repo.get_by!(lookup_code: lookup_code)
+    |> Repo.preload([:palette, :printer_profile, :pairs])
+  end
+
+  @spec create_test_sheet(map()) :: {:ok, TestSheet.t()} | {:error, Ecto.Changeset.t()}
+  def create_test_sheet(attrs) when is_map(attrs) do
+    %TestSheet{}
+    |> TestSheet.changeset(attrs)
     |> Repo.insert()
   end
 

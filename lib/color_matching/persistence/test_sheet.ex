@@ -1,0 +1,141 @@
+defmodule ColorMatching.Persistence.TestSheet do
+  @moduledoc """
+  Ecto schema for a persisted test sheet.
+
+  A test sheet captures a snapshot of the grid configuration used to produce a
+  specific physical print. Each sheet has a stable `lookup_code` (e.g. "LPSM-7K2N")
+  that the iOS companion app uses for manifest lookup, capture upload, and result
+  aggregation. The sheet belongs to a persisted palette and printer profile, and
+  stores enough generation metadata to reproduce the iOS manifest.
+
+  ## Lookup code
+
+  The `lookup_code` is a 9-character code in "XXXX-XXXX" format using an
+  unambiguous uppercase alphanumeric alphabet (no 0/O/1/I). If one is not
+  provided at creation time, it is auto-generated. Codes are globally unique
+  via a database-level unique index.
+
+  ## Pair IDs
+
+  Each row/column pair printed on the sheet needs a globally-stable identifier
+  for capture and observation records. Use `pair_id/3` to derive the canonical
+  ID for a given pair before inserting `TestSheetPair` records:
+
+      pair_id = TestSheet.pair_id(lookup_code, row, col)
+  """
+
+  use Ecto.Schema
+  import Ecto.Changeset
+
+  alias ColorMatching.Persistence.{Palette, PrinterProfile, TestSheetPair}
+
+  @type t :: %__MODULE__{
+          id: integer() | nil,
+          lookup_code: String.t() | nil,
+          palette_id: integer() | nil,
+          palette: Palette.t() | Ecto.Association.NotLoaded.t(),
+          printer_profile_id: integer() | nil,
+          printer_profile: PrinterProfile.t() | Ecto.Association.NotLoaded.t(),
+          sheet_version: String.t() | nil,
+          page_width_mm: float() | nil,
+          page_height_mm: float() | nil,
+          page_units: String.t() | nil,
+          reg_marker_layout: String.t() | nil,
+          patch_layout: String.t() | nil,
+          safe_inset_mm: float() | nil,
+          pairs: [TestSheetPair.t()] | Ecto.Association.NotLoaded.t(),
+          inserted_at: DateTime.t() | nil,
+          updated_at: DateTime.t() | nil
+        }
+
+  schema "test_sheets" do
+    field(:lookup_code, :string)
+    field(:sheet_version, :string)
+    field(:page_width_mm, :float)
+    field(:page_height_mm, :float)
+    field(:page_units, :string)
+    field(:reg_marker_layout, :string)
+    field(:patch_layout, :string)
+    field(:safe_inset_mm, :float)
+
+    belongs_to(:palette, Palette)
+    belongs_to(:printer_profile, PrinterProfile)
+
+    has_many(:pairs, TestSheetPair,
+      foreign_key: :test_sheet_id,
+      on_replace: :delete
+    )
+
+    timestamps()
+  end
+
+  @spec changeset(t(), map()) :: Ecto.Changeset.t()
+  def changeset(test_sheet, attrs) do
+    test_sheet
+    |> cast(attrs, [
+      :lookup_code,
+      :palette_id,
+      :printer_profile_id,
+      :sheet_version,
+      :page_width_mm,
+      :page_height_mm,
+      :page_units,
+      :reg_marker_layout,
+      :patch_layout,
+      :safe_inset_mm
+    ])
+    |> put_lookup_code_if_missing()
+    |> validate_required([:lookup_code, :palette_id, :printer_profile_id, :sheet_version])
+    |> cast_assoc(:pairs, with: &TestSheetPair.changeset/2)
+    |> unique_constraint(:lookup_code)
+    |> foreign_key_constraint(:palette_id)
+    |> foreign_key_constraint(:printer_profile_id)
+  end
+
+  @doc """
+  Derives the canonical stable pair ID for a given (row, col) position on
+  a sheet identified by `lookup_code`.
+
+  The ID is deterministic: given the same inputs it always produces the same
+  output, so it can be re-derived from a printed sheet's lookup code and a
+  pair's grid coordinates without a database round-trip.
+
+      iex> TestSheet.pair_id("LPSM-7K2N", 0, 1)
+      "pair-a3f2b1c4d5e6"  # example — actual value depends on HMAC
+  """
+  @spec pair_id(String.t(), non_neg_integer(), non_neg_integer()) :: String.t()
+  def pair_id(lookup_code, row, col) do
+    material = "#{lookup_code}|#{row}|#{col}"
+    hash = :crypto.hash(:sha256, material)
+    "pair-" <> binary_part(Base.encode16(hash, case: :lower), 0, 12)
+  end
+
+  @doc """
+  Generates a random 9-character lookup code in "XXXX-XXXX" format.
+
+  Uses an unambiguous alphabet (uppercase letters and digits, excluding 0, O,
+  1, and I) to produce codes safe for manual entry and QR scanning.
+  """
+  @spec generate_lookup_code() :: String.t()
+  def generate_lookup_code do
+    # 32-character alphabet with no ambiguous chars (0, O, 1, I excluded)
+    chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+    eight =
+      :crypto.strong_rand_bytes(8)
+      |> :binary.bin_to_list()
+      |> Enum.map(fn byte -> String.at(chars, rem(byte, 32)) end)
+      |> Enum.join()
+
+    String.slice(eight, 0, 4) <> "-" <> String.slice(eight, 4, 4)
+  end
+
+  @spec put_lookup_code_if_missing(Ecto.Changeset.t()) :: Ecto.Changeset.t()
+  defp put_lookup_code_if_missing(changeset) do
+    if get_field(changeset, :lookup_code) do
+      changeset
+    else
+      put_change(changeset, :lookup_code, generate_lookup_code())
+    end
+  end
+end
