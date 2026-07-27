@@ -86,6 +86,7 @@ defmodule ColorMatching.TestSheetTest do
       assert sheet.page_height_mm == 279.4
       assert sheet.page_units == "mm"
       assert length(sheet.pairs) == 2
+
       assert Enum.map(sheet.pairs, & &1.pair_id) == [
                TestSheet.pair_id("LPSM-ABCD", 0, 0),
                TestSheet.pair_id("LPSM-ABCD", 0, 1)
@@ -200,7 +201,7 @@ defmodule ColorMatching.TestSheetTest do
                  sheet_attrs(palette, profile, lookup_code: "EMTY-2345", pairs: [])
                )
 
-      assert "should have at least %{count} item(s)" in errors_on(changeset).pairs
+      assert "should have at least 1 item(s)" in errors_on(changeset).pairs
     end
 
     test "derives canonical pair_id from lookup_code and coordinates" do
@@ -315,9 +316,7 @@ defmodule ColorMatching.TestSheetTest do
         Persistence.create_test_sheet(sheet_attrs(palette, profile, lookup_code: "AAAA-2222"))
 
       {:ok, second} =
-        Persistence.create_test_sheet(
-          sheet_attrs(palette, profile, lookup_code: "BBBB-2222")
-        )
+        Persistence.create_test_sheet(sheet_attrs(palette, profile, lookup_code: "BBBB-2222"))
 
       sheets = Persistence.list_test_sheets()
       ids = Enum.map(sheets, & &1.id)

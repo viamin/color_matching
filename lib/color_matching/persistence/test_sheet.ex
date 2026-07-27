@@ -152,21 +152,22 @@ defmodule ColorMatching.Persistence.TestSheet do
 
     case get_attr(attrs, :pairs) do
       pairs when is_list(pairs) and is_binary(lookup_code) ->
-        canonical_pairs =
-          Enum.map(pairs, fn pair_attrs ->
-            case {get_attr(pair_attrs, :row), get_attr(pair_attrs, :col)} do
-              {row, col} when is_integer(row) and is_integer(col) ->
-                put_attr(pair_attrs, :pair_id, pair_id(lookup_code, row, col))
-
-              _ ->
-                pair_attrs
-            end
-          end)
-
+        canonical_pairs = Enum.map(pairs, &canonicalize_pair(&1, lookup_code))
         put_attr(attrs, :pairs, canonical_pairs)
 
       _ ->
         attrs
+    end
+  end
+
+  @spec canonicalize_pair(map(), String.t()) :: map()
+  defp canonicalize_pair(pair_attrs, lookup_code) do
+    case {get_attr(pair_attrs, :row), get_attr(pair_attrs, :col)} do
+      {row, col} when is_integer(row) and is_integer(col) ->
+        put_attr(pair_attrs, :pair_id, pair_id(lookup_code, row, col))
+
+      _ ->
+        pair_attrs
     end
   end
 
@@ -177,12 +178,10 @@ defmodule ColorMatching.Persistence.TestSheet do
 
   @spec put_attr(map(), atom(), term()) :: map()
   defp put_attr(attrs, key, value) when is_map(attrs) and is_atom(key) do
-    cond do
-      Map.has_key?(attrs, Atom.to_string(key)) ->
-        Map.put(attrs, Atom.to_string(key), value)
-
-      true ->
-        Map.put(attrs, key, value)
+    if Map.has_key?(attrs, Atom.to_string(key)) do
+      Map.put(attrs, Atom.to_string(key), value)
+    else
+      Map.put(attrs, key, value)
     end
   end
 end
