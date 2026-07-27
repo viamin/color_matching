@@ -47,7 +47,13 @@ defmodule ColorMatching.PersistenceTest do
                  ]
                })
 
-      assert "has already been taken" in errors_on(changeset).colors[1].sort_order
+      duplicate_color_error =
+        changeset
+        |> errors_on()
+        |> Map.fetch!(:colors)
+        |> Enum.at(1)
+
+      assert "has already been taken" in duplicate_color_error.sort_order
     end
   end
 
@@ -93,6 +99,26 @@ defmodule ColorMatching.PersistenceTest do
       assert monochrome
       assert "#DDD" in Enum.map(monochrome.colors, & &1.hex_color)
       assert "#FFF" in Enum.map(monochrome.colors, & &1.hex_color)
+    end
+
+    test "re-import keeps existing preset colors in place by sort order" do
+      assert {:ok, _palettes} = Persistence.import_preset_palettes()
+
+      original_warm =
+        Persistence.list_palettes()
+        |> Enum.find(&(&1.name == "Warm"))
+
+      original_color_ids = Enum.map(original_warm.colors, & &1.id)
+      original_inserted_ats = Enum.map(original_warm.colors, & &1.inserted_at)
+
+      assert {:ok, _palettes} = Persistence.import_preset_palettes()
+
+      reimported_warm =
+        Persistence.list_palettes()
+        |> Enum.find(&(&1.name == "Warm"))
+
+      assert Enum.map(reimported_warm.colors, & &1.id) == original_color_ids
+      assert Enum.map(reimported_warm.colors, & &1.inserted_at) == original_inserted_ats
     end
   end
 end

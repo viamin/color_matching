@@ -94,10 +94,38 @@ defmodule ColorMatching.Persistence do
         create_palette(attrs)
 
       %Palette{} = palette ->
+        palette = Repo.preload(palette, :colors)
+        attrs = merge_palette_color_ids(attrs, palette)
+
         palette
-        |> Repo.preload(:colors)
         |> Palette.changeset(attrs)
         |> Repo.update()
+    end
+  end
+
+  @spec merge_palette_color_ids(palette_attrs(), Palette.t()) :: palette_attrs()
+  defp merge_palette_color_ids(attrs, %Palette{} = palette) do
+    existing_colors_by_sort_order =
+      palette
+      |> Map.fetch!(:colors)
+      |> Map.new(fn color -> {color.sort_order, color} end)
+
+    Map.update(attrs, :colors, [], fn colors ->
+      Enum.map(colors, &merge_palette_color_id(&1, existing_colors_by_sort_order))
+    end)
+  end
+
+  @spec merge_palette_color_id(map(), %{required(integer()) => map()}) :: map()
+  defp merge_palette_color_id(color_attrs, existing_colors_by_sort_order) do
+    existing_color =
+      color_attrs
+      |> Map.fetch!(:sort_order)
+      |> then(&Map.get(existing_colors_by_sort_order, &1))
+
+    if existing_color do
+      Map.put(color_attrs, :id, existing_color.id)
+    else
+      color_attrs
     end
   end
 end

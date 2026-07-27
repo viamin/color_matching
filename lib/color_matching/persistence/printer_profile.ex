@@ -19,16 +19,16 @@ defmodule ColorMatching.Persistence.PrinterProfile do
         }
 
   schema "printer_profiles" do
-    field :printer_make_model, :string
-    field :paper_type, :string
-    field :ink_type, :string
-    field :icc_profile, :string
-    field :print_settings, :string
-    field :driver_name, :string
-    field :driver_version, :string
-    field :calibration_date, :date
-    field :calibration_version, :string
-    field :notes, :string
+    field(:printer_make_model, :string)
+    field(:paper_type, :string)
+    field(:ink_type, :string)
+    field(:icc_profile, :string)
+    field(:print_settings, :string)
+    field(:driver_name, :string)
+    field(:driver_version, :string)
+    field(:calibration_date, :date)
+    field(:calibration_version, :string)
+    field(:notes, :string)
 
     timestamps()
   end

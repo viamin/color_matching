@@ -14,13 +14,14 @@ defmodule ColorMatching.Persistence.Palette do
         }
 
   schema "palettes" do
-    field :name, :string
-    field :is_preset, :boolean, default: false
+    field(:name, :string)
+    field(:is_preset, :boolean, default: false)
 
-    has_many :colors, PaletteColor,
+    has_many(:colors, PaletteColor,
       foreign_key: :palette_id,
       on_replace: :delete,
       preload_order: [asc: :sort_order, asc: :id]
+    )
 
     timestamps()
   end

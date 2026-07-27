@@ -16,11 +16,11 @@ defmodule ColorMatching.Persistence.PaletteColor do
         }
 
   schema "palette_colors" do
-    field :hex_color, :string
-    field :display_label, :string
-    field :sort_order, :integer
+    field(:hex_color, :string)
+    field(:display_label, :string)
+    field(:sort_order, :integer)
 
-    belongs_to :palette, Palette
+    belongs_to(:palette, Palette)
 
     timestamps()
   end
