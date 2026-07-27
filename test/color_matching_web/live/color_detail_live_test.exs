@@ -185,7 +185,7 @@ defmodule ColorMatchingWeb.ColorDetailLiveTest do
 
       assert {:ok, second_profile} =
                Persistence.create_printer_profile(%{
-                 printer_make_model: "Canon imagePROGRAF PRO-1000",
+                 printer_make_model: "HP DesignJet Z9",
                  paper_type: "Premium Matte",
                  ink_type: "OEM Lucia Pro"
                })
@@ -201,11 +201,12 @@ defmodule ColorMatchingWeb.ColorDetailLiveTest do
       {:ok, view, html} =
         live(conn, ~p"/palettes/#{palette.id}/colors/#{color.id}")
 
-      # The first profile is selected by default and shows the recorded value.
+      # The fixture's Epson profile sorts alphabetically before HP, so it is
+      # selected by default and renders the recorded value.
       assert html =~ "0.500"
 
-      # Switching to the second profile should re-render with no measurements
-      # for that profile, so every light source flips back to Missing.
+      # Switching to the HP profile re-renders with no measurements for it,
+      # so every light source flips back to Missing.
       html =
         render_change(view, "select_printer_profile", %{
           "printer_profile_id" => second_profile.id
