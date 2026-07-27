@@ -281,7 +281,7 @@ defmodule ColorMatchingWeb.ColorDetailLive do
               class="mt-1 block w-full rounded-md border border-gray-300 bg-white shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
             >
               <%= for source <- IlluminantMeasurement.supported_light_sources() do %>
-                <option value={source} selected={source == @measurement_form.light_source}>
+                <option value={source} selected={source == @measurement_form["light_source"]}>
                   {light_source_label(source)}
                 </option>
               <% end %>
@@ -299,7 +299,7 @@ defmodule ColorMatchingWeb.ColorDetailLive do
               step="0.01"
               min="0"
               max="1"
-              value={@measurement_form.brightness}
+              value={@measurement_form["brightness"]}
               phx-change="update_measurement_brightness"
               class="mt-1 block w-full rounded-md border border-gray-300 shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
             />
@@ -350,7 +350,7 @@ defmodule ColorMatchingWeb.ColorDetailLive do
   defp initial_printer_profile(%{"printer_profile_id" => raw_id}, printer_profiles) do
     case parse_printer_profile_id(raw_id) do
       {:ok, printer_profile_id} ->
-        Enum.find(printer_profiles, &(&1.id == printer_profile_id))
+        Enum.find(printer_profiles, &(&1.id == printer_profile_id)) || List.first(printer_profiles)
 
       :error ->
         List.first(printer_profiles)
