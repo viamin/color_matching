@@ -27,7 +27,6 @@ defmodule ColorMatchingWeb.ColorDetailLive do
          |> assign(:printer_profile, initial_printer_profile)
          |> assign(:response_vector, build_response_vector(palette_color, initial_printer_profile))
          |> assign(:latest_measurements, build_latest_measurements(palette_color, initial_printer_profile))
-         |> assign(:light_source_labels, @light_source_labels)
          |> assign(:measurement_form, empty_measurement_form())
          |> assign(:form_errors, %{})
          |> assign(:not_found, false)}
@@ -130,21 +129,21 @@ defmodule ColorMatchingWeb.ColorDetailLive do
 
       <%= if !@not_found do %>
         <section class="flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm md:flex-row md:items-center">
-        <div
-          class="h-24 w-24 shrink-0 rounded-xl border border-gray-200"
-          style={"background-color: #{@palette_color.hex_color}"}
-        >
-        </div>
-        <div class="flex-1">
-          <p class="font-mono text-lg text-gray-900">{@palette_color.hex_color}</p>
-          <%= if @palette_color.display_label do %>
-            <p class="mt-1 text-sm text-gray-700">{@palette_color.display_label}</p>
-          <% end %>
-          <p class="mt-1 text-sm text-gray-500">
-            Palette: <span class="font-medium text-gray-700">{palette_name(@palette_color)}</span>
-          </p>
-        </div>
-      </section>
+          <div
+            class="h-24 w-24 shrink-0 rounded-xl border border-gray-200"
+            style={"background-color: #{@palette_color.hex_color}"}
+          >
+          </div>
+          <div class="flex-1">
+            <p class="font-mono text-lg text-gray-900">{@palette_color.hex_color}</p>
+            <%= if @palette_color.display_label do %>
+              <p class="mt-1 text-sm text-gray-700">{@palette_color.display_label}</p>
+            <% end %>
+            <p class="mt-1 text-sm text-gray-500">
+              Palette: <span class="font-medium text-gray-700">{palette_name(@palette_color)}</span>
+            </p>
+          </div>
+        </section>
 
       <section class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <h2 class="text-lg font-semibold text-gray-900">Printer Profile</h2>
