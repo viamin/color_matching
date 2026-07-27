@@ -353,7 +353,7 @@ defmodule ColorMatching.TestSheetTest do
 
       for suffix <- ~w[2222 2223 2224] do
         Persistence.create_test_sheet(
-          sheet_attrs(palette, profile, lookup_code: "LIMT-#{suffix}")
+          sheet_attrs(palette, profile, lookup_code: "LMNT-#{suffix}")
         )
       end
 
@@ -364,7 +364,7 @@ defmodule ColorMatching.TestSheetTest do
     test "does not preload associations" do
       palette = create_palette("P4")
       profile = create_printer_profile()
-      Persistence.create_test_sheet(sheet_attrs(palette, profile, lookup_code: "NOPX-2222"))
+      Persistence.create_test_sheet(sheet_attrs(palette, profile, lookup_code: "NPRX-2222"))
 
       [sheet] = Persistence.list_recent_test_sheets(limit: 1)
 
