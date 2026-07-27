@@ -116,18 +116,15 @@ defmodule ColorMatchingWeb.ColorDetailLive do
         <h1 class="text-3xl font-bold text-gray-900">Color Detail</h1>
       </div>
 
-      <div
-        :if={@not_found}
-        class="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-800 shadow-sm"
-      >
-        <p class="font-semibold">Color not found.</p>
-        <p class="mt-1">
-          The requested palette color could not be located. Return to the palettes page to choose
-          a different color.
-        </p>
-      </div>
-
-      <%= if !@not_found do %>
+      <%= if @not_found do %>
+        <div class="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-800 shadow-sm">
+          <p class="font-semibold">Color not found.</p>
+          <p class="mt-1">
+            The requested palette color could not be located. Return to the palettes page to choose
+            a different color.
+          </p>
+        </div>
+      <% else %>
         <section class="flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm md:flex-row md:items-center">
           <div
             class="h-24 w-24 shrink-0 rounded-xl border border-gray-200"
@@ -145,183 +142,183 @@ defmodule ColorMatchingWeb.ColorDetailLive do
           </div>
         </section>
 
-      <section class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <h2 class="text-lg font-semibold text-gray-900">Printer Profile</h2>
-        <p class="mt-1 text-sm text-gray-600">
-          The response profile below is specific to the selected printer profile. Different profiles
-          can produce different brightness readings for the same swatch.
-        </p>
+        <section class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h2 class="text-lg font-semibold text-gray-900">Printer Profile</h2>
+          <p class="mt-1 text-sm text-gray-600">
+            The response profile below is specific to the selected printer profile. Different profiles
+            can produce different brightness readings for the same swatch.
+          </p>
 
-        <div class="mt-4">
-          <label for="printer_profile_id" class="block text-sm font-medium text-gray-700">
-            Active profile
-          </label>
-          <select
-            id="printer_profile_id"
-            name="printer_profile_id"
-            phx-change="select_printer_profile"
-            class="mt-1 block w-full rounded-md border border-gray-300 bg-white shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
-          >
-            <%= for profile <- @printer_profiles do %>
-              <option value={profile.id} selected={profile.id == @printer_profile.id}>
-                {printer_profile_display_name(profile)}
-              </option>
-            <% end %>
-          </select>
-        </div>
-
-        <%= if @printer_profile do %>
-          <dl class="mt-4 grid grid-cols-1 gap-3 text-sm text-gray-700 md:grid-cols-2">
-            <div>
-              <dt class="text-xs font-semibold uppercase tracking-wide text-gray-500">Paper</dt>
-              <dd>{@printer_profile.paper_type}</dd>
-            </div>
-            <div>
-              <dt class="text-xs font-semibold uppercase tracking-wide text-gray-500">Ink</dt>
-              <dd>{@printer_profile.ink_type}</dd>
-            </div>
-            <div :if={@printer_profile.icc_profile}>
-              <dt class="text-xs font-semibold uppercase tracking-wide text-gray-500">ICC profile</dt>
-              <dd>{@printer_profile.icc_profile}</dd>
-            </div>
-            <div :if={@printer_profile.calibration_date}>
-              <dt class="text-xs font-semibold uppercase tracking-wide text-gray-500">Calibrated</dt>
-              <dd>{@printer_profile.calibration_date}</dd>
-            </div>
-          </dl>
-        <% end %>
-      </section>
-
-      <section class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <h2 class="text-lg font-semibold text-gray-900">Illuminant Response Profile</h2>
-        <p class="mt-1 text-sm text-gray-600">
-          Latest measured brightness for each initial light source. Missing entries are shown
-          explicitly because a zero reading and a missing reading are not the same thing.
-        </p>
-
-        <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <%= for source <- ResponseVector.light_sources() do %>
-            <% brightness = ResponseVector.value(@response_vector, source) %>
-            <% label = light_source_label(source) %>
-            <article class="rounded-xl border border-gray-200 p-4">
-              <header class="flex items-center justify-between">
-                <h3 class="text-sm font-semibold text-gray-900">{label}</h3>
-                <%= case brightness do %>
-                  <% :missing -> %>
-                    <span class="rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">
-                      Missing
-                    </span>
-                  <% value when is_float(value) -> %>
-                    <span class="rounded-full bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-800">
-                      {format_brightness(value)}
-                    </span>
-                <% end %>
-              </header>
-
-              <%= case Map.get(@latest_measurements, Atom.to_string(source)) do %>
-                <% %IlluminantMeasurement{} = measurement -> %>
-                  <dl class="mt-3 space-y-1 text-xs text-gray-600">
-                    <%= if measurement.measured_at do %>
-                      <div class="flex justify-between gap-3">
-                        <dt class="text-gray-500">Measured at</dt>
-                        <dd class="text-right text-gray-800">
-                          {format_datetime(measurement.measured_at)}
-                        </dd>
-                      </div>
-                    <% end %>
-                    <%= if measurement.measurement_method do %>
-                      <div class="flex justify-between gap-3">
-                        <dt class="text-gray-500">Method</dt>
-                        <dd class="text-right text-gray-800">{measurement.measurement_method}</dd>
-                      </div>
-                    <% end %>
-                    <%= if measurement.measurement_device do %>
-                      <div class="flex justify-between gap-3">
-                        <dt class="text-gray-500">Device</dt>
-                        <dd class="text-right text-gray-800">{measurement.measurement_device}</dd>
-                      </div>
-                    <% end %>
-                    <%= if measurement.test_run_id do %>
-                      <div class="flex justify-between gap-3">
-                        <dt class="text-gray-500">Test run</dt>
-                        <dd class="text-right font-mono text-gray-800">{measurement.test_run_id}</dd>
-                      </div>
-                    <% end %>
-                    <%= if measurement.notes do %>
-                      <div class="flex justify-between gap-3">
-                        <dt class="text-gray-500">Notes</dt>
-                        <dd class="text-right text-gray-800">{measurement.notes}</dd>
-                      </div>
-                    <% end %>
-                  </dl>
-                <% nil -> %>
-                  <p class="mt-3 text-xs text-gray-500">
-                    No measurement recorded for {label} on this profile yet.
-                  </p>
-              <% end %>
-            </article>
-          <% end %>
-        </div>
-      </section>
-
-      <section class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <h2 class="text-lg font-semibold text-gray-900">Record Measurement</h2>
-        <p class="mt-1 text-sm text-gray-600">
-          Enter a brightness reading between 0.0 and 1.0 for any supported light source.
-        </p>
-
-        <form phx-submit="submit_measurement" class="mt-4 space-y-4">
-          <div>
-            <label for="measurement-light-source" class="block text-sm font-medium text-gray-700">
-              Light source
+          <div class="mt-4">
+            <label for="printer_profile_id" class="block text-sm font-medium text-gray-700">
+              Active profile
             </label>
             <select
-              id="measurement-light-source"
-              name="light_source"
-              phx-change="update_measurement_light_source"
+              id="printer_profile_id"
+              name="printer_profile_id"
+              phx-change="select_printer_profile"
               class="mt-1 block w-full rounded-md border border-gray-300 bg-white shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
             >
-              <%= for source <- IlluminantMeasurement.supported_light_sources() do %>
-                <option value={source} selected={source == @measurement_form["light_source"]}>
-                  {light_source_label(source)}
+              <%= for profile <- @printer_profiles do %>
+                <option value={profile.id} selected={profile.id == @printer_profile.id}>
+                  {printer_profile_display_name(profile)}
                 </option>
               <% end %>
             </select>
           </div>
 
-          <div>
-            <label for="measurement-brightness" class="block text-sm font-medium text-gray-700">
-              Brightness
-            </label>
-            <input
-              id="measurement-brightness"
-              type="number"
-              name="brightness"
-              step="0.01"
-              min="0"
-              max="1"
-              value={@measurement_form["brightness"]}
-              phx-change="update_measurement_brightness"
-              class="mt-1 block w-full rounded-md border border-gray-300 shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
-            />
-            <%= case Map.get(@form_errors, "other") do %>
-              <% errors when is_list(errors) -> %>
-                <p :for={message <- errors} class="mt-1 text-xs text-red-700">
-                  {message}
-                </p>
-              <% nil -> %>
+          <%= if @printer_profile do %>
+            <dl class="mt-4 grid grid-cols-1 gap-3 text-sm text-gray-700 md:grid-cols-2">
+              <div>
+                <dt class="text-xs font-semibold uppercase tracking-wide text-gray-500">Paper</dt>
+                <dd>{@printer_profile.paper_type}</dd>
+              </div>
+              <div>
+                <dt class="text-xs font-semibold uppercase tracking-wide text-gray-500">Ink</dt>
+                <dd>{@printer_profile.ink_type}</dd>
+              </div>
+              <div :if={@printer_profile.icc_profile}>
+                <dt class="text-xs font-semibold uppercase tracking-wide text-gray-500">ICC profile</dt>
+                <dd>{@printer_profile.icc_profile}</dd>
+              </div>
+              <div :if={@printer_profile.calibration_date}>
+                <dt class="text-xs font-semibold uppercase tracking-wide text-gray-500">Calibrated</dt>
+                <dd>{@printer_profile.calibration_date}</dd>
+              </div>
+            </dl>
+          <% end %>
+        </section>
+
+        <section class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h2 class="text-lg font-semibold text-gray-900">Illuminant Response Profile</h2>
+          <p class="mt-1 text-sm text-gray-600">
+            Latest measured brightness for each initial light source. Missing entries are shown
+            explicitly because a zero reading and a missing reading are not the same thing.
+          </p>
+
+          <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+            <%= for source <- ResponseVector.light_sources() do %>
+              <% brightness = ResponseVector.value(@response_vector, source) %>
+              <% label = light_source_label(source) %>
+              <article class="rounded-xl border border-gray-200 p-4">
+                <header class="flex items-center justify-between">
+                  <h3 class="text-sm font-semibold text-gray-900">{label}</h3>
+                  <%= case brightness do %>
+                    <% :missing -> %>
+                      <span class="rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">
+                        Missing
+                      </span>
+                    <% value when is_float(value) -> %>
+                      <span class="rounded-full bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-800">
+                        {format_brightness(value)}
+                      </span>
+                  <% end %>
+                </header>
+
+                <%= case Map.get(@latest_measurements, Atom.to_string(source)) do %>
+                  <% %IlluminantMeasurement{} = measurement -> %>
+                    <dl class="mt-3 space-y-1 text-xs text-gray-600">
+                      <%= if measurement.measured_at do %>
+                        <div class="flex justify-between gap-3">
+                          <dt class="text-gray-500">Measured at</dt>
+                          <dd class="text-right text-gray-800">
+                            {format_datetime(measurement.measured_at)}
+                          </dd>
+                        </div>
+                      <% end %>
+                      <%= if measurement.measurement_method do %>
+                        <div class="flex justify-between gap-3">
+                          <dt class="text-gray-500">Method</dt>
+                          <dd class="text-right text-gray-800">{measurement.measurement_method}</dd>
+                        </div>
+                      <% end %>
+                      <%= if measurement.measurement_device do %>
+                        <div class="flex justify-between gap-3">
+                          <dt class="text-gray-500">Device</dt>
+                          <dd class="text-right text-gray-800">{measurement.measurement_device}</dd>
+                        </div>
+                      <% end %>
+                      <%= if measurement.test_run_id do %>
+                        <div class="flex justify-between gap-3">
+                          <dt class="text-gray-500">Test run</dt>
+                          <dd class="text-right font-mono text-gray-800">{measurement.test_run_id}</dd>
+                        </div>
+                      <% end %>
+                      <%= if measurement.notes do %>
+                        <div class="flex justify-between gap-3">
+                          <dt class="text-gray-500">Notes</dt>
+                          <dd class="text-right text-gray-800">{measurement.notes}</dd>
+                        </div>
+                      <% end %>
+                    </dl>
+                  <% nil -> %>
+                    <p class="mt-3 text-xs text-gray-500">
+                      No measurement recorded for {label} on this profile yet.
+                    </p>
+                <% end %>
+              </article>
             <% end %>
           </div>
+        </section>
 
-          <button
-            type="submit"
-            disabled={@printer_profile == nil}
-            class="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-40"
-          >
-            Record measurement
-          </button>
-        </form>
-      </section>
+        <section class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h2 class="text-lg font-semibold text-gray-900">Record Measurement</h2>
+          <p class="mt-1 text-sm text-gray-600">
+            Enter a brightness reading between 0.0 and 1.0 for any supported light source.
+          </p>
+
+          <form phx-submit="submit_measurement" class="mt-4 space-y-4">
+            <div>
+              <label for="measurement-light-source" class="block text-sm font-medium text-gray-700">
+                Light source
+              </label>
+              <select
+                id="measurement-light-source"
+                name="light_source"
+                phx-change="update_measurement_light_source"
+                class="mt-1 block w-full rounded-md border border-gray-300 bg-white shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
+              >
+                <%= for source <- IlluminantMeasurement.supported_light_sources() do %>
+                  <option value={source} selected={source == @measurement_form["light_source"]}>
+                    {light_source_label(source)}
+                  </option>
+                <% end %>
+              </select>
+            </div>
+
+            <div>
+              <label for="measurement-brightness" class="block text-sm font-medium text-gray-700">
+                Brightness
+              </label>
+              <input
+                id="measurement-brightness"
+                type="number"
+                name="brightness"
+                step="0.01"
+                min="0"
+                max="1"
+                value={@measurement_form["brightness"]}
+                phx-change="update_measurement_brightness"
+                class="mt-1 block w-full rounded-md border border-gray-300 shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
+              />
+              <%= case Map.get(@form_errors, "other") do %>
+                <% errors when is_list(errors) -> %>
+                  <p :for={message <- errors} class="mt-1 text-xs text-red-700">
+                    {message}
+                  </p>
+                <% nil -> %>
+              <% end %>
+            </div>
+
+            <button
+              type="submit"
+              disabled={@printer_profile == nil}
+              class="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-40"
+            >
+              Record measurement
+            </button>
+          </form>
+        </section>
       <% end %>
     </div>
     """
