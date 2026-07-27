@@ -95,6 +95,7 @@ defmodule ColorMatching.Persistence.TestSheet do
     )
     |> validate_required([:lookup_code, :palette_id, :printer_profile_id, :sheet_version])
     |> cast_assoc(:pairs, with: &TestSheetPair.changeset/2)
+    |> validate_length(:pairs, min: 1)
     |> unique_constraint(:lookup_code)
     |> foreign_key_constraint(:palette_id)
     |> foreign_key_constraint(:printer_profile_id)
