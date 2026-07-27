@@ -26,7 +26,7 @@ defmodule ColorMatchingWeb.TestSheetJSON do
       sheet_id: sheet.lookup_code,
       sheet_version: sheet.sheet_version,
       manifest_url: manifest_url(sheet),
-      created_at: NaiveDateTime.to_iso8601(sheet.inserted_at) <> "Z",
+      created_at: DateTime.to_iso8601(sheet.inserted_at),
       page_geometry: %{
         width_mm: sheet.page_width_mm,
         height_mm: sheet.page_height_mm,
@@ -102,7 +102,7 @@ defmodule ColorMatchingWeb.TestSheetJSON do
       {:ok, value} -> value
       {:error, reason} ->
         Logger.error("TestSheetJSON: failed to decode JSON field: #{inspect(reason)}")
-        nil
+        raise "data integrity error: unparseable JSON field in test sheet record"
     end
   end
 
