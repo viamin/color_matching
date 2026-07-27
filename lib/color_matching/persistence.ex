@@ -113,7 +113,7 @@ defmodule ColorMatching.Persistence do
   """
   @spec get_test_sheet_by_lookup_code!(String.t()) :: TestSheet.t()
   def get_test_sheet_by_lookup_code!(lookup_code) do
-    case get_test_sheet_by_lookup_code(lookup_code) do
+    case Repo.get_by(TestSheet, lookup_code: lookup_code) do
       nil -> raise Ecto.NoResultsError, queryable: TestSheet
       sheet -> Repo.preload(sheet, [{:palette, :colors}, :printer_profile, :pairs])
     end
