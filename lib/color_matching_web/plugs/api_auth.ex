@@ -24,8 +24,15 @@ defmodule ColorMatchingWeb.Plugs.ApiAuth do
 
       token ->
         case extract_bearer_token(conn) do
-          ^token -> conn
-          _ -> reject_unauthorized(conn)
+          bearer_token when is_binary(bearer_token) ->
+            if Plug.Crypto.secure_compare(bearer_token, token) do
+              conn
+            else
+              reject_unauthorized(conn)
+            end
+
+          _ ->
+            reject_unauthorized(conn)
         end
     end
   end

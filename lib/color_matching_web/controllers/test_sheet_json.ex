@@ -6,6 +6,10 @@ defmodule ColorMatchingWeb.TestSheetJSON do
   manifest lookups, and a lightweight list shape for recent-sheets discovery.
   """
 
+  use Phoenix.VerifiedRoutes,
+    endpoint: ColorMatchingWeb.Endpoint,
+    router: ColorMatchingWeb.Router
+
   alias ColorMatching.Persistence.TestSheet
 
   @doc """
@@ -14,12 +18,12 @@ defmodule ColorMatchingWeb.TestSheetJSON do
   Response schema version: `lps-sheet-manifest/v1`
   """
   @spec manifest(map()) :: map()
-  def manifest(%{sheet: sheet, conn: conn}) do
+  def manifest(%{sheet: sheet}) do
     %{
       schema_version: "lps-sheet-manifest/v1",
       sheet_id: sheet.lookup_code,
       sheet_version: sheet.sheet_version,
-      manifest_url: manifest_url(conn, sheet),
+      manifest_url: manifest_url(sheet),
       created_at: DateTime.to_iso8601(sheet.inserted_at),
       page_geometry: %{
         width_mm: sheet.page_width_mm,
@@ -39,17 +43,17 @@ defmodule ColorMatchingWeb.TestSheetJSON do
   Renders a list of recent sheets for discovery.
   """
   @spec recent(map()) :: map()
-  def recent(%{sheets: sheets, conn: conn}) do
+  def recent(%{sheets: sheets}) do
     %{
-      sheets: Enum.map(sheets, &render_recent_sheet(&1, conn))
+      sheets: Enum.map(sheets, &render_recent_sheet/1)
     }
   end
 
-  @spec render_recent_sheet(TestSheet.t(), Plug.Conn.t()) :: map()
-  defp render_recent_sheet(sheet, conn) do
+  @spec render_recent_sheet(TestSheet.t()) :: map()
+  defp render_recent_sheet(sheet) do
     %{
       sheet_id: sheet.lookup_code,
-      manifest_url: manifest_url(conn, sheet),
+      manifest_url: manifest_url(sheet),
       title: nil
     }
   end
@@ -83,10 +87,9 @@ defmodule ColorMatchingWeb.TestSheetJSON do
     }
   end
 
-  @spec manifest_url(Plug.Conn.t(), TestSheet.t()) :: String.t()
-  defp manifest_url(conn, sheet) do
-    endpoint = Phoenix.Controller.endpoint_module(conn)
-    endpoint.url() <> "/api/v1/test_sheets/#{sheet.lookup_code}/manifest"
+  @spec manifest_url(TestSheet.t()) :: String.t()
+  defp manifest_url(sheet) do
+    url(~p"/api/v1/test_sheets/#{sheet.lookup_code}/manifest")
   end
 
   @spec decode_json_field(String.t() | nil) :: term()
