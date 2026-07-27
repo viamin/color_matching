@@ -59,6 +59,11 @@ defmodule ColorMatchingWeb.IlluminantMeasurementController do
 
   @spec datetime_to_iso8601(DateTime.t() | nil) :: String.t() | nil
   defp datetime_to_iso8601(nil), do: nil
+
+  defp datetime_to_iso8601(%DateTime{microsecond: {0, _}} = datetime) do
+    DateTime.to_iso8601(%{datetime | microsecond: {0, 0}})
+  end
+
   defp datetime_to_iso8601(%DateTime{} = datetime), do: DateTime.to_iso8601(datetime)
 
   @spec changeset_errors(Ecto.Changeset.t()) :: map()
