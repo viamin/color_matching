@@ -1,5 +1,10 @@
 defmodule ColorMatchingWeb.TestSheetControllerTest do
-  use ColorMatchingWeb.ConnCase, async: true
+  # async: false is required because the TestSheetAuthControllerTest mutates
+  # `Application.get_env(:color_matching, :api_token)` in its setup, and the
+  # api_auth plug reads that env on every request. Running the two test
+  # modules concurrently would let the auth token from a sibling test leak
+  # into these requests, producing spurious 401s.
+  use ColorMatchingWeb.ConnCase, async: false
 
   alias ColorMatching.Persistence
   alias ColorMatching.Persistence.TestSheet
@@ -32,7 +37,7 @@ defmodule ColorMatchingWeb.TestSheetControllerTest do
     profile
   end
 
-  defp create_sheet(lookup_code \\ "ABCD-2345") do
+  defp create_sheet(lookup_code) do
     palette = create_palette()
     profile = create_printer_profile()
 
@@ -130,7 +135,7 @@ defmodule ColorMatchingWeb.TestSheetControllerTest do
     end
 
     test "manifest includes patches with pair_id, row, col, and colors", %{conn: conn} do
-      sheet = create_sheet("ABCD-2350")
+      sheet = create_sheet("ABCD-2355")
 
       conn = get(conn, ~p"/api/v1/test_sheets/#{sheet.lookup_code}/manifest")
 
@@ -148,12 +153,16 @@ defmodule ColorMatchingWeb.TestSheetControllerTest do
     end
 
     test "manifest_url points to the manifest endpoint", %{conn: conn} do
-      sheet = create_sheet("ABCD-2351")
+      sheet = create_sheet("ABCD-2356")
 
       conn = get(conn, ~p"/api/v1/test_sheets/#{sheet.lookup_code}/manifest")
 
       body = json_response(conn, 200)
-      assert String.contains?(body["manifest_url"], "/api/v1/test_sheets/#{sheet.lookup_code}/manifest")
+
+      assert String.contains?(
+               body["manifest_url"],
+               "/api/v1/test_sheets/#{sheet.lookup_code}/manifest"
+             )
     end
 
     test "returns structured 404 JSON for unknown sheet_id", %{conn: conn} do
@@ -206,8 +215,11 @@ defmodule ColorMatchingWeb.TestSheetControllerTest do
 
       body = json_response(conn, 200)
       entry = Enum.find(body["sheets"], &(&1["sheet_id"] == sheet.lookup_code))
-      assert String.contains?(entry["manifest_url"], "/api/v1/test_sheets/#{sheet.lookup_code}/manifest")
+
+      assert String.contains?(
+               entry["manifest_url"],
+               "/api/v1/test_sheets/#{sheet.lookup_code}/manifest"
+             )
     end
   end
-
 end

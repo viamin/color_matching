@@ -10,7 +10,9 @@ defmodule ColorMatchingWeb.TestSheetAuthControllerTest do
       :ok
     end
 
-    test "returns 401 when token is configured but no Authorization header provided", %{conn: conn} do
+    test "returns 401 when token is configured but no Authorization header provided", %{
+      conn: conn
+    } do
       conn = get(conn, ~p"/api/v1/test_sheets/recent")
 
       body = json_response(conn, 401)

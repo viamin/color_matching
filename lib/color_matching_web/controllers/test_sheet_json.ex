@@ -26,7 +26,7 @@ defmodule ColorMatchingWeb.TestSheetJSON do
       sheet_id: sheet.lookup_code,
       sheet_version: sheet.sheet_version,
       manifest_url: manifest_url(sheet),
-      created_at: DateTime.to_iso8601(sheet.inserted_at),
+      created_at: datetime_to_iso8601(sheet.inserted_at),
       page_geometry: %{
         width_mm: sheet.page_width_mm,
         height_mm: sheet.page_height_mm,
@@ -99,7 +99,9 @@ defmodule ColorMatchingWeb.TestSheetJSON do
 
   defp decode_json_field(json_string) when is_binary(json_string) do
     case Jason.decode(json_string) do
-      {:ok, value} -> value
+      {:ok, value} ->
+        value
+
       {:error, reason} ->
         Logger.error("TestSheetJSON: failed to decode JSON field: #{inspect(reason)}")
         raise "data integrity error: unparseable JSON field in test sheet record"
@@ -109,4 +111,19 @@ defmodule ColorMatchingWeb.TestSheetJSON do
   @spec render_date(Date.t() | nil) :: String.t() | nil
   defp render_date(nil), do: nil
   defp render_date(date), do: Date.to_iso8601(date)
+
+  @spec datetime_to_iso8601(DateTime.t() | NaiveDateTime.t() | nil) :: String.t() | nil
+  defp datetime_to_iso8601(nil), do: nil
+
+  defp datetime_to_iso8601(%DateTime{microsecond: {0, _}} = datetime) do
+    DateTime.to_iso8601(%{datetime | microsecond: {0, 0}})
+  end
+
+  defp datetime_to_iso8601(%DateTime{} = datetime), do: DateTime.to_iso8601(datetime)
+
+  defp datetime_to_iso8601(%NaiveDateTime{} = naive_datetime) do
+    naive_datetime
+    |> DateTime.from_naive!("Etc/UTC")
+    |> datetime_to_iso8601()
+  end
 end

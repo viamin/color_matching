@@ -18,22 +18,28 @@ defmodule ColorMatchingWeb.Plugs.ApiAuth do
 
   @impl Plug
   def call(conn, _opts) do
+    case authorization_decision(conn) do
+      :allow -> conn
+      :deny -> reject_unauthorized(conn)
+    end
+  end
+
+  @spec authorization_decision(Plug.Conn.t()) :: :allow | :deny
+  defp authorization_decision(conn) do
     case configured_token() do
-      nil ->
-        conn
+      nil -> :allow
+      token -> verify_bearer_token(conn, token)
+    end
+  end
 
-      token ->
-        case extract_bearer_token(conn) do
-          bearer_token when is_binary(bearer_token) ->
-            if Plug.Crypto.secure_compare(bearer_token, token) do
-              conn
-            else
-              reject_unauthorized(conn)
-            end
+  @spec verify_bearer_token(Plug.Conn.t(), String.t()) :: :allow | :deny
+  defp verify_bearer_token(conn, token) do
+    case extract_bearer_token(conn) do
+      bearer_token when is_binary(bearer_token) ->
+        if Plug.Crypto.secure_compare(bearer_token, token), do: :allow, else: :deny
 
-          _ ->
-            reject_unauthorized(conn)
-        end
+      _ ->
+        :deny
     end
   end
 
