@@ -4,5 +4,5 @@ defmodule ColorMatching.TestSupport.ConstantScorer do
   @behaviour ColorMatching.IlluminantScoring
 
   @impl ColorMatching.IlluminantScoring
-  def score(_candidate, _target, _weights), do: 0.0
+  def score(_candidate, _target, _weights), do: :custom_score
 end
