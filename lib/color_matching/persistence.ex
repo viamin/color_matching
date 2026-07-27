@@ -301,29 +301,39 @@ defmodule ColorMatching.Persistence do
           {:ok, [IlluminantMeasurement.t()]}
           | {:error, {:invalid_rows, [invalid_bulk_measurement_row()]}}
   defp insert_bulk_measurements(prepared_measurements) do
-    case Repo.transaction(fn ->
-           Enum.reduce_while(prepared_measurements, [], fn prepared_measurement, inserted ->
-             case Repo.insert(prepared_measurement.changeset) do
-               {:ok, measurement} ->
-                 {:cont, [measurement | inserted]}
+    transaction_result =
+      fn -> insert_each_measurement(prepared_measurements) end
+      |> Repo.transaction()
 
-               {:error, changeset} ->
-                 Repo.rollback(
-                   {:invalid_rows,
-                    [
-                      %{
-                        index: prepared_measurement.index,
-                        color_id: prepared_measurement.color_id,
-                        errors: changeset_errors(changeset)
-                      }
-                    ]}
-                 )
-             end
-           end)
-         end) do
+    case transaction_result do
       {:ok, inserted_measurements} -> {:ok, Enum.reverse(inserted_measurements)}
       {:error, {:invalid_rows, invalid_rows}} -> {:error, {:invalid_rows, invalid_rows}}
     end
+  end
+
+  @spec insert_each_measurement([map()]) :: [IlluminantMeasurement.t()]
+  defp insert_each_measurement(prepared_measurements) do
+    Enum.reduce_while(prepared_measurements, [], fn prepared_measurement, inserted ->
+      case Repo.insert(prepared_measurement.changeset) do
+        {:ok, measurement} ->
+          {:cont, [measurement | inserted]}
+
+        {:error, changeset} ->
+          Repo.rollback(invalid_row(prepared_measurement, changeset))
+      end
+    end)
+  end
+
+  @spec invalid_row(map(), Ecto.Changeset.t()) :: {:invalid_rows, [invalid_bulk_measurement_row()]}
+  defp invalid_row(prepared_measurement, changeset) do
+    {:invalid_rows,
+     [
+       %{
+         index: prepared_measurement.index,
+         color_id: prepared_measurement.color_id,
+         errors: changeset_errors(changeset)
+       }
+     ]}
   end
 
   @spec normalize_measurement_attrs(map()) :: map()
