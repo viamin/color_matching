@@ -56,6 +56,8 @@ defmodule ColorMatching.MixProject do
       {:floki, ">= 0.30.0", only: :test},
       {:lazy_html, ">= 0.1.0", only: :test},
       {:phoenix_live_dashboard, "~> 0.8.3"},
+      {:ecto_sql, "~> 3.13"},
+      {:ecto_sqlite3, "~> 0.21"},
       {:esbuild, "~> 0.8", runtime: Mix.env() == :dev},
       {:tailwind, "~> 0.5.1", runtime: Mix.env() == :dev},
       {:heroicons,

@@ -9,6 +9,7 @@ defmodule ColorMatching.Application do
   def start(_type, _args) do
     children = [
       ColorMatchingWeb.Telemetry,
+      ColorMatching.Repo,
       {DNSCluster, query: Application.get_env(:color_matching, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: ColorMatching.PubSub},
       # Start the Finch HTTP client for sending emails
