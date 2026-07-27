@@ -175,5 +175,28 @@ defmodule ColorMatching.PersistenceTest do
       assert Enum.map(reimported_warm.colors, & &1.hex_color) == ["#111111", "#444444", "#111111", "#222222"]
       assert Enum.map(reimported_warm.colors, & &1.sort_order) == [0, 1, 2, 3]
     end
+
+    test "rejects preset import when a user palette name collides with a built-in preset" do
+      assert {:ok, user_palette} =
+               Persistence.create_palette(%{
+                 name: "Warm",
+                 colors: [
+                   %{hex_color: "#123456", sort_order: 0, display_label: "User Swatch"}
+                 ]
+               })
+
+      assert {:error, changeset} = Persistence.import_preset_palettes()
+
+      assert %{name: [message]} = errors_on(changeset)
+      assert message =~ "conflicts with an existing user palette"
+
+      persisted = Persistence.get_palette!(user_palette.id)
+
+      assert persisted.name == "Warm"
+      assert persisted.is_preset == false
+      assert Enum.map(persisted.colors, & &1.hex_color) == ["#123456"]
+      assert Enum.map(persisted.colors, & &1.display_label) == ["User Swatch"]
+      assert Persistence.list_palettes() |> Enum.map(& &1.id) == [user_palette.id]
+    end
   end
 end

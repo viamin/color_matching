@@ -57,8 +57,9 @@ defmodule ColorMatching.Persistence do
   @doc """
   Imports the built-in preset palettes into the database.
 
-  Existing preset rows are updated in place by palette name, making the import
-  safe to run from seeds or from an API bootstrap step.
+  Existing preset rows are updated in place by palette name. If a user-created
+  palette already uses a built-in preset name, the import fails instead of
+  overwriting that row.
   """
   @spec import_preset_palettes() :: {:ok, [Palette.t()]} | {:error, Ecto.Changeset.t()}
   def import_preset_palettes do
@@ -97,10 +98,9 @@ defmodule ColorMatching.Persistence do
   @spec upsert_preset_palette(palette_attrs()) ::
           {:ok, Palette.t()} | {:error, Ecto.Changeset.t()}
   defp upsert_preset_palette(attrs) do
-    case Repo.get_by(Palette, name: Map.fetch!(attrs, :name)) do
-      nil ->
-        create_palette(attrs)
+    palette_name = Map.fetch!(attrs, :name)
 
+    case Repo.get_by(Palette, name: palette_name, is_preset: true) do
       %Palette{} = palette ->
         palette = Repo.preload(palette, :colors)
         attrs = merge_palette_color_ids(attrs, palette)
@@ -108,7 +108,26 @@ defmodule ColorMatching.Persistence do
         palette
         |> Palette.changeset(attrs)
         |> Repo.update()
+
+      nil ->
+        case Repo.get_by(Palette, name: palette_name) do
+          %Palette{is_preset: false} ->
+            {:error, preset_palette_name_conflict_changeset(attrs)}
+
+          nil ->
+            create_palette(attrs)
+        end
     end
+  end
+
+  @spec preset_palette_name_conflict_changeset(palette_attrs()) :: Ecto.Changeset.t()
+  defp preset_palette_name_conflict_changeset(attrs) do
+    %Palette{}
+    |> Ecto.Changeset.change(attrs)
+    |> Ecto.Changeset.add_error(
+      :name,
+      "conflicts with an existing user palette; rename or remove the user palette before importing presets"
+    )
   end
 
   @spec merge_palette_color_ids(palette_attrs(), Palette.t()) :: palette_attrs()
