@@ -99,7 +99,7 @@ defmodule ColorMatching.ResponseVector do
   end
 
   @spec value(t(), light_source()) :: brightness()
-  def value(%__MODULE_{} = vector, light_source) when light_source in @light_sources do
+  def value(%__MODULE__{} = vector, light_source) when light_source in @light_sources do
     Map.fetch!(vector, light_source)
   end
 

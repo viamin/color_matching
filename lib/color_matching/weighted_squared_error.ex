@@ -5,8 +5,8 @@ defmodule ColorMatching.WeightedSquaredError do
   For each light source `s` with weight `w` where `w > 0`, this scorer
   computes `(candidate.s - target.s) ** 2 * w` and sums the per-source
   contributions. Light sources with weight `0` (or absent from the weights
-  map) are ignored entirely, but the candidate is still expected to have a
-  measurement for them under the default exclusion policy.
+   map) are ignored entirely — including for the purposes of the default
+   exclusion policy.
 
   ## Missing-data policy
 
