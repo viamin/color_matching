@@ -6,8 +6,14 @@ defmodule ColorMatching.Persistence do
   import Ecto.Query, warn: false
 
   alias ColorMatching.PaletteStorage
-  alias ColorMatching.Persistence.{IlluminantMeasurement, Palette, PrinterProfile}
+  alias ColorMatching.Persistence.{
+    IlluminantMeasurement,
+    Palette,
+    PaletteColor,
+    PrinterProfile
+  }
   alias ColorMatching.Repo
+  alias ColorMatching.ResponseVector
 
   @type palette_attrs :: %{
           optional(:name) => String.t(),
@@ -95,6 +101,22 @@ defmodule ColorMatching.Persistence do
     |> latest_illuminant_measurements_query(printer_profile_id)
     |> Repo.all()
     |> Map.new(&{&1.light_source, &1})
+  end
+
+  @doc """
+  Builds a response vector for a palette color under a printer profile using
+  the latest persisted illuminant measurements.
+
+  Light sources without any persisted measurement contribute `:missing` to
+  the resulting vector so callers can distinguish "never measured" from
+  "measured as zero brightness".
+  """
+  @spec response_vector(PaletteColor.t(), PrinterProfile.t()) :: ResponseVector.t()
+  def response_vector(%PaletteColor{} = palette_color, %PrinterProfile{} = printer_profile) do
+    measurements =
+      latest_illuminant_measurements_by_light_source(palette_color.id, printer_profile.id)
+
+    ResponseVector.new(palette_color.hex_color, printer_profile.id, measurements)
   end
 
   @spec latest_illuminant_measurements_query(integer(), integer(), String.t() | nil) ::
