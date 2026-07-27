@@ -46,6 +46,30 @@ defmodule ColorMatching.Persistence do
     |> Repo.preload(:colors)
   end
 
+  @doc """
+  Fetches a single palette color preloaded with its parent palette.
+
+  Raises `Ecto.NoResultsError` when the color id is unknown.
+  """
+  @spec get_palette_color!(integer()) :: PaletteColor.t()
+  def get_palette_color!(id) do
+    PaletteColor
+    |> Repo.get!(id)
+    |> Repo.preload(:palette)
+  end
+
+  @doc """
+  Fetches a single palette color preloaded with its parent palette, or
+  returns `nil` when no row matches the given id.
+  """
+  @spec get_palette_color(integer()) :: PaletteColor.t() | nil
+  def get_palette_color(id) do
+    case Repo.get(PaletteColor, id) do
+      %PaletteColor{} = palette_color -> Repo.preload(palette_color, :palette)
+      nil -> nil
+    end
+  end
+
   @spec create_palette(palette_attrs()) :: {:ok, Palette.t()} | {:error, Ecto.Changeset.t()}
   def create_palette(attrs) when is_map(attrs) do
     %Palette{}
