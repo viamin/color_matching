@@ -6,13 +6,14 @@ defmodule ColorMatching.WeightedSquaredError do
   computes `(candidate.s - target.s) ** 2 * w` and sums the per-source
   contributions. Light sources with weight `0` (or absent from the weights
    map) are ignored entirely — including for the purposes of the default
-   exclusion policy.
+   exclusion policy. Unknown light sources (not in `ResponseVector.light_sources/0`)
+   are silently ignored.
 
   ## Missing-data policy
 
-  By default, a candidate is excluded (returns `:excluded`) when any light
-  source with weight greater than `0` is missing a measurement. The
-  exclusion policy can be relaxed by passing
+  By default, a candidate or target is excluded (returns `:excluded`) when any
+  light source with weight greater than `0` is missing a measurement on either
+  vector. The exclusion policy can be relaxed by passing
   `exclude_when_missing: false` to `score/4`, in which case missing
   measurements are treated as `0.0` for that source. This relaxation should
   be used with care because it makes missing and zero-brightness
@@ -56,31 +57,39 @@ defmodule ColorMatching.WeightedSquaredError do
   def score(candidate, target, weights, options)
       when is_map(weights) do
     exclude_when_missing = Keyword.get(options, :exclude_when_missing, true)
+    filtered_weights = filter_weights(weights)
 
-    case exclude_candidate(candidate, weights, exclude_when_missing) do
+    case exclude_candidate(candidate, target, filtered_weights, exclude_when_missing) do
       :excluded ->
         :excluded
 
       :scorable ->
-        compute_squared_error(candidate, target, weights)
+        compute_squared_error(candidate, target, filtered_weights)
     end
   end
 
-  defp exclude_candidate(_candidate, _weights, false), do: :scorable
+  # Strips any keys from `weights` that are not recognised light sources so
+  # that `ResponseVector.value/2` never receives an unknown atom.
+  defp filter_weights(weights) do
+    known = ResponseVector.light_sources()
+    Map.filter(weights, fn {source, _weight} -> source in known end)
+  end
 
-  defp exclude_candidate(%ResponseVector{} = candidate, weights, true) do
-    if any_required_missing?(candidate, weights) do
+  defp exclude_candidate(_candidate, _target, _weights, false), do: :scorable
+
+  defp exclude_candidate(%ResponseVector{} = candidate, %ResponseVector{} = target, weights, true) do
+    if any_required_missing?(candidate, weights) or any_required_missing?(target, weights) do
       :excluded
     else
       :scorable
     end
   end
 
-  defp any_required_missing?(%ResponseVector{} = candidate, weights) do
+  defp any_required_missing?(%ResponseVector{} = vector, weights) do
     weights
     |> Map.to_list()
     |> Enum.any?(fn {source, weight} ->
-      weight > 0 and ResponseVector.value(candidate, source) == :missing
+      weight > 0 and ResponseVector.value(vector, source) == :missing
     end)
   end
 
@@ -91,23 +100,16 @@ defmodule ColorMatching.WeightedSquaredError do
       if weight <= 0 do
         acc
       else
-        candidate_value = candidate_brightness(candidate, source)
-        target_value = target_brightness(target, source)
+        candidate_value = brightness_value(candidate, source)
+        target_value = brightness_value(target, source)
         diff = candidate_value - target_value
         acc + diff * diff * weight
       end
     end)
   end
 
-  defp candidate_brightness(candidate, source) do
-    case ResponseVector.value(candidate, source) do
-      :missing -> 0.0
-      value when is_float(value) -> value
-    end
-  end
-
-  defp target_brightness(target, source) do
-    case ResponseVector.value(target, source) do
+  defp brightness_value(vector, source) do
+    case ResponseVector.value(vector, source) do
       :missing -> 0.0
       value when is_float(value) -> value
     end

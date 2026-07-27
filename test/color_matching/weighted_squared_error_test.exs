@@ -48,6 +48,22 @@ defmodule ColorMatching.WeightedSquaredErrorTest do
       assert WeightedSquaredError.score(candidate, target, @weights) == :excluded
     end
 
+    test "excludes when target is missing any positive-weight light source" do
+      target = vector("#000000", white: 0.8, red: :missing, green: 0.7, blue: 0.1, lps: 0.5)
+      candidate = vector("#FF0000", white: 0.5, red: 0.1, green: 0.4, blue: 0.0, lps: 0.3)
+
+      assert WeightedSquaredError.score(candidate, target, @weights) == :excluded
+    end
+
+    test "ignores unknown light sources in the weights map" do
+      weights = Map.put(@weights, :ultraviolet, 1.0)
+
+      target = vector("#000000", white: 0.8, red: 0.2, green: 0.7, blue: 0.1, lps: 0.5)
+      candidate = vector("#FF0000", white: 0.5, red: 0.1, green: 0.4, blue: 0.0, lps: 0.3)
+
+      assert_in_delta WeightedSquaredError.score(candidate, target, weights), 0.205, 1.0e-9
+    end
+
     test "does not exclude a candidate when missing only zero-weight light sources" do
       target = vector("#000000", white: 0.5, red: 0.5, green: 0.5, blue: 0.5, lps: 0.5)
 
