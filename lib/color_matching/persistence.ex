@@ -324,7 +324,8 @@ defmodule ColorMatching.Persistence do
     end)
   end
 
-  @spec invalid_row(map(), Ecto.Changeset.t()) :: {:invalid_rows, [invalid_bulk_measurement_row()]}
+  @spec invalid_row(map(), Ecto.Changeset.t()) ::
+          {:invalid_rows, [invalid_bulk_measurement_row()]}
   defp invalid_row(prepared_measurement, changeset) do
     {:invalid_rows,
      [

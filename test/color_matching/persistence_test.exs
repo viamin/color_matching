@@ -251,7 +251,11 @@ defmodule ColorMatching.PersistenceTest do
                "white"
              ).id == timestamped_white.id
 
-      assert Persistence.get_latest_illuminant_measurement(color.id, printer_profile.id, "blue") ==
+      assert Persistence.get_latest_illuminant_measurement(
+               color.id,
+               printer_profile.id,
+               "blue"
+             ) ==
                nil
 
       refute latest_by_light_source["red"].id == oldest_red.id
