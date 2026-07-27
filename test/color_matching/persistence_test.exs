@@ -55,6 +55,37 @@ defmodule ColorMatching.PersistenceTest do
 
       assert "has already been taken" in duplicate_color_error.sort_order
     end
+
+    test "loads a single palette color with its parent palette" do
+      assert {:ok, palette} =
+               Persistence.create_palette(%{
+                 name: "Detail Fixture",
+                 colors: [
+                   %{hex_color: "#ABCDEF", sort_order: 0, display_label: "Patch A"},
+                   %{hex_color: "#123456", sort_order: 1, display_label: "Patch B"}
+                 ]
+               })
+
+      [first_color, second_color] = Persistence.get_palette!(palette.id).colors
+
+      loaded_first = Persistence.get_palette_color!(first_color.id)
+      loaded_second = Persistence.get_palette_color!(second_color.id)
+
+      assert loaded_first.id == first_color.id
+      assert loaded_first.hex_color == "#ABCDEF"
+      assert loaded_first.display_label == "Patch A"
+      assert loaded_first.palette.id == palette.id
+      assert loaded_first.palette.name == "Detail Fixture"
+      assert loaded_second.hex_color == "#123456"
+
+      assert_raise Ecto.NoResultsError, fn ->
+        Persistence.get_palette_color!(0)
+      end
+    end
+
+    test "returns nil for get_palette_color/1 when the color id is unknown" do
+      assert Persistence.get_palette_color(0) == nil
+    end
   end
 
   describe "printer profiles" do
