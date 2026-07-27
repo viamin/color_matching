@@ -34,7 +34,7 @@ defmodule ColorMatching.TestSheetTest do
   end
 
   defp sheet_attrs(palette, profile, opts \\ []) do
-    lookup_code = Keyword.get(opts, :lookup_code, "ABCD-1234")
+    lookup_code = Keyword.get(opts, :lookup_code, "ABCD-EFGH")
 
     pairs =
       Keyword.get(opts, :pairs, [
@@ -74,11 +74,11 @@ defmodule ColorMatching.TestSheetTest do
     test "creates a test sheet with stable lookup code and associated pairs" do
       palette = create_palette()
       profile = create_printer_profile()
-      attrs = sheet_attrs(palette, profile, lookup_code: "LPSM-TEST")
+      attrs = sheet_attrs(palette, profile, lookup_code: "LPSM-ABCD")
 
       assert {:ok, sheet} = Persistence.create_test_sheet(attrs)
 
-      assert sheet.lookup_code == "LPSM-TEST"
+      assert sheet.lookup_code == "LPSM-ABCD"
       assert sheet.palette_id == palette.id
       assert sheet.printer_profile_id == profile.id
       assert sheet.sheet_version == "lps-letter-grid-v1"
@@ -108,13 +108,13 @@ defmodule ColorMatching.TestSheetTest do
     test "enforces unique lookup codes" do
       palette = create_palette()
       profile = create_printer_profile()
-      attrs = sheet_attrs(palette, profile, lookup_code: "DUPL-ICATE")
+      attrs = sheet_attrs(palette, profile, lookup_code: "DUPL-CATE")
 
       assert {:ok, _sheet} = Persistence.create_test_sheet(attrs)
 
       assert {:error, changeset} =
                Persistence.create_test_sheet(
-                 sheet_attrs(palette, profile, lookup_code: "DUPL-ICATE", pairs: [])
+                 sheet_attrs(palette, profile, lookup_code: "DUPL-CATE", pairs: [])
                )
 
       assert "has already been taken" in errors_on(changeset).lookup_code
@@ -129,6 +129,26 @@ defmodule ColorMatching.TestSheetTest do
       assert errors[:sheet_version]
     end
 
+    test "rejects a lookup_code that does not match XXXX-XXXX unambiguous format" do
+      palette = create_palette()
+      profile = create_printer_profile()
+
+      for invalid_code <- ["lowercase", "ABCD-123", "ABCD-1234", "ABCD-OOOO", "ABCD-IIII"] do
+        attrs = %{
+          lookup_code: invalid_code,
+          palette_id: palette.id,
+          printer_profile_id: profile.id,
+          sheet_version: "lps-letter-grid-v1"
+        }
+
+        assert {:error, changeset} = Persistence.create_test_sheet(attrs),
+               "expected #{inspect(invalid_code)} to be rejected"
+
+        assert errors_on(changeset).lookup_code,
+               "expected lookup_code error for #{inspect(invalid_code)}"
+      end
+    end
+
     test "validates pair hex color format" do
       palette = create_palette()
       profile = create_printer_profile()
@@ -137,7 +157,7 @@ defmodule ColorMatching.TestSheetTest do
         sheet_attrs(palette, profile,
           pairs: [
             %{
-              pair_id: TestSheet.pair_id("ABCD-1234", 0, 0),
+              pair_id: TestSheet.pair_id("ABCD-EFGH", 0, 0),
               row: 0,
               col: 0,
               color_a_hex: "not-a-color",
@@ -161,9 +181,9 @@ defmodule ColorMatching.TestSheetTest do
       profile = create_printer_profile()
       {:ok, _} = Persistence.create_test_sheet(sheet_attrs(palette, profile))
 
-      sheet = Persistence.get_test_sheet_by_lookup_code!("ABCD-1234")
+      sheet = Persistence.get_test_sheet_by_lookup_code!("ABCD-EFGH")
 
-      assert sheet.lookup_code == "ABCD-1234"
+      assert sheet.lookup_code == "ABCD-EFGH"
       assert sheet.palette.id == palette.id
       assert sheet.printer_profile.id == profile.id
       assert length(sheet.pairs) == 2
@@ -171,7 +191,7 @@ defmodule ColorMatching.TestSheetTest do
 
     test "raises for an unknown lookup code" do
       assert_raise Ecto.NoResultsError, fn ->
-        Persistence.get_test_sheet_by_lookup_code!("UNKN-0000")
+        Persistence.get_test_sheet_by_lookup_code!("UNKN-2345")
       end
     end
   end
@@ -196,7 +216,7 @@ defmodule ColorMatching.TestSheetTest do
       profile = create_printer_profile()
 
       {:ok, first} =
-        Persistence.create_test_sheet(sheet_attrs(palette, profile, lookup_code: "AAAA-1111"))
+        Persistence.create_test_sheet(sheet_attrs(palette, profile, lookup_code: "AAAA-2222"))
 
       {:ok, second} =
         Persistence.create_test_sheet(
@@ -223,7 +243,7 @@ defmodule ColorMatching.TestSheetTest do
       profile = create_printer_profile()
       {:ok, _} = Persistence.create_test_sheet(sheet_attrs(palette, profile))
 
-      sheet = Persistence.get_test_sheet_by_lookup_code!("ABCD-1234")
+      sheet = Persistence.get_test_sheet_by_lookup_code!("ABCD-EFGH")
 
       assert sheet.palette.name == "Test Palette"
       assert Enum.map(sheet.palette.colors, & &1.hex_color) == ["#FF0000", "#00FF00", "#0000FF"]
@@ -234,7 +254,7 @@ defmodule ColorMatching.TestSheetTest do
       profile = create_printer_profile()
       {:ok, _} = Persistence.create_test_sheet(sheet_attrs(palette, profile))
 
-      sheet = Persistence.get_test_sheet_by_lookup_code!("ABCD-1234")
+      sheet = Persistence.get_test_sheet_by_lookup_code!("ABCD-EFGH")
 
       assert sheet.printer_profile.printer_make_model == "Epson SureColor P900"
     end
@@ -265,7 +285,7 @@ defmodule ColorMatching.TestSheetTest do
     end
 
     test "pair_id/3 differs for different lookup codes" do
-      id_a = TestSheet.pair_id("AAAA-1111", 0, 0)
+      id_a = TestSheet.pair_id("AAAA-2222", 0, 0)
       id_b = TestSheet.pair_id("BBBB-2222", 0, 0)
 
       assert id_a != id_b
@@ -274,7 +294,7 @@ defmodule ColorMatching.TestSheetTest do
     test "persisted pairs carry stable pair_ids that survive a round-trip" do
       palette = create_palette()
       profile = create_printer_profile()
-      lookup_code = "STBL-1234"
+      lookup_code = "STBL-2345"
 
       expected_pair_id = TestSheet.pair_id(lookup_code, 0, 1)
 
@@ -310,7 +330,7 @@ defmodule ColorMatching.TestSheetTest do
 
       pairs_a = [
         %{
-          pair_id: TestSheet.pair_id("AAAA-1111", 0, 0),
+          pair_id: TestSheet.pair_id("AAAA-2222", 0, 0),
           row: 0,
           col: 0,
           color_a_hex: "#FF0000",
@@ -330,7 +350,7 @@ defmodule ColorMatching.TestSheetTest do
 
       assert {:ok, sheet_a} =
                Persistence.create_test_sheet(
-                 sheet_attrs(palette, profile, lookup_code: "AAAA-1111", pairs: pairs_a)
+                 sheet_attrs(palette, profile, lookup_code: "AAAA-2222", pairs: pairs_a)
                )
 
       assert {:ok, sheet_b} =

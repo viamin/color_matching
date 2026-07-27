@@ -85,6 +85,9 @@ defmodule ColorMatching.Persistence.TestSheet do
       :safe_inset_mm
     ])
     |> put_lookup_code_if_missing()
+    |> validate_format(:lookup_code, ~r/^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/,
+      message: "must be in XXXX-XXXX format using unambiguous characters (no 0, O, 1, I)"
+    )
     |> validate_required([:lookup_code, :palette_id, :printer_profile_id, :sheet_version])
     |> cast_assoc(:pairs, with: &TestSheetPair.changeset/2)
     |> unique_constraint(:lookup_code)
