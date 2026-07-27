@@ -6,7 +6,7 @@ defmodule ColorMatching.Persistence do
   import Ecto.Query, warn: false
 
   alias ColorMatching.PaletteStorage
-  alias ColorMatching.Persistence.{Palette, PaletteColor, PrinterProfile}
+  alias ColorMatching.Persistence.{Palette, PrinterProfile}
   alias ColorMatching.Repo
 
   @type palette_attrs :: %{
@@ -30,7 +30,7 @@ defmodule ColorMatching.Persistence do
     |> Repo.preload(:colors)
   end
 
-  @spec create_palette(map()) :: {:ok, Palette.t()} | {:error, Ecto.Changeset.t()}
+  @spec create_palette(palette_attrs()) :: {:ok, Palette.t()} | {:error, Ecto.Changeset.t()}
   def create_palette(attrs) when is_map(attrs) do
     %Palette{}
     |> Palette.changeset(attrs)
@@ -86,6 +86,8 @@ defmodule ColorMatching.Persistence do
     end
   end
 
+  @spec upsert_preset_palette(palette_attrs()) ::
+          {:ok, Palette.t()} | {:error, Ecto.Changeset.t()}
   defp upsert_preset_palette(attrs) do
     case Repo.get_by(Palette, name: Map.fetch!(attrs, :name)) do
       nil ->

@@ -27,8 +27,6 @@ defmodule ColorMatchingWeb.ConnCase do
       # Import conveniences for testing with connections
       import Plug.Conn
       import Phoenix.ConnTest
-      import Ecto
-      import Ecto.Query
       import ColorMatchingWeb.ConnCase
     end
   end
