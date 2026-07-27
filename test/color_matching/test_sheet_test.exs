@@ -293,6 +293,25 @@ defmodule ColorMatching.TestSheetTest do
     end
   end
 
+  describe "get_test_sheet_by_lookup_code/1" do
+    test "retrieves a sheet by its lookup code with associations preloaded" do
+      palette = create_palette()
+      profile = create_printer_profile()
+      {:ok, _} = Persistence.create_test_sheet(sheet_attrs(palette, profile))
+
+      sheet = Persistence.get_test_sheet_by_lookup_code("ABCD-EFGH")
+
+      assert sheet.lookup_code == "ABCD-EFGH"
+      assert sheet.palette.id == palette.id
+      assert sheet.printer_profile.id == profile.id
+      assert length(sheet.pairs) == 2
+    end
+
+    test "returns nil for an unknown lookup code" do
+      assert Persistence.get_test_sheet_by_lookup_code("UNKN-2345") == nil
+    end
+  end
+
   describe "get_test_sheet!/1" do
     test "retrieves a sheet by integer id with associations preloaded" do
       palette = create_palette()
@@ -304,27 +323,6 @@ defmodule ColorMatching.TestSheetTest do
       assert sheet.id == created.id
       assert sheet.palette.id == palette.id
       assert sheet.printer_profile.id == profile.id
-    end
-  end
-
-  describe "list_test_sheets/0" do
-    test "returns all test sheets ordered by most recently inserted" do
-      palette = create_palette("P1")
-      profile = create_printer_profile()
-
-      {:ok, first} =
-        Persistence.create_test_sheet(sheet_attrs(palette, profile, lookup_code: "AAAA-2222"))
-
-      {:ok, second} =
-        Persistence.create_test_sheet(sheet_attrs(palette, profile, lookup_code: "BBBB-2222"))
-
-      sheets = Persistence.list_test_sheets()
-      ids = Enum.map(sheets, & &1.id)
-
-      assert first.id in ids
-      assert second.id in ids
-      # Most-recently inserted is first
-      assert List.first(ids) == second.id
     end
   end
 

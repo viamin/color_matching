@@ -379,9 +379,8 @@ defmodule ColorMatching.PersistenceTest do
                }
              ]
 
-    assert Persistence.list_illuminant_measurements(color.id, printer_profile.id) == []
+      assert Persistence.list_illuminant_measurements(color.id, printer_profile.id) == []
     end
-  end
   end
 
   describe "preset palette import" do

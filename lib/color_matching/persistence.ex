@@ -19,6 +19,11 @@ defmodule ColorMatching.Persistence do
   alias ColorMatching.Repo
   alias ColorMatching.ResponseVector
 
+  @type palette_attrs :: %{
+          optional(:name) => String.t(),
+          optional(:is_preset) => boolean(),
+          optional(:colors) => [map()]
+        }
   @type measurement_error_map :: %{optional(atom()) => [String.t()]}
   @type invalid_bulk_measurement_row :: %{
           index: non_neg_integer(),
@@ -86,7 +91,7 @@ defmodule ColorMatching.Persistence do
     |> Repo.all()
   end
 
-  @spec get_test_sheet!
+  @spec get_test_sheet!(integer()) :: TestSheet.t()
   def get_test_sheet!(id) do
     TestSheet
     |> Repo.get!(id)
@@ -148,6 +153,34 @@ defmodule ColorMatching.Persistence do
     |> validate_measurement_references(attrs)
     |> Repo.insert()
   end
+
+  @spec create_illuminant_measurements_bulk(map()) ::
+          {:ok, [IlluminantMeasurement.t()]}
+          | {:error, {:invalid_request, measurement_error_map()}}
+          | {:error, {:invalid_rows, [invalid_bulk_measurement_row()]}}
+  def create_illuminant_measurements_bulk(attrs) when is_map(attrs) do
+    case fetch_bulk_measurements(attrs) do
+      {:ok, measurements} ->
+        shared_attrs =
+          attrs
+          |> Map.drop([:measurements, "measurements"])
+          |> normalize_measurement_attrs()
+
+        prepared_measurements =
+          measurements
+          |> Enum.with_index()
+          |> prepare_bulk_measurements(shared_attrs)
+
+        case collect_invalid_bulk_rows(prepared_measurements) do
+          [] -> insert_bulk_measurements(prepared_measurements)
+          invalid_rows -> {:error, {:invalid_rows, invalid_rows}}
+        end
+
+      error ->
+        error
+    end
+  end
+
   @spec list_illuminant_measurements(integer(), integer()) :: [IlluminantMeasurement.t()]
   def list_illuminant_measurements(palette_color_id, printer_profile_id) do
     IlluminantMeasurement
@@ -198,6 +231,7 @@ defmodule ColorMatching.Persistence do
 
     ResponseVector.new(palette_color.hex_color, printer_profile.id, measurements)
   end
+
   @spec latest_illuminant_measurements_query(integer(), integer(), String.t() | nil) ::
           Ecto.Query.t()
   defp latest_illuminant_measurements_query(
