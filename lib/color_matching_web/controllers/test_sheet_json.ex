@@ -10,6 +10,8 @@ defmodule ColorMatchingWeb.TestSheetJSON do
     endpoint: ColorMatchingWeb.Endpoint,
     router: ColorMatchingWeb.Router
 
+  require Logger
+
   alias ColorMatching.Persistence.TestSheet
 
   @doc """
@@ -99,7 +101,6 @@ defmodule ColorMatchingWeb.TestSheetJSON do
     case Jason.decode(json_string) do
       {:ok, value} -> value
       {:error, reason} ->
-        require Logger
         Logger.error("TestSheetJSON: failed to decode JSON field: #{inspect(reason)}")
         nil
     end
