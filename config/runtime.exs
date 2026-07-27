@@ -20,6 +20,13 @@ if System.get_env("PHX_SERVER") do
   config :color_matching, ColorMatchingWeb.Endpoint, server: true
 end
 
+# Optional bearer-token authentication for the JSON API.
+# Set LPSM_API_TOKEN to a non-empty string to require token auth on all
+# /api/* routes. Leave unset (the default) for unauthenticated local access.
+if api_token = System.get_env("LPSM_API_TOKEN") do
+  config :color_matching, :api_token, api_token
+end
+
 if config_env() == :prod do
   database_path =
     System.get_env("DATABASE_PATH") ||

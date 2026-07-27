@@ -14,6 +14,10 @@ defmodule ColorMatchingWeb.Router do
     plug :accepts, ["json"]
   end
 
+  pipeline :api_auth do
+    plug ColorMatchingWeb.Plugs.ApiAuth
+  end
+
   scope "/", ColorMatchingWeb do
     pipe_through :browser
 
@@ -23,10 +27,12 @@ defmodule ColorMatchingWeb.Router do
     get "/home", PageController, :home
   end
 
-  # Other scopes may use custom stacks.
-  # scope "/api", ColorMatchingWeb do
-  #   pipe_through :api
-  # end
+  scope "/api/v1", ColorMatchingWeb do
+    pipe_through [:api, :api_auth]
+
+    get "/test_sheets/recent", TestSheetController, :recent
+    get "/test_sheets/:sheet_id/manifest", TestSheetController, :manifest
+  end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
   if Application.compile_env(:color_matching, :dev_routes) do
