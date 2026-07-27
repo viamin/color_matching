@@ -23,7 +23,7 @@ defmodule ColorMatching.Persistence do
     |> Repo.all()
   end
 
-  @spec get_palette!(Ecto.UUID.t() | integer()) :: Palette.t()
+  @spec get_palette!(integer()) :: Palette.t()
   def get_palette!(id) do
     Palette
     |> Repo.get!(id)
@@ -44,7 +44,7 @@ defmodule ColorMatching.Persistence do
     |> Repo.all()
   end
 
-  @spec get_printer_profile!(Ecto.UUID.t() | integer()) :: PrinterProfile.t()
+  @spec get_printer_profile!(integer()) :: PrinterProfile.t()
   def get_printer_profile!(id), do: Repo.get!(PrinterProfile, id)
 
   @spec create_printer_profile(map()) :: {:ok, PrinterProfile.t()} | {:error, Ecto.Changeset.t()}

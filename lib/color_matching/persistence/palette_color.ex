@@ -30,6 +30,6 @@ defmodule ColorMatching.Persistence.PaletteColor do
     palette_color
     |> cast(attrs, [:hex_color, :display_label, :sort_order])
     |> validate_required([:hex_color, :sort_order])
-    |> validate_format(:hex_color, ~r/^#[0-9A-Fa-f]{6}$/)
+    |> validate_format(:hex_color, ~r/^#[0-9A-Fa-f]{3}([0-9A-Fa-f]{3})?$/)
   end
 end
