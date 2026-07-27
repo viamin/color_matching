@@ -249,6 +249,78 @@ defmodule ColorMatching.PersistenceTest do
       refute latest_by_light_source["green"].id == first_green.id
       refute latest_by_light_source["white"].id == nil_timestamp_white.id
     end
+
+    test "bulk import creates independent measurement records with shared metadata" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, measurements} =
+               Persistence.create_illuminant_measurements_bulk(%{
+                 printer_profile_id: printer_profile.id,
+                 light_source: "red",
+                 measured_at: ~U[2026-07-27 14:00:00Z],
+                 measurement_method: "camera",
+                 measurement_device: "phone-camera",
+                 test_run_id: "sheet-2026-07-26-a",
+                 measurements: [
+                   %{
+                     color_id: color.id,
+                     brightness: 0.91,
+                     raw_value: 184.2,
+                     raw_unit: "8-bit grayscale",
+                     notes: "center patch"
+                   },
+                   %{
+                     color_id: color.id,
+                     brightness: 0.87,
+                     raw_value: 176.0,
+                     raw_unit: "8-bit grayscale",
+                     notes: "edge patch"
+                   }
+                 ]
+               })
+
+      assert Enum.count(measurements) == 2
+      assert Enum.map(measurements, & &1.id) == Enum.uniq(Enum.map(measurements, & &1.id))
+      assert Enum.all?(measurements, &(&1.printer_profile_id == printer_profile.id))
+      assert Enum.all?(measurements, &(&1.palette_color_id == color.id))
+      assert Enum.all?(measurements, &(&1.light_source == "red"))
+      assert Enum.all?(measurements, &(&1.measurement_method == "camera"))
+      assert Enum.all?(measurements, &(&1.measurement_device == "phone-camera"))
+      assert Enum.all?(measurements, &(&1.test_run_id == "sheet-2026-07-26-a"))
+
+      persisted = Persistence.list_illuminant_measurements(color.id, printer_profile.id)
+      persisted_ids = persisted |> Enum.map(& &1.id) |> Enum.sort()
+      measurement_ids = measurements |> Enum.map(& &1.id) |> Enum.sort()
+
+      assert Enum.count(persisted) == 2
+      assert persisted_ids == measurement_ids
+    end
+
+    test "bulk import returns indexed row errors and rolls back the batch" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:error, {:invalid_rows, invalid_rows}} =
+               Persistence.create_illuminant_measurements_bulk(%{
+                 printer_profile_id: printer_profile.id,
+                 light_source: "green",
+                 measurements: [
+                   %{color_id: color.id, brightness: 0.52},
+                   %{color_id: 999_999, brightness: 0.61},
+                   %{color_id: color.id, brightness: 1.5}
+                 ]
+               })
+
+      assert invalid_rows == [
+               %{index: 1, color_id: 999_999, errors: %{palette_color_id: ["does not exist"]}},
+               %{
+                 index: 2,
+                 color_id: color.id,
+                 errors: %{normalized_brightness: ["must be less than or equal to 1.0"]}
+               }
+             ]
+
+      assert Persistence.list_illuminant_measurements(color.id, printer_profile.id) == []
+    end
   end
 
   describe "preset palette import" do
