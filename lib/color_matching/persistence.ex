@@ -93,7 +93,7 @@ defmodule ColorMatching.Persistence do
   @doc """
   Fetches a test sheet by its stable lookup code.
 
-  Raises `Ecto.NoResultsError` when no sheet with that code exists.
+  Returns `nil` when no sheet with that code exists.
   """
   @spec get_test_sheet_by_lookup_code(String.t()) :: TestSheet.t() | nil
   def get_test_sheet_by_lookup_code(lookup_code) do
@@ -102,6 +102,20 @@ defmodule ColorMatching.Persistence do
     |> case do
       nil -> nil
       test_sheet -> Repo.preload(test_sheet, [:printer_profile, :pairs])
+    end
+  end
+
+  @doc """
+  Fetches a test sheet by its stable lookup code, preloading the palette
+  with its colors in addition to the printer profile and pairs.
+
+  Raises `Ecto.NoResultsError` when no sheet with that code exists.
+  """
+  @spec get_test_sheet_by_lookup_code!(String.t()) :: TestSheet.t()
+  def get_test_sheet_by_lookup_code!(lookup_code) do
+    case get_test_sheet_by_lookup_code(lookup_code) do
+      nil -> raise Ecto.NoResultsError, queryable: TestSheet
+      sheet -> Repo.preload(sheet, [{:palette, :colors}])
     end
   end
 
