@@ -204,20 +204,44 @@ defmodule ColorMatching.PersistenceTest do
                  measured_at: ~U[2026-07-27 10:00:00Z]
                })
 
+      assert {:ok, nil_timestamp_white} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.5
+               })
+
+      assert {:ok, timestamped_white} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.55,
+                 measured_at: ~U[2026-07-27 12:00:00Z]
+               })
+
       latest_by_light_source =
         Persistence.latest_illuminant_measurements_by_light_source(color.id, printer_profile.id)
 
-      assert Map.keys(latest_by_light_source) |> Enum.sort() == ["green", "red"]
+      assert Map.keys(latest_by_light_source) |> Enum.sort() == ["green", "red", "white"]
       assert latest_by_light_source["red"].id == latest_red.id
       assert latest_by_light_source["red"].normalized_brightness == 0.25
       assert latest_by_light_source["green"].id == second_green.id
       assert latest_by_light_source["green"].normalized_brightness == 0.45
+      assert latest_by_light_source["white"].id == timestamped_white.id
+      assert latest_by_light_source["white"].normalized_brightness == 0.55
       assert Persistence.get_latest_illuminant_measurement(color.id, printer_profile.id, "red").id ==
                latest_red.id
-      assert Persistence.get_latest_illuminant_measurement(color.id, printer_profile.id, "white") == nil
+      assert Persistence.get_latest_illuminant_measurement(color.id, printer_profile.id, "green").id ==
+               second_green.id
+      assert Persistence.get_latest_illuminant_measurement(color.id, printer_profile.id, "white").id ==
+               timestamped_white.id
+      assert Persistence.get_latest_illuminant_measurement(color.id, printer_profile.id, "blue") == nil
 
       refute latest_by_light_source["red"].id == oldest_red.id
       refute latest_by_light_source["green"].id == first_green.id
+      refute latest_by_light_source["white"].id == nil_timestamp_white.id
     end
   end
 
