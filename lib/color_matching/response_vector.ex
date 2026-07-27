@@ -24,7 +24,7 @@ defmodule ColorMatching.ResponseVector do
     :printer_profile_id,
     :measured_at,
     :inserted_at,
-    :missing?,
+    missing?: false,
     white: :missing,
     red: :missing,
     green: :missing,
@@ -114,7 +114,8 @@ defmodule ColorMatching.ResponseVector do
   end
 
   defp timestamps_for(latest_measurements_by_light_source) do
-    measurements = Map.values(latest_measurements_by_light_source)
+    known_keys = Enum.map(@light_sources, &Atom.to_string/1)
+    measurements = Map.take(latest_measurements_by_light_source, known_keys) |> Map.values()
 
     measured_at =
       measurements
