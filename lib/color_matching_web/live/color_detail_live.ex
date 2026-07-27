@@ -26,8 +26,14 @@ defmodule ColorMatchingWeb.ColorDetailLive do
          |> assign(:palette_color, palette_color)
          |> assign(:printer_profiles, printer_profiles)
          |> assign(:printer_profile, initial_printer_profile)
-         |> assign(:response_vector, build_response_vector(palette_color, initial_printer_profile))
-         |> assign(:latest_measurements, build_latest_measurements(palette_color, initial_printer_profile))
+         |> assign(
+           :response_vector,
+           build_response_vector(palette_color, initial_printer_profile)
+         )
+         |> assign(
+           :latest_measurements,
+           build_latest_measurements(palette_color, initial_printer_profile)
+         )
          |> assign(:measurement_form, empty_measurement_form())
          |> assign(:form_errors, %{})
          |> assign(:not_found, false)}
@@ -91,7 +97,10 @@ defmodule ColorMatchingWeb.ColorDetailLive do
         {:noreply,
          socket
          |> assign(:response_vector, build_response_vector(palette_color, printer_profile))
-         |> assign(:latest_measurements, build_latest_measurements(palette_color, printer_profile))
+         |> assign(
+           :latest_measurements,
+           build_latest_measurements(palette_color, printer_profile)
+         )
          |> assign(:measurement_form, empty_measurement_form())
          |> put_flash(:info, "Recorded #{light_source_label(light_source)} measurement")}
 
@@ -179,11 +188,15 @@ defmodule ColorMatchingWeb.ColorDetailLive do
                 <dd>{@printer_profile.ink_type}</dd>
               </div>
               <div :if={@printer_profile.icc_profile}>
-                <dt class="text-xs font-semibold uppercase tracking-wide text-gray-500">ICC profile</dt>
+                <dt class="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  ICC profile
+                </dt>
                 <dd>{@printer_profile.icc_profile}</dd>
               </div>
               <div :if={@printer_profile.calibration_date}>
-                <dt class="text-xs font-semibold uppercase tracking-wide text-gray-500">Calibrated</dt>
+                <dt class="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Calibrated
+                </dt>
                 <dd>{@printer_profile.calibration_date}</dd>
               </div>
             </dl>
@@ -242,7 +255,9 @@ defmodule ColorMatchingWeb.ColorDetailLive do
                       <%= if measurement.test_run_id do %>
                         <div class="flex justify-between gap-3">
                           <dt class="text-gray-500">Test run</dt>
-                          <dd class="text-right font-mono text-gray-800">{measurement.test_run_id}</dd>
+                          <dd class="text-right font-mono text-gray-800">
+                            {measurement.test_run_id}
+                          </dd>
                         </div>
                       <% end %>
                       <%= if measurement.notes do %>
@@ -349,7 +364,8 @@ defmodule ColorMatchingWeb.ColorDetailLive do
   defp initial_printer_profile(%{"printer_profile_id" => raw_id}, printer_profiles) do
     case parse_printer_profile_id(raw_id) do
       {:ok, printer_profile_id} ->
-        Enum.find(printer_profiles, &(&1.id == printer_profile_id)) || List.first(printer_profiles)
+        Enum.find(printer_profiles, &(&1.id == printer_profile_id)) ||
+          List.first(printer_profiles)
 
       :error ->
         List.first(printer_profiles)
@@ -424,25 +440,18 @@ defmodule ColorMatchingWeb.ColorDetailLive do
   end
 
   defp put_form_errors(socket, _light_source, changeset) do
-    errors =
+    messages =
       changeset
       |> Ecto.Changeset.traverse_errors(fn {message, opts} ->
         Regex.replace(~r"%{(\w+)}", message, fn _, key ->
           opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
         end)
       end)
-      |> externalize_measurement_errors()
+      |> Map.values()
+      |> List.flatten()
 
-    assign(socket, :form_errors, errors)
+    assign(socket, :form_errors, %{"other" => messages})
   end
-
-  defp externalize_measurement_errors(errors) do
-    Map.new(errors, fn {key, value} -> {external_measurement_error_key(key), value} end)
-  end
-
-  defp external_measurement_error_key(:normalized_brightness), do: "other"
-  defp external_measurement_error_key(:palette_color_id), do: "color_id"
-  defp external_measurement_error_key(key), do: to_string(key)
 
   defp color_page_title(%PaletteColor{} = palette_color) do
     "Color · #{palette_color.hex_color}"

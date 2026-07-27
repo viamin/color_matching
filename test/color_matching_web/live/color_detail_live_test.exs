@@ -178,6 +178,28 @@ defmodule ColorMatchingWeb.ColorDetailLiveTest do
       refute html =~ "Recorded"
     end
 
+    test "surfaces errors when the printer profile was removed while the page was open",
+         %{conn: conn} do
+      %{palette: palette, color: color, printer_profile: printer_profile} =
+        persisted_color_fixture()
+
+      {:ok, view, _html} =
+        live(conn, ~p"/palettes/#{palette.id}/colors/#{color.id}")
+
+      # Bypass the persistence layer so the in-memory LiveView still references
+      # the printer profile that no longer exists in the database.
+      {:ok, _} = ColorMatching.Repo.delete(printer_profile)
+
+      html =
+        render_submit(view, "submit_measurement", %{
+          "light_source" => "blue",
+          "brightness" => "0.42"
+        })
+
+      assert html =~ "does not exist"
+      refute html =~ "Recorded"
+    end
+
     test "switching printer profile rebuilds the response vector from the new profile",
          %{conn: conn} do
       %{palette: palette, color: color, printer_profile: first_profile} =
