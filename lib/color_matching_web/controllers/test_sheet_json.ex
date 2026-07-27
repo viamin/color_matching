@@ -78,7 +78,7 @@ defmodule ColorMatchingWeb.TestSheetJSON do
     }
   end
 
-  @spec render_pair(map()) :: map()
+  @spec render_pair(ColorMatching.Persistence.TestSheetPair.t()) :: map()
   defp render_pair(pair) do
     %{
       pair_id: pair.pair_id,
