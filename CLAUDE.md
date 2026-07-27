@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development Commands
 
-- **Setup**: `mix setup` - Install dependencies and setup assets
+- **Setup**: `mix setup` - Install dependencies, create and migrate the SQLite database, import preset palettes, and build assets
 - **Setup git hooks**: `bin/setup-git-hooks` - Install pre-commit formatting hooks
 - **Test CI locally**: `bin/ci-test` - Simulate GitHub Actions workflow locally
 - **Start server**: `mix phx.server` or `iex -S mix phx.server` (with interactive shell)
