@@ -1,12 +1,12 @@
 defmodule ColorMatching.Persistence do
   @moduledoc """
-  Persistence boundary for palettes, palette colors, and printer profiles.
+  Persistence boundary for palettes, palette colors, printer profiles, test sheets, and illuminant measurements.
   """
 
   import Ecto.Query, warn: false
 
   alias ColorMatching.PaletteStorage
-  alias ColorMatching.Persistence.{IlluminantMeasurement, Palette, PrinterProfile}
+  alias ColorMatching.Persistence.{IlluminantMeasurement, Palette, PrinterProfile, TestSheet}
   alias ColorMatching.Repo
 
   @type palette_attrs :: %{
@@ -53,6 +53,54 @@ defmodule ColorMatching.Persistence do
     |> PrinterProfile.changeset(attrs)
     |> Repo.insert()
   end
+
+  # ---------------------------------------------------------------------------
+  # Test sheets
+  # ---------------------------------------------------------------------------
+
+  @spec list_test_sheets() :: [TestSheet.t()]
+  def list_test_sheets do
+    TestSheet
+    |> order_by([sheet], desc: sheet.inserted_at, desc: sheet.id)
+    |> Repo.all()
+    |> preload_test_sheet_associations()
+  end
+
+  @spec get_test_sheet!(integer()) :: TestSheet.t()
+  def get_test_sheet!(id) do
+    TestSheet
+    |> Repo.get!(id)
+    |> preload_test_sheet_associations()
+  end
+
+  @doc """
+  Fetches a test sheet by its stable lookup code.
+
+  Raises `Ecto.NoResultsError` when no sheet with that code exists.
+  """
+  @spec get_test_sheet_by_lookup_code!(String.t()) :: TestSheet.t()
+  def get_test_sheet_by_lookup_code!(lookup_code) do
+    TestSheet
+    |> Repo.get_by!(lookup_code: lookup_code)
+    |> preload_test_sheet_associations()
+  end
+
+  @spec create_test_sheet(map()) :: {:ok, TestSheet.t()} | {:error, Ecto.Changeset.t()}
+  def create_test_sheet(attrs) when is_map(attrs) do
+    %TestSheet{}
+    |> TestSheet.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @spec preload_test_sheet_associations(TestSheet.t() | [TestSheet.t()]) ::
+          TestSheet.t() | [TestSheet.t()]
+  defp preload_test_sheet_associations(test_sheet_or_sheets) do
+    Repo.preload(test_sheet_or_sheets, [{:palette, :colors}, :printer_profile, :pairs])
+  end
+
+  # ---------------------------------------------------------------------------
+  # Illuminant measurements
+  # ---------------------------------------------------------------------------
 
   @spec create_illuminant_measurement(map()) ::
           {:ok, IlluminantMeasurement.t()} | {:error, Ecto.Changeset.t()}
