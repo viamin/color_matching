@@ -95,11 +95,14 @@ defmodule ColorMatching.Persistence do
 
   Raises `Ecto.NoResultsError` when no sheet with that code exists.
   """
-  @spec get_test_sheet_by_lookup_code!(String.t()) :: TestSheet.t()
-  def get_test_sheet_by_lookup_code!(lookup_code) do
+  @spec get_test_sheet_by_lookup_code(String.t()) :: TestSheet.t() | nil
+  def get_test_sheet_by_lookup_code(lookup_code) do
     TestSheet
-    |> Repo.get_by!(lookup_code: lookup_code)
-    |> preload_test_sheet_associations()
+    |> Repo.get_by(lookup_code: lookup_code)
+    |> case do
+      nil -> nil
+      test_sheet -> Repo.preload(test_sheet, [:printer_profile, :pairs])
+    end
   end
 
   @spec create_test_sheet(map()) :: {:ok, TestSheet.t()} | {:error, Ecto.Changeset.t()}
