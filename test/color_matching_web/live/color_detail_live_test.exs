@@ -140,7 +140,7 @@ defmodule ColorMatchingWeb.ColorDetailLiveTest do
         live(conn, ~p"/palettes/#{palette.id}/colors/#{color.id}")
 
       # The dropdown ships with the default "white" option marked as selected.
-      assert html =~ ~s(value="white" selected>White</option>)
+      assert html =~ ~r/<option value="white"[^>]*selected/
 
       # Changing the dropdown to "green" must update the assigns so the
       # `selected` attribute stays in sync with the user's choice instead of
@@ -150,7 +150,7 @@ defmodule ColorMatchingWeb.ColorDetailLiveTest do
           "light_source" => "green"
         })
 
-      assert html =~ ~s(value="green" selected>Green</option>)
+      assert html =~ ~r/<option value="green"[^>]*selected/
 
       # The selection is also captured alongside a brightness update so it
       # survives the re-render triggered by typing a reading.
@@ -159,7 +159,7 @@ defmodule ColorMatchingWeb.ColorDetailLiveTest do
           "brightness" => "0.42"
         })
 
-      assert html =~ ~s(value="green" selected>Green</option>)
+      assert html =~ ~r/<option value="green"[^>]*selected/
     end
 
     test "shows validation errors for out-of-range brightness input", %{conn: conn} do
