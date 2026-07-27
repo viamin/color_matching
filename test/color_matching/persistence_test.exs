@@ -233,14 +233,23 @@ defmodule ColorMatching.PersistenceTest do
       assert latest_by_light_source["white"].id == timestamped_white.id
       assert latest_by_light_source["white"].normalized_brightness == 0.55
 
-      assert Persistence.get_latest_illuminant_measurement(color.id, printer_profile.id, "red").id ==
-               latest_red.id
+      assert Persistence.get_latest_illuminant_measurement(
+               color.id,
+               printer_profile.id,
+               "red"
+             ).id == latest_red.id
 
-      assert Persistence.get_latest_illuminant_measurement(color.id, printer_profile.id, "green").id ==
-               second_green.id
+      assert Persistence.get_latest_illuminant_measurement(
+               color.id,
+               printer_profile.id,
+               "green"
+             ).id == second_green.id
 
-      assert Persistence.get_latest_illuminant_measurement(color.id, printer_profile.id, "white").id ==
-               timestamped_white.id
+      assert Persistence.get_latest_illuminant_measurement(
+               color.id,
+               printer_profile.id,
+               "white"
+             ).id == timestamped_white.id
 
       assert Persistence.get_latest_illuminant_measurement(color.id, printer_profile.id, "blue") ==
                nil

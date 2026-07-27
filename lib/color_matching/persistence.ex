@@ -15,6 +15,12 @@ defmodule ColorMatching.Persistence do
           optional(:is_preset) => boolean(),
           optional(:colors) => [map()]
         }
+  @type measurement_error_map :: %{optional(atom()) => [String.t()]}
+  @type invalid_bulk_measurement_row :: %{
+          index: non_neg_integer(),
+          color_id: term(),
+          errors: measurement_error_map()
+        }
 
   @spec list_palettes() :: [Palette.t()]
   def list_palettes do
@@ -68,8 +74,8 @@ defmodule ColorMatching.Persistence do
 
   @spec create_illuminant_measurements_bulk(map()) ::
           {:ok, [IlluminantMeasurement.t()]}
-          | {:error, {:invalid_request, map()}}
-          | {:error, {:invalid_rows, [map()]}}
+          | {:error, {:invalid_request, measurement_error_map()}}
+          | {:error, {:invalid_rows, [invalid_bulk_measurement_row()]}}
   def create_illuminant_measurements_bulk(attrs) when is_map(attrs) do
     with {:ok, measurements} <- fetch_bulk_measurements(attrs) do
       shared_attrs =
@@ -183,9 +189,10 @@ defmodule ColorMatching.Persistence do
     where(query, [measurement], measurement.light_source == ^light_source)
   end
 
-  @spec fetch_bulk_measurements(map()) :: {:ok, [map()]} | {:error, {:invalid_request, map()}}
+  @spec fetch_bulk_measurements(map()) ::
+          {:ok, [map()]} | {:error, {:invalid_request, measurement_error_map()}}
   defp fetch_bulk_measurements(attrs) do
-    case Map.get(attrs, :measurements) || Map.get(attrs, "measurements") do
+    case first_present_value(attrs, [:measurements, "measurements"]) do
       measurements when is_list(measurements) and measurements != [] ->
         if Enum.all?(measurements, &is_map/1) do
           {:ok, measurements}
@@ -268,7 +275,7 @@ defmodule ColorMatching.Persistence do
     |> Enum.uniq()
   end
 
-  @spec collect_invalid_bulk_rows([map()]) :: [map()]
+  @spec collect_invalid_bulk_rows([map()]) :: [invalid_bulk_measurement_row()]
   defp collect_invalid_bulk_rows(prepared_measurements) do
     prepared_measurements
     |> Enum.flat_map(fn prepared_measurement ->
@@ -287,7 +294,8 @@ defmodule ColorMatching.Persistence do
   end
 
   @spec insert_bulk_measurements([map()]) ::
-          {:ok, [IlluminantMeasurement.t()]} | {:error, {:invalid_rows, [map()]}}
+          {:ok, [IlluminantMeasurement.t()]}
+          | {:error, {:invalid_rows, [invalid_bulk_measurement_row()]}}
   defp insert_bulk_measurements(prepared_measurements) do
     case Repo.transaction(fn ->
            Enum.reduce_while(prepared_measurements, [], fn prepared_measurement, inserted ->
@@ -317,7 +325,12 @@ defmodule ColorMatching.Persistence do
   @spec normalize_measurement_attrs(map()) :: map()
   defp normalize_measurement_attrs(attrs) do
     attrs
-    |> normalize_measurement_key(:palette_color_id, [:palette_color_id, "palette_color_id", :color_id, "color_id"])
+    |> normalize_measurement_key(:palette_color_id, [
+      :palette_color_id,
+      "palette_color_id",
+      :color_id,
+      "color_id"
+    ])
     |> normalize_measurement_key(:normalized_brightness, [
       :normalized_brightness,
       "normalized_brightness",
@@ -350,18 +363,20 @@ defmodule ColorMatching.Persistence do
 
   @spec normalize_measurement_key(map(), atom(), [atom() | String.t()]) :: map()
   defp normalize_measurement_key(attrs, canonical_key, source_keys) do
-    case Enum.find_value(source_keys, &fetch_present_value(attrs, &1)) do
+    case first_present_value(attrs, source_keys) do
       nil -> attrs
       value -> Map.put(attrs, canonical_key, value)
     end
   end
 
-  @spec fetch_present_value(map(), atom() | String.t()) :: term() | nil
-  defp fetch_present_value(attrs, key) do
-    case Map.fetch(attrs, key) do
-      {:ok, value} -> value
-      :error -> nil
-    end
+  @spec first_present_value(map(), [atom() | String.t()]) :: term() | nil
+  defp first_present_value(attrs, keys) do
+    Enum.reduce_while(keys, nil, fn key, _acc ->
+      case Map.fetch(attrs, key) do
+        {:ok, value} -> {:halt, value}
+        :error -> {:cont, nil}
+      end
+    end)
   end
 
   @spec validate_measurement_references(Ecto.Changeset.t(), map()) :: Ecto.Changeset.t()
@@ -381,8 +396,11 @@ defmodule ColorMatching.Persistence do
     validate_measurement_references(changeset, palette_color_ids, printer_profile_ids)
   end
 
-  @spec validate_measurement_references(Ecto.Changeset.t(), MapSet.t(integer()), MapSet.t(integer())) ::
-          Ecto.Changeset.t()
+  @spec validate_measurement_references(
+          Ecto.Changeset.t(),
+          MapSet.t(integer()),
+          MapSet.t(integer())
+        ) :: Ecto.Changeset.t()
   defp validate_measurement_references(
          changeset,
          existing_palette_color_ids,
@@ -401,8 +419,12 @@ defmodule ColorMatching.Persistence do
     )
   end
 
-  @spec maybe_add_missing_reference_error(Ecto.Changeset.t(), atom(), integer() | nil, MapSet.t(integer())) ::
-          Ecto.Changeset.t()
+  @spec maybe_add_missing_reference_error(
+          Ecto.Changeset.t(),
+          atom(),
+          integer() | nil,
+          MapSet.t(integer())
+        ) :: Ecto.Changeset.t()
   defp maybe_add_missing_reference_error(changeset, _field, nil, _existing_ids), do: changeset
 
   defp maybe_add_missing_reference_error(changeset, field, id, existing_ids) do

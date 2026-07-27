@@ -33,16 +33,7 @@ defmodule ColorMatchingWeb.IlluminantMeasurementController do
       {:error, {:invalid_rows, invalid_rows}} ->
         conn
         |> put_status(:unprocessable_entity)
-        |> json(%{
-          errors:
-            Enum.map(invalid_rows, fn invalid_row ->
-              %{
-                index: invalid_row.index,
-                color_id: invalid_row.color_id,
-                errors: externalize_error_keys(invalid_row.errors)
-              }
-            end)
-        })
+        |> json(%{errors: externalize_invalid_rows(invalid_rows)})
     end
   end
 
@@ -86,7 +77,18 @@ defmodule ColorMatchingWeb.IlluminantMeasurementController do
     |> Map.new()
   end
 
-  @spec external_error_key(atom()) :: atom()
+  @spec externalize_invalid_rows([map()]) :: [map()]
+  defp externalize_invalid_rows(invalid_rows) do
+    Enum.map(invalid_rows, fn invalid_row ->
+      %{
+        index: invalid_row.index,
+        color_id: invalid_row.color_id,
+        errors: externalize_error_keys(invalid_row.errors)
+      }
+    end)
+  end
+
+  @spec external_error_key(atom() | String.t()) :: atom() | String.t()
   defp external_error_key(:palette_color_id), do: :color_id
   defp external_error_key(:normalized_brightness), do: :brightness
   defp external_error_key(:raw_measured_value), do: :raw_value
