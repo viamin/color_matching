@@ -4,6 +4,7 @@ defmodule ColorMatching.Persistence do
   """
 
   import Ecto.Query, warn: false
+  import Ecto.Changeset, only: [add_error: 3]
 
   alias ColorMatching.PaletteStorage
 
@@ -22,6 +23,12 @@ defmodule ColorMatching.Persistence do
           optional(:name) => String.t(),
           optional(:is_preset) => boolean(),
           optional(:colors) => [map()]
+        }
+  @type measurement_error_map :: %{optional(atom()) => [String.t()]}
+  @type invalid_bulk_measurement_row :: %{
+          index: non_neg_integer(),
+          color_id: term(),
+          errors: measurement_error_map()
         }
 
   @spec list_palettes() :: [Palette.t()]
@@ -114,9 +121,39 @@ defmodule ColorMatching.Persistence do
   @spec create_illuminant_measurement(map()) ::
           {:ok, IlluminantMeasurement.t()} | {:error, Ecto.Changeset.t()}
   def create_illuminant_measurement(attrs) when is_map(attrs) do
+    attrs = normalize_measurement_attrs(attrs)
+
     %IlluminantMeasurement{}
     |> IlluminantMeasurement.changeset(attrs)
+    |> validate_measurement_references(attrs)
     |> Repo.insert()
+  end
+
+  @spec create_illuminant_measurements_bulk(map()) ::
+          {:ok, [IlluminantMeasurement.t()]}
+          | {:error, {:invalid_request, measurement_error_map()}}
+          | {:error, {:invalid_rows, [invalid_bulk_measurement_row()]}}
+  def create_illuminant_measurements_bulk(attrs) when is_map(attrs) do
+    case fetch_bulk_measurements(attrs) do
+      {:ok, measurements} ->
+        shared_attrs =
+          attrs
+          |> Map.drop([:measurements, "measurements"])
+          |> normalize_measurement_attrs()
+
+        prepared_measurements =
+          measurements
+          |> Enum.with_index()
+          |> prepare_bulk_measurements(shared_attrs)
+
+        case collect_invalid_bulk_rows(prepared_measurements) do
+          [] -> insert_bulk_measurements(prepared_measurements)
+          invalid_rows -> {:error, {:invalid_rows, invalid_rows}}
+        end
+
+      error ->
+        error
+    end
   end
 
   @spec list_illuminant_measurements(integer(), integer()) :: [IlluminantMeasurement.t()]
@@ -227,6 +264,277 @@ defmodule ColorMatching.Persistence do
 
   defp maybe_filter_light_source(query, light_source) do
     where(query, [measurement], measurement.light_source == ^light_source)
+  end
+
+  @spec fetch_bulk_measurements(map()) ::
+          {:ok, [map()]} | {:error, {:invalid_request, measurement_error_map()}}
+  defp fetch_bulk_measurements(attrs) do
+    case first_present_value(attrs, [:measurements, "measurements"]) do
+      measurements when is_list(measurements) and measurements != [] ->
+        if Enum.all?(measurements, &is_map/1) do
+          {:ok, measurements}
+        else
+          {:error, {:invalid_request, %{measurements: ["must contain only measurement objects"]}}}
+        end
+
+      [] ->
+        {:error, {:invalid_request, %{measurements: ["must contain at least one measurement"]}}}
+
+      nil ->
+        {:error, {:invalid_request, %{measurements: ["is required"]}}}
+
+      _other ->
+        {:error, {:invalid_request, %{measurements: ["must be a list"]}}}
+    end
+  end
+
+  @spec prepare_bulk_measurements([{map(), non_neg_integer()}], map()) :: [map()]
+  defp prepare_bulk_measurements(indexed_measurements, shared_attrs) do
+    printer_profile_ids =
+      indexed_measurements
+      |> Enum.map(fn {measurement_attrs, _index} ->
+        measurement_attrs
+        |> normalize_measurement_attrs()
+        |> Map.get(:printer_profile_id, shared_attrs[:printer_profile_id])
+      end)
+      |> Enum.reject(&is_nil/1)
+      |> existing_ids(PrinterProfile)
+
+    palette_color_ids =
+      indexed_measurements
+      |> Enum.map(fn {measurement_attrs, _index} ->
+        measurement_attrs
+        |> normalize_measurement_attrs()
+        |> Map.get(:palette_color_id, shared_attrs[:palette_color_id])
+      end)
+      |> Enum.reject(&is_nil/1)
+      |> existing_ids(PaletteColor)
+
+    Enum.map(indexed_measurements, fn {measurement_attrs, index} ->
+      attrs =
+        shared_attrs
+        |> Map.merge(normalize_measurement_attrs(measurement_attrs))
+
+      changeset =
+        %IlluminantMeasurement{}
+        |> IlluminantMeasurement.changeset(attrs)
+        |> validate_measurement_references(palette_color_ids, printer_profile_ids)
+
+      %{
+        index: index,
+        color_id: attrs[:palette_color_id],
+        changeset: changeset
+      }
+    end)
+  end
+
+  @spec existing_ids([term()], module()) :: MapSet.t(integer())
+  defp existing_ids([], _schema), do: MapSet.new()
+
+  defp existing_ids(ids, schema) do
+    ids = cast_integer_ids(ids)
+
+    schema
+    |> where([record], record.id in ^ids)
+    |> select([record], record.id)
+    |> Repo.all()
+    |> MapSet.new()
+  end
+
+  @spec cast_integer_ids([term()]) :: [integer()]
+  defp cast_integer_ids(ids) do
+    ids
+    |> Enum.map(&Ecto.Type.cast(:integer, &1))
+    |> Enum.flat_map(fn
+      {:ok, id} -> [id]
+      :error -> []
+    end)
+    |> Enum.uniq()
+  end
+
+  @spec collect_invalid_bulk_rows([map()]) :: [invalid_bulk_measurement_row()]
+  defp collect_invalid_bulk_rows(prepared_measurements) do
+    prepared_measurements
+    |> Enum.flat_map(fn prepared_measurement ->
+      if prepared_measurement.changeset.valid? do
+        []
+      else
+        [
+          %{
+            index: prepared_measurement.index,
+            color_id: prepared_measurement.color_id,
+            errors: changeset_errors(prepared_measurement.changeset)
+          }
+        ]
+      end
+    end)
+  end
+
+  @spec insert_bulk_measurements([map()]) ::
+          {:ok, [IlluminantMeasurement.t()]}
+          | {:error, {:invalid_rows, [invalid_bulk_measurement_row()]}}
+  defp insert_bulk_measurements(prepared_measurements) do
+    transaction_result =
+      fn -> insert_each_measurement(prepared_measurements) end
+      |> Repo.transaction()
+
+    case transaction_result do
+      {:ok, inserted_measurements} -> {:ok, Enum.reverse(inserted_measurements)}
+      {:error, {:invalid_rows, invalid_rows}} -> {:error, {:invalid_rows, invalid_rows}}
+    end
+  end
+
+  @spec insert_each_measurement([map()]) :: [IlluminantMeasurement.t()]
+  defp insert_each_measurement(prepared_measurements) do
+    Enum.reduce_while(prepared_measurements, [], fn prepared_measurement, inserted ->
+      case Repo.insert(prepared_measurement.changeset) do
+        {:ok, measurement} ->
+          {:cont, [measurement | inserted]}
+
+        {:error, changeset} ->
+          Repo.rollback(invalid_row(prepared_measurement, changeset))
+      end
+    end)
+  end
+
+  @spec invalid_row(map(), Ecto.Changeset.t()) ::
+          {:invalid_rows, [invalid_bulk_measurement_row()]}
+  defp invalid_row(prepared_measurement, changeset) do
+    {:invalid_rows,
+     [
+       %{
+         index: prepared_measurement.index,
+         color_id: prepared_measurement.color_id,
+         errors: changeset_errors(changeset)
+       }
+     ]}
+  end
+
+  @spec normalize_measurement_attrs(map()) :: map()
+  defp normalize_measurement_attrs(attrs) do
+    attrs
+    |> normalize_measurement_key(:palette_color_id, [
+      :palette_color_id,
+      "palette_color_id",
+      :color_id,
+      "color_id"
+    ])
+    |> normalize_measurement_key(:normalized_brightness, [
+      :normalized_brightness,
+      "normalized_brightness",
+      :brightness,
+      "brightness"
+    ])
+    |> normalize_measurement_key(:raw_measured_value, [
+      :raw_measured_value,
+      "raw_measured_value",
+      :raw_value,
+      "raw_value"
+    ])
+    |> normalize_measurement_key(:raw_value_unit, [
+      :raw_value_unit,
+      "raw_value_unit",
+      :raw_unit,
+      "raw_unit"
+    ])
+    |> normalize_measurement_key(:printer_profile_id, [
+      :printer_profile_id,
+      "printer_profile_id"
+    ])
+    |> normalize_measurement_key(:light_source, [:light_source, "light_source"])
+    |> normalize_measurement_key(:notes, [:notes, "notes"])
+    |> normalize_measurement_key(:measured_at, [:measured_at, "measured_at"])
+    |> normalize_measurement_key(:measurement_method, [:measurement_method, "measurement_method"])
+    |> normalize_measurement_key(:measurement_device, [:measurement_device, "measurement_device"])
+    |> normalize_measurement_key(:test_run_id, [:test_run_id, "test_run_id"])
+  end
+
+  @spec normalize_measurement_key(map(), atom(), [atom() | String.t()]) :: map()
+  defp normalize_measurement_key(attrs, canonical_key, source_keys) do
+    case first_present_value(attrs, source_keys) do
+      nil ->
+        attrs
+
+      value ->
+        attrs
+        |> Map.drop(source_keys)
+        |> Map.put(canonical_key, value)
+    end
+  end
+
+  @spec first_present_value(map(), [atom() | String.t()]) :: term() | nil
+  defp first_present_value(attrs, keys) do
+    Enum.reduce_while(keys, nil, fn key, _acc ->
+      case Map.fetch(attrs, key) do
+        {:ok, value} -> {:halt, value}
+        :error -> {:cont, nil}
+      end
+    end)
+  end
+
+  @spec validate_measurement_references(Ecto.Changeset.t(), map()) :: Ecto.Changeset.t()
+  defp validate_measurement_references(changeset, attrs) do
+    palette_color_ids =
+      attrs
+      |> Map.get(:palette_color_id)
+      |> List.wrap()
+      |> existing_ids(PaletteColor)
+
+    printer_profile_ids =
+      attrs
+      |> Map.get(:printer_profile_id)
+      |> List.wrap()
+      |> existing_ids(PrinterProfile)
+
+    validate_measurement_references(changeset, palette_color_ids, printer_profile_ids)
+  end
+
+  @spec validate_measurement_references(
+          Ecto.Changeset.t(),
+          MapSet.t(integer()),
+          MapSet.t(integer())
+        ) :: Ecto.Changeset.t()
+  defp validate_measurement_references(
+         changeset,
+         existing_palette_color_ids,
+         existing_printer_profile_ids
+       ) do
+    changeset
+    |> maybe_add_missing_reference_error(
+      :palette_color_id,
+      Ecto.Changeset.get_field(changeset, :palette_color_id),
+      existing_palette_color_ids
+    )
+    |> maybe_add_missing_reference_error(
+      :printer_profile_id,
+      Ecto.Changeset.get_field(changeset, :printer_profile_id),
+      existing_printer_profile_ids
+    )
+  end
+
+  @spec maybe_add_missing_reference_error(
+          Ecto.Changeset.t(),
+          atom(),
+          integer() | nil,
+          MapSet.t(integer())
+        ) :: Ecto.Changeset.t()
+  defp maybe_add_missing_reference_error(changeset, _field, nil, _existing_ids), do: changeset
+
+  defp maybe_add_missing_reference_error(changeset, field, id, existing_ids) do
+    if MapSet.member?(existing_ids, id) do
+      changeset
+    else
+      add_error(changeset, field, "does not exist")
+    end
+  end
+
+  @spec changeset_errors(Ecto.Changeset.t()) :: map()
+  defp changeset_errors(changeset) do
+    Ecto.Changeset.traverse_errors(changeset, fn {message, opts} ->
+      Regex.replace(~r"%{(\w+)}", message, fn _, key ->
+        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
+      end)
+    end)
   end
 
   @doc """

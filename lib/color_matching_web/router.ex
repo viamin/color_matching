@@ -23,10 +23,12 @@ defmodule ColorMatchingWeb.Router do
     get "/home", PageController, :home
   end
 
-  # Other scopes may use custom stacks.
-  # scope "/api", ColorMatchingWeb do
-  #   pipe_through :api
-  # end
+  scope "/api", ColorMatchingWeb do
+    pipe_through :api
+
+    post "/illuminant_measurements", IlluminantMeasurementController, :create
+    post "/illuminant_measurements/bulk", IlluminantMeasurementController, :bulk_create
+  end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
   if Application.compile_env(:color_matching, :dev_routes) do
