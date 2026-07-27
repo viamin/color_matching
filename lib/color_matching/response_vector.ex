@@ -84,9 +84,13 @@ defmodule ColorMatching.ResponseVector do
       printer_profile_id: printer_profile_id,
       measured_at: timestamps.measured_at,
       inserted_at: timestamps.inserted_at,
-      missing?: Enum.any?(@light_sources, &(Map.get(brightnesses, &1) == :missing))
+      missing?: Enum.any?(@light_sources, &(Map.get(brightnesses, &1) == :missing)),
+      white: brightnesses.white,
+      red: brightnesses.red,
+      green: brightnesses.green,
+      blue: brightnesses.blue,
+      lps: brightnesses.lps
     }
-    |> Map.merge(brightnesses)
   end
 
   @spec value(t(), light_source()) :: brightness()
