@@ -107,10 +107,9 @@ defmodule ColorMatching.Persistence.TestSheet do
 
   The ID is deterministic: given the same inputs it always produces the same
   output, so it can be re-derived from a printed sheet's lookup code and a
-  pair's grid coordinates without a database round-trip.
-
-      iex> TestSheet.pair_id("LPSM-7K2N", 0, 1)
-      "pair-a3f2b1c4d5e6"  # example — actual value depends on the SHA-256 digest
+  pair's grid coordinates without a database round-trip. The value is a
+  17-character string of the form `"pair-"` followed by 12 lowercase hex digits
+  drawn from the SHA-256 digest of `"<lookup_code>|<row>|<col>"`.
   """
   @spec pair_id(String.t(), non_neg_integer(), non_neg_integer()) :: String.t()
   def pair_id(lookup_code, row, col) do
