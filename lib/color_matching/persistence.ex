@@ -61,16 +61,16 @@ defmodule ColorMatching.Persistence do
   @spec list_test_sheets() :: [TestSheet.t()]
   def list_test_sheets do
     TestSheet
-    |> order_by([sheet], desc: sheet.inserted_at)
-    |> preload([:palette, :printer_profile, :pairs])
+    |> order_by([sheet], desc: sheet.inserted_at, desc: sheet.id)
     |> Repo.all()
+    |> preload_test_sheet_associations()
   end
 
   @spec get_test_sheet!(integer()) :: TestSheet.t()
   def get_test_sheet!(id) do
     TestSheet
     |> Repo.get!(id)
-    |> Repo.preload([:palette, :printer_profile, :pairs])
+    |> preload_test_sheet_associations()
   end
 
   @doc """
@@ -82,7 +82,7 @@ defmodule ColorMatching.Persistence do
   def get_test_sheet_by_lookup_code!(lookup_code) do
     TestSheet
     |> Repo.get_by!(lookup_code: lookup_code)
-    |> Repo.preload([:palette, :printer_profile, :pairs])
+    |> preload_test_sheet_associations()
   end
 
   @spec create_test_sheet(map()) :: {:ok, TestSheet.t()} | {:error, Ecto.Changeset.t()}
@@ -90,6 +90,12 @@ defmodule ColorMatching.Persistence do
     %TestSheet{}
     |> TestSheet.changeset(attrs)
     |> Repo.insert()
+  end
+
+  @spec preload_test_sheet_associations(TestSheet.t() | [TestSheet.t()]) ::
+          TestSheet.t() | [TestSheet.t()]
+  defp preload_test_sheet_associations(test_sheet_or_sheets) do
+    Repo.preload(test_sheet_or_sheets, [{:palette, :colors}, :printer_profile, :pairs])
   end
 
   @doc """
