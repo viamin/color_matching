@@ -98,7 +98,10 @@ defmodule ColorMatchingWeb.TestSheetJSON do
   defp decode_json_field(json_string) when is_binary(json_string) do
     case Jason.decode(json_string) do
       {:ok, value} -> value
-      {:error, _} -> json_string
+      {:error, reason} ->
+        require Logger
+        Logger.error("TestSheetJSON: failed to decode JSON field: #{inspect(reason)}")
+        nil
     end
   end
 
