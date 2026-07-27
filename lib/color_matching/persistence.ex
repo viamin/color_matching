@@ -77,21 +77,25 @@ defmodule ColorMatching.Persistence do
           | {:error, {:invalid_request, measurement_error_map()}}
           | {:error, {:invalid_rows, [invalid_bulk_measurement_row()]}}
   def create_illuminant_measurements_bulk(attrs) when is_map(attrs) do
-    with {:ok, measurements} <- fetch_bulk_measurements(attrs) do
-      shared_attrs =
-        attrs
-        |> Map.drop([:measurements, "measurements"])
-        |> normalize_measurement_attrs()
+    case fetch_bulk_measurements(attrs) do
+      {:ok, measurements} ->
+        shared_attrs =
+          attrs
+          |> Map.drop([:measurements, "measurements"])
+          |> normalize_measurement_attrs()
 
-      prepared_measurements =
-        measurements
-        |> Enum.with_index()
-        |> prepare_bulk_measurements(shared_attrs)
+        prepared_measurements =
+          measurements
+          |> Enum.with_index()
+          |> prepare_bulk_measurements(shared_attrs)
 
-      case collect_invalid_bulk_rows(prepared_measurements) do
-        [] -> insert_bulk_measurements(prepared_measurements)
-        invalid_rows -> {:error, {:invalid_rows, invalid_rows}}
-      end
+        case collect_invalid_bulk_rows(prepared_measurements) do
+          [] -> insert_bulk_measurements(prepared_measurements)
+          invalid_rows -> {:error, {:invalid_rows, invalid_rows}}
+        end
+
+      error ->
+        error
     end
   end
 

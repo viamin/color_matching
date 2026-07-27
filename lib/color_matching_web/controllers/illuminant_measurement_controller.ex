@@ -72,9 +72,7 @@ defmodule ColorMatchingWeb.IlluminantMeasurementController do
 
   @spec externalize_error_keys(map()) :: map()
   defp externalize_error_keys(errors) do
-    errors
-    |> Enum.map(fn {key, value} -> {external_error_key(key), value} end)
-    |> Map.new()
+    Map.new(errors, fn {key, value} -> {external_error_key(key), value} end)
   end
 
   @spec externalize_invalid_rows([map()]) :: [map()]
