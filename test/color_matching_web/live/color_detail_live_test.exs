@@ -129,6 +129,35 @@ defmodule ColorMatchingWeb.ColorDetailLiveTest do
       assert persisted.printer_profile_id == printer_profile.id
     end
 
+    test "light source dropdown syncs back into the form via phx-change", %{conn: conn} do
+      %{palette: palette, color: color} = persisted_color_fixture()
+
+      {:ok, view, html} =
+        live(conn, ~p"/palettes/#{palette.id}/colors/#{color.id}")
+
+      # The dropdown ships with the default "white" option marked as selected.
+      assert html =~ ~s(value="white" selected>White</option>)
+
+      # Changing the dropdown to "green" must update the assigns so the
+      # `selected` attribute stays in sync with the user's choice instead of
+      # snapping back to "white" on the next re-render.
+      html =
+        render_change(view, "update_measurement_light_source", %{
+          "light_source" => "green"
+        })
+
+      assert html =~ ~s(value="green" selected>Green</option>)
+
+      # The selection is also captured alongside a brightness update so it
+      # survives the re-render triggered by typing a reading.
+      html =
+        render_change(view, "update_measurement_brightness", %{
+          "brightness" => "0.42"
+        })
+
+      assert html =~ ~s(value="green" selected>Green</option>)
+    end
+
     test "shows validation errors for out-of-range brightness input", %{conn: conn} do
       %{palette: palette, color: color} = persisted_color_fixture()
 

@@ -66,7 +66,16 @@ defmodule ColorMatchingWeb.ColorDetailLive do
 
     {:noreply,
      socket
-     |> put_in_measurement_form(value)
+     |> put_in_measurement_form("brightness", value)
+     |> clear_form_error()}
+  end
+
+  def handle_event("update_measurement_light_source", params, socket) do
+    value = Map.get(params, "light_source", socket.assigns.measurement_form["light_source"])
+
+    {:noreply,
+     socket
+     |> put_in_measurement_form("light_source", value)
      |> clear_form_error()}
   end
 
@@ -269,6 +278,7 @@ defmodule ColorMatchingWeb.ColorDetailLive do
             <select
               id="measurement-light-source"
               name="light_source"
+              phx-change="update_measurement_light_source"
               class="mt-1 block w-full rounded-md border border-gray-300 bg-white shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
             >
               <%= for source <- IlluminantMeasurement.supported_light_sources() do %>
@@ -406,10 +416,8 @@ defmodule ColorMatchingWeb.ColorDetailLive do
     %{"light_source" => "white", "brightness" => ""}
   end
 
-  defp put_in_measurement_form(socket, value) do
-    # Only the brightness field is editable inline via phx-change, so
-    # `light_source` and the other keys are intentionally preserved.
-    updated = Map.put(socket.assigns.measurement_form, "brightness", value)
+  defp put_in_measurement_form(socket, field, value) do
+    updated = Map.put(socket.assigns.measurement_form, field, value)
     assign(socket, :measurement_form, updated)
   end
 
