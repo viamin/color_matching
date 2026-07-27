@@ -1,7 +1,7 @@
 defmodule ColorMatching.PersistenceTest do
   use ColorMatching.DataCase, async: false
 
-  alias ColorMatching.Persistence
+  alias ColorMatching.{Palette, Persistence}
 
   describe "palettes" do
     test "creates and reads a palette with persisted colors" do
@@ -101,24 +101,79 @@ defmodule ColorMatching.PersistenceTest do
       assert "#FFF" in Enum.map(monochrome.colors, & &1.hex_color)
     end
 
-    test "re-import keeps existing preset colors in place by sort order" do
-      assert {:ok, _palettes} = Persistence.import_preset_palettes()
+    test "rolls back the full import when a later preset is invalid" do
+      preset_palettes = [
+        Palette.new(%{name: "Valid Preset", colors: ["#112233"], is_preset: true}),
+        Palette.new(%{name: "Invalid Preset", colors: ["not-a-hex"], is_preset: true})
+      ]
+
+      assert {:error, changeset} = Persistence.import_preset_palettes(preset_palettes)
+
+      assert %{colors: [%{hex_color: ["has invalid format"]}]} = errors_on(changeset)
+      assert Persistence.list_palettes() == []
+    end
+
+    test "re-import preserves existing preset color ids by hex color across reordering" do
+      initial_presets = [
+        Palette.new(%{
+          name: "Warm",
+          colors: ["#111111", "#222222", "#111111"],
+          is_preset: true
+        })
+      ]
+
+      reordered_presets = [
+        Palette.new(%{
+          name: "Warm",
+          colors: ["#111111", "#444444", "#111111", "#222222"],
+          is_preset: true
+        })
+      ]
+
+      assert {:ok, _palettes} = Persistence.import_preset_palettes(initial_presets)
 
       original_warm =
         Persistence.list_palettes()
         |> Enum.find(&(&1.name == "Warm"))
 
-      original_color_ids = Enum.map(original_warm.colors, & &1.id)
-      original_inserted_ats = Enum.map(original_warm.colors, & &1.inserted_at)
+      original_duplicate_ids =
+        original_warm.colors
+        |> Enum.filter(&(&1.hex_color == "#111111"))
+        |> Enum.map(& &1.id)
 
-      assert {:ok, _palettes} = Persistence.import_preset_palettes()
+      original_duplicate_inserted_ats =
+        original_warm.colors
+        |> Enum.filter(&(&1.hex_color == "#111111"))
+        |> Enum.map(& &1.inserted_at)
+
+      original_singleton_ids =
+        original_warm.colors
+        |> Enum.reject(&(&1.hex_color == "#111111"))
+        |> Map.new(fn color -> {color.hex_color, color.id} end)
+
+      assert {:ok, _palettes} = Persistence.import_preset_palettes(reordered_presets)
 
       reimported_warm =
         Persistence.list_palettes()
         |> Enum.find(&(&1.name == "Warm"))
 
-      assert Enum.map(reimported_warm.colors, & &1.id) == original_color_ids
-      assert Enum.map(reimported_warm.colors, & &1.inserted_at) == original_inserted_ats
+      reimported_duplicate_colors =
+        Enum.filter(reimported_warm.colors, &(&1.hex_color == "#111111"))
+
+      reimported_duplicate_ids = Enum.map(reimported_duplicate_colors, & &1.id)
+      reimported_duplicate_inserted_ats = Enum.map(reimported_duplicate_colors, & &1.inserted_at)
+
+      reimported_singleton_ids =
+        reimported_warm.colors
+        |> Enum.reject(&(&1.hex_color == "#111111"))
+        |> Map.new(fn color -> {color.hex_color, color.id} end)
+
+      assert reimported_duplicate_ids == original_duplicate_ids
+      assert reimported_duplicate_inserted_ats == original_duplicate_inserted_ats
+      assert reimported_singleton_ids["#222222"] == original_singleton_ids["#222222"]
+      assert reimported_singleton_ids["#444444"] not in original_duplicate_ids ++ Map.values(original_singleton_ids)
+      assert Enum.map(reimported_warm.colors, & &1.hex_color) == ["#111111", "#444444", "#111111", "#222222"]
+      assert Enum.map(reimported_warm.colors, & &1.sort_order) == [0, 1, 2, 3]
     end
   end
 end

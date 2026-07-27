@@ -62,27 +62,35 @@ defmodule ColorMatching.Persistence do
   """
   @spec import_preset_palettes() :: {:ok, [Palette.t()]} | {:error, Ecto.Changeset.t()}
   def import_preset_palettes do
-    PaletteStorage.get_preset_palettes()
-    |> Enum.reduce_while({:ok, []}, fn preset_palette, {:ok, imported} ->
-      attrs = %{
-        name: preset_palette.name,
-        is_preset: true,
-        colors:
-          preset_palette.colors
-          |> Enum.with_index()
-          |> Enum.map(fn {hex_color, index} ->
-            %{hex_color: hex_color, sort_order: index, display_label: nil}
-          end)
-      }
+    import_preset_palettes(PaletteStorage.get_preset_palettes())
+  end
 
-      case upsert_preset_palette(attrs) do
-        {:ok, palette} -> {:cont, {:ok, [palette | imported]}}
-        {:error, changeset} -> {:halt, {:error, changeset}}
-      end
+  @spec import_preset_palettes([ColorMatching.Palette.t()]) ::
+          {:ok, [Palette.t()]} | {:error, Ecto.Changeset.t()}
+  def import_preset_palettes(preset_palettes) when is_list(preset_palettes) do
+    Repo.transaction(fn ->
+      Enum.reduce(preset_palettes, [], fn preset_palette, imported ->
+        attrs = %{
+          name: preset_palette.name,
+          is_preset: true,
+          colors:
+            preset_palette.colors
+            |> Enum.with_index()
+            |> Enum.map(fn {hex_color, index} ->
+              %{hex_color: hex_color, sort_order: index, display_label: nil}
+            end)
+        }
+
+        case upsert_preset_palette(attrs) do
+          {:ok, palette} -> [palette | imported]
+          {:error, changeset} -> Repo.rollback(changeset)
+        end
+      end)
+      |> Enum.reverse()
     end)
     |> case do
-      {:ok, palettes} -> {:ok, Enum.reverse(palettes)}
-      error -> error
+      {:ok, palettes} -> {:ok, palettes}
+      {:error, changeset} -> {:error, changeset}
     end
   end
 
@@ -105,27 +113,33 @@ defmodule ColorMatching.Persistence do
 
   @spec merge_palette_color_ids(palette_attrs(), Palette.t()) :: palette_attrs()
   defp merge_palette_color_ids(attrs, %Palette{} = palette) do
-    existing_colors_by_sort_order =
+    existing_colors_by_hex =
       palette
       |> Map.fetch!(:colors)
-      |> Map.new(fn color -> {color.sort_order, color} end)
+      |> Enum.group_by(& &1.hex_color)
 
     Map.update(attrs, :colors, [], fn colors ->
-      Enum.map(colors, &merge_palette_color_id(&1, existing_colors_by_sort_order))
+      {merged_colors, _remaining_colors_by_hex} =
+        Enum.map_reduce(colors, existing_colors_by_hex, &merge_palette_color_id/2)
+
+      merged_colors
     end)
   end
 
-  @spec merge_palette_color_id(map(), %{required(integer()) => map()}) :: map()
-  defp merge_palette_color_id(color_attrs, existing_colors_by_sort_order) do
-    existing_color =
-      color_attrs
-      |> Map.fetch!(:sort_order)
-      |> then(&Map.get(existing_colors_by_sort_order, &1))
+  @spec merge_palette_color_id(map(), %{required(String.t()) => [map()]}) ::
+          {map(), %{required(String.t()) => [map()]}}
+  defp merge_palette_color_id(color_attrs, existing_colors_by_hex) do
+    hex_color = Map.fetch!(color_attrs, :hex_color)
 
-    if existing_color do
-      Map.put(color_attrs, :id, existing_color.id)
-    else
-      color_attrs
+    case Map.get(existing_colors_by_hex, hex_color, []) do
+      [existing_color | remaining_colors] ->
+        {
+          Map.put(color_attrs, :id, existing_color.id),
+          Map.put(existing_colors_by_hex, hex_color, remaining_colors)
+        }
+
+      [] ->
+        {color_attrs, existing_colors_by_hex}
     end
   end
 end
