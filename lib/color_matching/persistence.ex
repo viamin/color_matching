@@ -109,12 +109,13 @@ defmodule ColorMatching.Persistence do
       |> ranked_illuminant_measurement_ids_query(printer_profile_id, light_source)
       |> subquery()
 
-    from ranked_measurement in ranked_measurement_ids_query,
+    from(ranked_measurement in ranked_measurement_ids_query,
       where: ranked_measurement.latest_rank == 1,
       join: measurement in IlluminantMeasurement,
       on: measurement.id == ranked_measurement.id,
       order_by: [asc: measurement.light_source],
       select: measurement
+    )
   end
 
   @spec ranked_illuminant_measurement_ids_query(integer(), integer(), String.t() | nil) ::

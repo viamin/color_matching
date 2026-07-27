@@ -124,7 +124,8 @@ defmodule ColorMatching.PersistenceTest do
                  normalized_brightness: 1.01
                })
 
-      assert %{normalized_brightness: ["must be less than or equal to 1.0"]} = errors_on(changeset)
+      assert %{normalized_brightness: ["must be less than or equal to 1.0"]} =
+               errors_on(changeset)
 
       assert {:error, changeset} =
                Persistence.create_illuminant_measurement(%{
@@ -231,13 +232,18 @@ defmodule ColorMatching.PersistenceTest do
       assert latest_by_light_source["green"].normalized_brightness == 0.45
       assert latest_by_light_source["white"].id == timestamped_white.id
       assert latest_by_light_source["white"].normalized_brightness == 0.55
+
       assert Persistence.get_latest_illuminant_measurement(color.id, printer_profile.id, "red").id ==
                latest_red.id
+
       assert Persistence.get_latest_illuminant_measurement(color.id, printer_profile.id, "green").id ==
                second_green.id
+
       assert Persistence.get_latest_illuminant_measurement(color.id, printer_profile.id, "white").id ==
                timestamped_white.id
-      assert Persistence.get_latest_illuminant_measurement(color.id, printer_profile.id, "blue") == nil
+
+      assert Persistence.get_latest_illuminant_measurement(color.id, printer_profile.id, "blue") ==
+               nil
 
       refute latest_by_light_source["red"].id == oldest_red.id
       refute latest_by_light_source["green"].id == first_green.id

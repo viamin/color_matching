@@ -63,9 +63,17 @@ defmodule ColorMatching.Persistence.IlluminantMeasurement do
       :palette_color_id,
       :printer_profile_id
     ])
-    |> validate_required([:light_source, :normalized_brightness, :palette_color_id, :printer_profile_id])
+    |> validate_required([
+      :light_source,
+      :normalized_brightness,
+      :palette_color_id,
+      :printer_profile_id
+    ])
     |> validate_inclusion(:light_source, @light_sources)
-    |> validate_number(:normalized_brightness, greater_than_or_equal_to: 0.0, less_than_or_equal_to: 1.0)
+    |> validate_number(:normalized_brightness,
+      greater_than_or_equal_to: 0.0,
+      less_than_or_equal_to: 1.0
+    )
     |> foreign_key_constraint(:palette_color_id)
     |> foreign_key_constraint(:printer_profile_id)
   end
