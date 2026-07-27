@@ -36,6 +36,19 @@ defmodule ColorMatching.PersistenceTest do
       persisted = Persistence.get_palette!(palette.id)
       assert Enum.map(persisted.colors, & &1.hex_color) == ["#DDD", "#FFF"]
     end
+
+    test "returns a changeset error when colors reuse the same sort order" do
+      assert {:error, changeset} =
+               Persistence.create_palette(%{
+                 name: "Duplicate Sort Order",
+                 colors: [
+                   %{hex_color: "#112233", sort_order: 0},
+                   %{hex_color: "#445566", sort_order: 0}
+                 ]
+               })
+
+      assert "has already been taken" in errors_on(changeset).colors[1].sort_order
+    end
   end
 
   describe "printer profiles" do

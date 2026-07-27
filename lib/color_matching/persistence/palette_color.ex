@@ -31,5 +31,6 @@ defmodule ColorMatching.Persistence.PaletteColor do
     |> cast(attrs, [:hex_color, :display_label, :sort_order])
     |> validate_required([:hex_color, :sort_order])
     |> validate_format(:hex_color, ~r/^#[0-9A-Fa-f]{3}([0-9A-Fa-f]{3})?$/)
+    |> unique_constraint(:sort_order, name: :palette_colors_palette_id_sort_order_index)
   end
 end

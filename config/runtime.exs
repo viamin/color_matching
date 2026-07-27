@@ -22,7 +22,12 @@ end
 
 if config_env() == :prod do
   database_path =
-    System.get_env("DATABASE_PATH") || Path.expand("../color_matching_prod.db", __DIR__)
+    System.get_env("DATABASE_PATH") ||
+      raise """
+      environment variable DATABASE_PATH is missing.
+
+      Set DATABASE_PATH to an absolute path for the production SQLite database file.
+      """
 
   pool_size = String.to_integer(System.get_env("POOL_SIZE") || "5")
 
