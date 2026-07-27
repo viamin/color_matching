@@ -200,7 +200,8 @@ defmodule ColorMatchingWeb.ColorDetailLive do
         </p>
 
         <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <%= for {source, brightness} <- @response_vector.brightness_map() do %>
+          <%= for source <- ResponseVector.light_sources() do %>
+            <% brightness = ResponseVector.value(@response_vector, source) %>
             <% label = light_source_label(source) %>
             <article class="rounded-xl border border-gray-200 p-4">
               <header class="flex items-center justify-between">

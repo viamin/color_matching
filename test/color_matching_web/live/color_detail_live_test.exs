@@ -23,6 +23,10 @@ defmodule ColorMatchingWeb.ColorDetailLiveTest do
         assert html =~ label
       end
 
+      # The DOM order of the light sources must stay stable across renders so
+      # users (and LiveView's diff) can rely on a predictable layout.
+      assert order_of_labels(html) == ["White", "Red", "Green", "Blue", "LPS"]
+
       assert html =~ "Missing"
 
       # Printer profile context is shown alongside the response profile.
@@ -242,5 +246,19 @@ defmodule ColorMatchingWeb.ColorDetailLiveTest do
     color = Persistence.get_palette!(palette.id).colors |> List.first()
 
     %{palette: palette, color: color, printer_profile: printer_profile}
+  end
+
+  defp order_of_labels(html) do
+    heading_pattern = ~r{<h3[^>]*>([^<]+)</h3>}
+
+    html
+    |> scan_heading_labels(heading_pattern)
+    |> Enum.map(&String.trim/1)
+    |> Enum.filter(&(&1 in ["White", "Red", "Green", "Blue", "LPS"]))
+  end
+
+  defp scan_heading_labels(html, pattern) do
+    Regex.scan(pattern, html, capture: :all_but_first)
+    |> List.flatten()
   end
 end
