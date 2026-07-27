@@ -187,7 +187,11 @@ defmodule ColorMatching.Persistence do
   defp fetch_bulk_measurements(attrs) do
     case Map.get(attrs, :measurements) || Map.get(attrs, "measurements") do
       measurements when is_list(measurements) and measurements != [] ->
-        {:ok, measurements}
+        if Enum.all?(measurements, &is_map/1) do
+          {:ok, measurements}
+        else
+          {:error, {:invalid_request, %{measurements: ["must contain only measurement objects"]}}}
+        end
 
       [] ->
         {:error, {:invalid_request, %{measurements: ["must contain at least one measurement"]}}}
@@ -230,7 +234,7 @@ defmodule ColorMatching.Persistence do
       changeset =
         %IlluminantMeasurement{}
         |> IlluminantMeasurement.changeset(attrs)
-        |> validate_measurement_references(attrs, palette_color_ids, printer_profile_ids)
+        |> validate_measurement_references(palette_color_ids, printer_profile_ids)
 
       %{
         index: index,
@@ -240,15 +244,28 @@ defmodule ColorMatching.Persistence do
     end)
   end
 
-  @spec existing_ids([integer()], module()) :: MapSet.t(integer())
+  @spec existing_ids([term()], module()) :: MapSet.t(integer())
   defp existing_ids([], _schema), do: MapSet.new()
 
   defp existing_ids(ids, schema) do
+    ids = cast_integer_ids(ids)
+
     schema
-    |> where([record], record.id in ^Enum.uniq(ids))
+    |> where([record], record.id in ^ids)
     |> select([record], record.id)
     |> Repo.all()
     |> MapSet.new()
+  end
+
+  @spec cast_integer_ids([term()]) :: [integer()]
+  defp cast_integer_ids(ids) do
+    ids
+    |> Enum.map(&Ecto.Type.cast(:integer, &1))
+    |> Enum.flat_map(fn
+      {:ok, id} -> [id]
+      :error -> []
+    end)
+    |> Enum.uniq()
   end
 
   @spec collect_invalid_bulk_rows([map()]) :: [map()]
@@ -361,26 +378,25 @@ defmodule ColorMatching.Persistence do
       |> List.wrap()
       |> existing_ids(PrinterProfile)
 
-    validate_measurement_references(changeset, attrs, palette_color_ids, printer_profile_ids)
+    validate_measurement_references(changeset, palette_color_ids, printer_profile_ids)
   end
 
-  @spec validate_measurement_references(Ecto.Changeset.t(), map(), MapSet.t(integer()), MapSet.t(integer())) ::
+  @spec validate_measurement_references(Ecto.Changeset.t(), MapSet.t(integer()), MapSet.t(integer())) ::
           Ecto.Changeset.t()
   defp validate_measurement_references(
          changeset,
-         attrs,
          existing_palette_color_ids,
          existing_printer_profile_ids
        ) do
     changeset
     |> maybe_add_missing_reference_error(
       :palette_color_id,
-      attrs[:palette_color_id],
+      Ecto.Changeset.get_field(changeset, :palette_color_id),
       existing_palette_color_ids
     )
     |> maybe_add_missing_reference_error(
       :printer_profile_id,
-      attrs[:printer_profile_id],
+      Ecto.Changeset.get_field(changeset, :printer_profile_id),
       existing_printer_profile_ids
     )
   end

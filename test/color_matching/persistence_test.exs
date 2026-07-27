@@ -250,6 +250,25 @@ defmodule ColorMatching.PersistenceTest do
       refute latest_by_light_source["white"].id == nil_timestamp_white.id
     end
 
+    test "returns validation errors for uncastable measurement reference ids" do
+      invalid_ids = ["abc", %{"id" => 1}]
+
+      for invalid_id <- invalid_ids do
+        assert {:error, changeset} =
+                 Persistence.create_illuminant_measurement(%{
+                   palette_color_id: invalid_id,
+                   printer_profile_id: invalid_id,
+                   light_source: "red",
+                   normalized_brightness: 0.5
+                 })
+
+        assert %{
+                 palette_color_id: ["is invalid"],
+                 printer_profile_id: ["is invalid"]
+               } = errors_on(changeset)
+      end
+    end
+
     test "bulk import creates independent measurement records with shared metadata" do
       %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
 
@@ -294,6 +313,35 @@ defmodule ColorMatching.PersistenceTest do
 
       assert Enum.count(persisted) == 2
       assert persisted_ids == measurement_ids
+    end
+
+    test "bulk import rejects non-object rows before preparing measurements" do
+      assert {:error, {:invalid_request, errors}} =
+               Persistence.create_illuminant_measurements_bulk(%{measurements: [1]})
+
+      assert errors == %{measurements: ["must contain only measurement objects"]}
+    end
+
+    test "bulk import returns indexed validation errors for uncastable reference ids" do
+      assert {:error, {:invalid_rows, invalid_rows}} =
+               Persistence.create_illuminant_measurements_bulk(%{
+                 light_source: "green",
+                 normalized_brightness: 0.5,
+                 measurements: [
+                   %{color_id: "abc", printer_profile_id: %{"id" => 1}}
+                 ]
+               })
+
+      assert invalid_rows == [
+               %{
+                 index: 0,
+                 color_id: "abc",
+                 errors: %{
+                   palette_color_id: ["is invalid"],
+                   printer_profile_id: ["is invalid"]
+                 }
+               }
+             ]
     end
 
     test "bulk import returns indexed row errors and rolls back the batch" do
