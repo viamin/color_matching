@@ -41,7 +41,7 @@ This design eliminates duplicate combinations while providing both subtle (origi
 
 To start your Phoenix server:
 
-- Run `mix setup` to install and setup dependencies
+- Run `mix setup` to install dependencies, create and migrate the SQLite database, import preset palettes, and build assets
 - Run `mix test` to run the test suite
 - Start Phoenix endpoint with `mix phx.server` or inside IEx with `iex -S mix phx.server`
 
