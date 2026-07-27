@@ -171,8 +171,17 @@ defmodule ColorMatching.PersistenceTest do
       assert reimported_duplicate_ids == original_duplicate_ids
       assert reimported_duplicate_inserted_ats == original_duplicate_inserted_ats
       assert reimported_singleton_ids["#222222"] == original_singleton_ids["#222222"]
-      assert reimported_singleton_ids["#444444"] not in original_duplicate_ids ++ Map.values(original_singleton_ids)
-      assert Enum.map(reimported_warm.colors, & &1.hex_color) == ["#111111", "#444444", "#111111", "#222222"]
+
+      assert reimported_singleton_ids["#444444"] not in (original_duplicate_ids ++
+                                                           Map.values(original_singleton_ids))
+
+      assert Enum.map(reimported_warm.colors, & &1.hex_color) == [
+               "#111111",
+               "#444444",
+               "#111111",
+               "#222222"
+             ]
+
       assert Enum.map(reimported_warm.colors, & &1.sort_order) == [0, 1, 2, 3]
     end
 

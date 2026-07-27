@@ -5,6 +5,8 @@ defmodule ColorMatching.DataCase do
 
   use ExUnit.CaseTemplate
 
+  alias Ecto.Adapters.SQL.Sandbox
+
   using do
     quote do
       alias ColorMatching.Repo
@@ -29,10 +31,10 @@ defmodule ColorMatching.DataCase do
   end
 
   setup tags do
-    :ok = Ecto.Adapters.SQL.Sandbox.checkout(ColorMatching.Repo)
+    :ok = Sandbox.checkout(ColorMatching.Repo)
 
     unless tags[:async] do
-      Ecto.Adapters.SQL.Sandbox.mode(ColorMatching.Repo, {:shared, self()})
+      Sandbox.mode(ColorMatching.Repo, {:shared, self()})
     end
 
     :ok

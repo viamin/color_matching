@@ -8,7 +8,7 @@ defmodule ColorMatching.Persistence.Palette do
           id: integer() | nil,
           name: String.t() | nil,
           is_preset: boolean(),
-          colors: [PaletteColor.t()],
+          colors: [PaletteColor.t()] | Ecto.Association.NotLoaded.t(),
           inserted_at: DateTime.t() | nil,
           updated_at: DateTime.t() | nil
         }
@@ -32,6 +32,7 @@ defmodule ColorMatching.Persistence.Palette do
     |> cast(attrs, [:name, :is_preset])
     |> validate_required([:name])
     |> cast_assoc(:colors, with: &PaletteColor.changeset/2)
+    |> reorder_assoc(:colors)
     |> unique_constraint(:name)
   end
 end

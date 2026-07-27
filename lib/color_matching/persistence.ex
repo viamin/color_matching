@@ -69,30 +69,47 @@ defmodule ColorMatching.Persistence do
   @spec import_preset_palettes([ColorMatching.Palette.t()]) ::
           {:ok, [Palette.t()]} | {:error, Ecto.Changeset.t()}
   def import_preset_palettes(preset_palettes) when is_list(preset_palettes) do
-    Repo.transaction(fn ->
-      Enum.reduce(preset_palettes, [], fn preset_palette, imported ->
-        attrs = %{
-          name: preset_palette.name,
-          is_preset: true,
-          colors:
-            preset_palette.colors
-            |> Enum.with_index()
-            |> Enum.map(fn {hex_color, index} ->
-              %{hex_color: hex_color, sort_order: index, display_label: nil}
-            end)
-        }
-
-        case upsert_preset_palette(attrs) do
-          {:ok, palette} -> [palette | imported]
-          {:error, changeset} -> Repo.rollback(changeset)
-        end
-      end)
-      |> Enum.reverse()
-    end)
-    |> case do
-      {:ok, palettes} -> {:ok, palettes}
+    case Repo.transaction(fn ->
+           preset_palettes
+           |> Enum.map(&preset_palette_attrs/1)
+           |> Enum.reduce_while([], &upsert_or_rollback/2)
+           |> finalize_transaction_result()
+         end) do
+      {:ok, {:ok, palettes}} -> {:ok, palettes}
+      {:ok, {:error, _} = error} -> error
       {:error, changeset} -> {:error, changeset}
     end
+  end
+
+  @spec upsert_or_rollback(palette_attrs(), [Palette.t()]) ::
+          {:cont, [Palette.t()]} | {:halt, {:error, Ecto.Changeset.t()}}
+  defp upsert_or_rollback(attrs, imported) do
+    case upsert_preset_palette(attrs) do
+      {:ok, palette} -> {:cont, [palette | imported]}
+      {:error, changeset} -> {:halt, Repo.rollback(changeset)}
+    end
+  end
+
+  @spec finalize_transaction_result([Palette.t()] | {:error, term()}) ::
+          {:ok, [Palette.t()]} | {:error, term()}
+  defp finalize_transaction_result(imported) when is_list(imported) do
+    {:ok, Enum.reverse(imported)}
+  end
+
+  defp finalize_transaction_result({:error, _} = error), do: error
+
+  @spec preset_palette_attrs(ColorMatching.Palette.t()) :: palette_attrs()
+  defp preset_palette_attrs(preset_palette) do
+    %{
+      name: preset_palette.name,
+      is_preset: true,
+      colors:
+        preset_palette.colors
+        |> Enum.with_index()
+        |> Enum.map(fn {hex_color, index} ->
+          %{hex_color: hex_color, sort_order: index, display_label: nil}
+        end)
+    }
   end
 
   @spec upsert_preset_palette(palette_attrs()) ::

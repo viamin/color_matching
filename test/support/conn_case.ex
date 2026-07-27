@@ -17,6 +17,8 @@ defmodule ColorMatchingWeb.ConnCase do
 
   use ExUnit.CaseTemplate
 
+  alias Ecto.Adapters.SQL.Sandbox
+
   using do
     quote do
       # The default endpoint for testing
@@ -32,10 +34,10 @@ defmodule ColorMatchingWeb.ConnCase do
   end
 
   setup tags do
-    :ok = Ecto.Adapters.SQL.Sandbox.checkout(ColorMatching.Repo)
+    :ok = Sandbox.checkout(ColorMatching.Repo)
 
     unless tags[:async] do
-      Ecto.Adapters.SQL.Sandbox.mode(ColorMatching.Repo, {:shared, self()})
+      Sandbox.mode(ColorMatching.Repo, {:shared, self()})
     end
 
     {:ok, conn: Phoenix.ConnTest.build_conn()}
