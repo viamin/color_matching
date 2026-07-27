@@ -6,7 +6,7 @@ defmodule ColorMatching.Persistence do
   import Ecto.Query, warn: false
 
   alias ColorMatching.PaletteStorage
-  alias ColorMatching.Persistence.{Palette, PrinterProfile}
+  alias ColorMatching.Persistence.{IlluminantMeasurement, Palette, PrinterProfile}
   alias ColorMatching.Repo
 
   @type palette_attrs :: %{
@@ -52,6 +52,50 @@ defmodule ColorMatching.Persistence do
     %PrinterProfile{}
     |> PrinterProfile.changeset(attrs)
     |> Repo.insert()
+  end
+
+  @spec create_illuminant_measurement(map()) ::
+          {:ok, IlluminantMeasurement.t()} | {:error, Ecto.Changeset.t()}
+  def create_illuminant_measurement(attrs) when is_map(attrs) do
+    %IlluminantMeasurement{}
+    |> IlluminantMeasurement.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @spec list_illuminant_measurements(integer(), integer()) :: [IlluminantMeasurement.t()]
+  def list_illuminant_measurements(palette_color_id, printer_profile_id) do
+    IlluminantMeasurement
+    |> where(
+      [measurement],
+      measurement.palette_color_id == ^palette_color_id and
+        measurement.printer_profile_id == ^printer_profile_id
+    )
+    |> order_by([measurement],
+      asc: measurement.light_source,
+      asc: fragment("CASE WHEN ? IS NULL THEN 1 ELSE 0 END", measurement.measured_at),
+      desc: measurement.measured_at,
+      desc: measurement.inserted_at,
+      desc: measurement.id
+    )
+    |> Repo.all()
+  end
+
+  @spec get_latest_illuminant_measurement(integer(), integer(), String.t()) ::
+          IlluminantMeasurement.t() | nil
+  def get_latest_illuminant_measurement(palette_color_id, printer_profile_id, light_source) do
+    palette_color_id
+    |> latest_illuminant_measurements_by_light_source(printer_profile_id)
+    |> Map.get(light_source)
+  end
+
+  @spec latest_illuminant_measurements_by_light_source(integer(), integer()) ::
+          %{optional(String.t()) => IlluminantMeasurement.t()}
+  def latest_illuminant_measurements_by_light_source(palette_color_id, printer_profile_id) do
+    palette_color_id
+    |> list_illuminant_measurements(printer_profile_id)
+    |> Enum.reduce(%{}, fn measurement, latest_by_light_source ->
+      Map.put_new(latest_by_light_source, measurement.light_source, measurement)
+    end)
   end
 
   @doc """

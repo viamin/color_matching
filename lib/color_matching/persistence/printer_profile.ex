@@ -2,6 +2,8 @@ defmodule ColorMatching.Persistence.PrinterProfile do
   use Ecto.Schema
   import Ecto.Changeset
 
+  alias ColorMatching.Persistence.IlluminantMeasurement
+
   @type t :: %__MODULE__{
           id: integer() | nil,
           printer_make_model: String.t() | nil,
@@ -14,6 +16,7 @@ defmodule ColorMatching.Persistence.PrinterProfile do
           calibration_date: Date.t() | nil,
           calibration_version: String.t() | nil,
           notes: String.t() | nil,
+          illuminant_measurements: [IlluminantMeasurement.t()] | Ecto.Association.NotLoaded.t(),
           inserted_at: DateTime.t() | nil,
           updated_at: DateTime.t() | nil
         }
@@ -29,6 +32,8 @@ defmodule ColorMatching.Persistence.PrinterProfile do
     field(:calibration_date, :date)
     field(:calibration_version, :string)
     field(:notes, :string)
+
+    has_many(:illuminant_measurements, IlluminantMeasurement)
 
     timestamps()
   end
