@@ -1,7 +1,6 @@
 defmodule ColorMatching.WeightedSquaredErrorTest do
   use ExUnit.Case, async: true
 
-  alias ColorMatching.IlluminantScoring
   alias ColorMatching.ResponseVector
   alias ColorMatching.WeightedSquaredError
 
@@ -93,12 +92,6 @@ defmodule ColorMatching.WeightedSquaredErrorTest do
 
       assert first == second
       assert second == third
-    end
-  end
-
-  describe "IlluminantScoring behaviour" do
-    test "implements the IlluminantScoring behaviour" do
-      assert IlluminantScoring.impl?(WeightedSquaredError)
     end
   end
 

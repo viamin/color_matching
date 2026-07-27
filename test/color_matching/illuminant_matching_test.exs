@@ -2,7 +2,6 @@ defmodule ColorMatching.IlluminantMatchingTest do
   use ExUnit.Case, async: true
 
   alias ColorMatching.IlluminantMatching
-  alias ColorMatching.IlluminantScoring
   alias ColorMatching.ResponseVector
   alias ColorMatching.TestSupport.ConstantScorer
   alias ColorMatching.WeightedSquaredError
@@ -95,12 +94,6 @@ defmodule ColorMatching.IlluminantMatchingTest do
 
       # Score matches what the default WeightedSquaredError scorer would compute.
       assert score == WeightedSquaredError.score(candidate, target, @weights)
-    end
-  end
-
-  describe "IlluminantScoring pluggability" do
-    test "accepts any module implementing the IlluminantScoring behaviour" do
-      assert IlluminantScoring.impl?(WeightedSquaredError)
     end
   end
 

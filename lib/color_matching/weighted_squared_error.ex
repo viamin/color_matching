@@ -102,14 +102,14 @@ defmodule ColorMatching.WeightedSquaredError do
   defp candidate_brightness(candidate, source) do
     case ResponseVector.value(candidate, source) do
       :missing -> 0.0
-      value when is_number(value) -> value * 1.0
+      value when is_float(value) -> value
     end
   end
 
   defp target_brightness(target, source) do
     case ResponseVector.value(target, source) do
       :missing -> 0.0
-      value when is_number(value) -> value * 1.0
+      value when is_float(value) -> value
     end
   end
 end

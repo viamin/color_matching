@@ -29,15 +29,6 @@ defmodule ColorMatching.IlluminantScoring do
   @type score :: float() | :excluded
 
   @doc """
-  Returns `true` if `module` implements the `IlluminantScoring` behaviour.
-  """
-  @spec impl?(module()) :: boolean()
-  def impl?(module) do
-    Code.ensure_loaded?(module) and
-      function_exported?(module, :score, 3)
-  end
-
-  @doc """
   Computes a score for `candidate` against `target` using `weights`.
 
   Returns `:excluded` when the scoring policy cannot rank the candidate

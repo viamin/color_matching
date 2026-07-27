@@ -51,15 +51,6 @@ defmodule ColorMatching.ResponseVector do
   @spec light_sources() :: [light_source()]
   def light_sources, do: @light_sources
 
-  @spec supported_light_sources() :: [light_source()]
-  @doc """
-  Returns the supported light sources that participate in the response vector.
-
-  Kept as an alias for `light_sources/0` so callers can refer to the supported
-  set without implying "always available".
-  """
-  def supported_light_sources, do: light_sources()
-
   @doc """
   Builds a response vector from the latest measurements for a color.
 
@@ -112,9 +103,6 @@ defmodule ColorMatching.ResponseVector do
     case Map.get(latest_measurements_by_light_source, Atom.to_string(source)) do
       %IlluminantMeasurement{normalized_brightness: brightness} when is_float(brightness) ->
         brightness
-
-      %IlluminantMeasurement{normalized_brightness: brightness} when is_integer(brightness) ->
-        brightness * 1.0
 
       _other ->
         :missing
