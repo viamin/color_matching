@@ -12,6 +12,7 @@ defmodule ColorMatchingWeb.ColorDetailLive do
     "blue" => "Blue",
     "lps" => "LPS"
   }
+  @light_source_keys Map.keys(@light_source_labels)
 
   def mount(params, _session, socket) do
     case load_color(params) do
@@ -79,7 +80,7 @@ defmodule ColorMatchingWeb.ColorDetailLive do
   end
 
   def handle_event("submit_measurement", %{"light_source" => light_source} = params, socket)
-      when light_source in Map.keys(@light_source_labels) do
+      when light_source in @light_source_keys do
     palette_color = socket.assigns.palette_color
     printer_profile = socket.assigns.printer_profile
 
