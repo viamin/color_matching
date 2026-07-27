@@ -233,22 +233,155 @@ defmodule ColorMatching.PersistenceTest do
       assert latest_by_light_source["white"].id == timestamped_white.id
       assert latest_by_light_source["white"].normalized_brightness == 0.55
 
-      assert Persistence.get_latest_illuminant_measurement(color.id, printer_profile.id, "red").id ==
-               latest_red.id
+      assert Persistence.get_latest_illuminant_measurement(
+               color.id,
+               printer_profile.id,
+               "red"
+             ).id == latest_red.id
 
-      assert Persistence.get_latest_illuminant_measurement(color.id, printer_profile.id, "green").id ==
-               second_green.id
+      assert Persistence.get_latest_illuminant_measurement(
+               color.id,
+               printer_profile.id,
+               "green"
+             ).id == second_green.id
 
-      assert Persistence.get_latest_illuminant_measurement(color.id, printer_profile.id, "white").id ==
-               timestamped_white.id
+      assert Persistence.get_latest_illuminant_measurement(
+               color.id,
+               printer_profile.id,
+               "white"
+             ).id == timestamped_white.id
 
-      assert Persistence.get_latest_illuminant_measurement(color.id, printer_profile.id, "blue") ==
-               nil
+      assert Persistence.get_latest_illuminant_measurement(
+               color.id,
+               printer_profile.id,
+               "blue"
+             ) == nil
 
       refute latest_by_light_source["red"].id == oldest_red.id
       refute latest_by_light_source["green"].id == first_green.id
       refute latest_by_light_source["white"].id == nil_timestamp_white.id
     end
+
+    test "returns validation errors for uncastable measurement reference ids" do
+      invalid_ids = ["abc", %{"id" => 1}]
+
+      for invalid_id <- invalid_ids do
+        assert {:error, changeset} =
+                 Persistence.create_illuminant_measurement(%{
+                   palette_color_id: invalid_id,
+                   printer_profile_id: invalid_id,
+                   light_source: "red",
+                   normalized_brightness: 0.5
+                 })
+
+        assert %{
+                 palette_color_id: ["is invalid"],
+                 printer_profile_id: ["is invalid"]
+               } = errors_on(changeset)
+      end
+    end
+
+    test "bulk import creates independent measurement records with shared metadata" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, measurements} =
+               Persistence.create_illuminant_measurements_bulk(%{
+                 printer_profile_id: printer_profile.id,
+                 light_source: "red",
+                 measured_at: ~U[2026-07-27 14:00:00Z],
+                 measurement_method: "camera",
+                 measurement_device: "phone-camera",
+                 test_run_id: "sheet-2026-07-26-a",
+                 measurements: [
+                   %{
+                     color_id: color.id,
+                     brightness: 0.91,
+                     raw_value: 184.2,
+                     raw_unit: "8-bit grayscale",
+                     notes: "center patch"
+                   },
+                   %{
+                     color_id: color.id,
+                     brightness: 0.87,
+                     raw_value: 176.0,
+                     raw_unit: "8-bit grayscale",
+                     notes: "edge patch"
+                   }
+                 ]
+               })
+
+      assert Enum.count(measurements) == 2
+      assert Enum.map(measurements, & &1.id) == Enum.uniq(Enum.map(measurements, & &1.id))
+      assert Enum.all?(measurements, &(&1.printer_profile_id == printer_profile.id))
+      assert Enum.all?(measurements, &(&1.palette_color_id == color.id))
+      assert Enum.all?(measurements, &(&1.light_source == "red"))
+      assert Enum.all?(measurements, &(&1.measurement_method == "camera"))
+      assert Enum.all?(measurements, &(&1.measurement_device == "phone-camera"))
+      assert Enum.all?(measurements, &(&1.test_run_id == "sheet-2026-07-26-a"))
+
+      persisted = Persistence.list_illuminant_measurements(color.id, printer_profile.id)
+      persisted_ids = persisted |> Enum.map(& &1.id) |> Enum.sort()
+      measurement_ids = measurements |> Enum.map(& &1.id) |> Enum.sort()
+
+      assert Enum.count(persisted) == 2
+      assert persisted_ids == measurement_ids
+    end
+
+    test "bulk import rejects non-object rows before preparing measurements" do
+      assert {:error, {:invalid_request, errors}} =
+               Persistence.create_illuminant_measurements_bulk(%{measurements: [1]})
+
+      assert errors == %{measurements: ["must contain only measurement objects"]}
+    end
+
+    test "bulk import returns indexed validation errors for uncastable reference ids" do
+      assert {:error, {:invalid_rows, invalid_rows}} =
+               Persistence.create_illuminant_measurements_bulk(%{
+                 light_source: "green",
+                 normalized_brightness: 0.5,
+                 measurements: [
+                   %{color_id: "abc", printer_profile_id: %{"id" => 1}}
+                 ]
+               })
+
+      assert invalid_rows == [
+               %{
+                 index: 0,
+                 color_id: "abc",
+                 errors: %{
+                   palette_color_id: ["is invalid"],
+                   printer_profile_id: ["is invalid"]
+                 }
+               }
+             ]
+    end
+
+    test "bulk import returns indexed row errors and rolls back the batch" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:error, {:invalid_rows, invalid_rows}} =
+               Persistence.create_illuminant_measurements_bulk(%{
+                 printer_profile_id: printer_profile.id,
+                 light_source: "green",
+                 measurements: [
+                   %{color_id: color.id, brightness: 0.52},
+                   %{color_id: 999_999, brightness: 0.61},
+                   %{color_id: color.id, brightness: 1.5}
+                 ]
+               })
+
+      assert invalid_rows == [
+               %{index: 1, color_id: 999_999, errors: %{palette_color_id: ["does not exist"]}},
+               %{
+                 index: 2,
+                 color_id: color.id,
+                 errors: %{normalized_brightness: ["must be less than or equal to 1.0"]}
+               }
+             ]
+
+    assert Persistence.list_illuminant_measurements(color.id, printer_profile.id) == []
+    end
+  end
   end
 
   describe "preset palette import" do

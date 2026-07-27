@@ -34,6 +34,13 @@ defmodule ColorMatchingWeb.Router do
     get "/test_sheets/:sheet_id/manifest", TestSheetController, :manifest
   end
 
+  scope "/api", ColorMatchingWeb do
+    pipe_through :api
+
+    post "/illuminant_measurements", IlluminantMeasurementController, :create
+    post "/illuminant_measurements/bulk", IlluminantMeasurementController, :bulk_create
+  end
+
   # Enable LiveDashboard and Swoosh mailbox preview in development
   if Application.compile_env(:color_matching, :dev_routes) do
     # If you want to use the LiveDashboard in production, you should put
