@@ -16,7 +16,7 @@ defmodule ColorMatchingWeb.TestSheetController do
 
   @spec recent(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def recent(conn, _params) do
-    sheets = Persistence.list_test_sheets()
+    sheets = Persistence.list_recent_test_sheets(limit: 20)
     render(conn, :recent, sheets: sheets)
   end
 end

@@ -66,6 +66,23 @@ defmodule ColorMatching.Persistence do
     |> preload_test_sheet_associations()
   end
 
+  @doc """
+  Returns the most recent test sheets up to `limit`, without preloading
+  associations.
+
+  Use this instead of `list_test_sheets/0` when only top-level sheet fields
+  (e.g. `lookup_code`) are needed, to avoid loading unnecessary data.
+  """
+  @spec list_recent_test_sheets(keyword()) :: [TestSheet.t()]
+  def list_recent_test_sheets(opts \\ []) do
+    limit = Keyword.get(opts, :limit, 20)
+
+    TestSheet
+    |> order_by([sheet], desc: sheet.inserted_at, desc: sheet.id)
+    |> limit(^limit)
+    |> Repo.all()
+  end
+
   @spec get_test_sheet!(integer()) :: TestSheet.t()
   def get_test_sheet!(id) do
     TestSheet

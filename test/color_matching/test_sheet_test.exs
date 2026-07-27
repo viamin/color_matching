@@ -328,6 +328,52 @@ defmodule ColorMatching.TestSheetTest do
     end
   end
 
+  describe "list_recent_test_sheets/1" do
+    test "returns sheets ordered by most recently inserted" do
+      palette = create_palette("P2")
+      profile = create_printer_profile()
+
+      {:ok, first} =
+        Persistence.create_test_sheet(sheet_attrs(palette, profile, lookup_code: "RECA-2222"))
+
+      {:ok, second} =
+        Persistence.create_test_sheet(sheet_attrs(palette, profile, lookup_code: "RECB-2222"))
+
+      sheets = Persistence.list_recent_test_sheets()
+      ids = Enum.map(sheets, & &1.id)
+
+      assert first.id in ids
+      assert second.id in ids
+      assert List.first(ids) == second.id
+    end
+
+    test "respects the limit option" do
+      palette = create_palette("P3")
+      profile = create_printer_profile()
+
+      for suffix <- ~w[2222 2223 2224] do
+        Persistence.create_test_sheet(
+          sheet_attrs(palette, profile, lookup_code: "LIMT-#{suffix}")
+        )
+      end
+
+      sheets = Persistence.list_recent_test_sheets(limit: 2)
+      assert length(sheets) == 2
+    end
+
+    test "does not preload associations" do
+      palette = create_palette("P4")
+      profile = create_printer_profile()
+      Persistence.create_test_sheet(sheet_attrs(palette, profile, lookup_code: "NOPX-2222"))
+
+      [sheet] = Persistence.list_recent_test_sheets(limit: 1)
+
+      assert %Ecto.Association.NotLoaded{} = sheet.pairs
+      assert %Ecto.Association.NotLoaded{} = sheet.palette
+      assert %Ecto.Association.NotLoaded{} = sheet.printer_profile
+    end
+  end
+
   # ---------------------------------------------------------------------------
   # Palette and printer profile association
   # ---------------------------------------------------------------------------
