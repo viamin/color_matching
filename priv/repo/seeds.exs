@@ -12,11 +12,11 @@ end
 # ---------------------------------------------------------------------------
 # Dev fixture: one complete test sheet usable by the iOS companion app.
 #
-# Lookup code "LPSM-DEV1" is intentionally hard-coded so the iOS app can
+# Lookup code "LPSM-DEV2" is intentionally hard-coded so the iOS app can
 # always find this fixture without scanning a QR code.
 # ---------------------------------------------------------------------------
 
-dev_lookup_code = "LPSM-DEV1"
+dev_lookup_code = "LPSM-DEV2"
 
 unless Enum.any?(Persistence.list_test_sheets(), &(&1.lookup_code == dev_lookup_code)) do
   # Use the "Sodium Metamers A" preset palette (first colour in the list).
