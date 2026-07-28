@@ -104,8 +104,22 @@ defmodule ColorMatchingWeb.MultiImageMappingController do
   end
 
   defp fetch_param(params, key) when is_map(params) and is_binary(key) do
-    atom_key = String.to_existing_atom(key)
-    Map.get_lazy(params, key, fn -> Map.get(params, atom_key) end)
+    case Map.fetch(params, key) do
+      {:ok, value} ->
+        value
+
+      :error ->
+        case existing_atom_key(key) do
+          {:ok, atom_key} -> Map.get(params, atom_key)
+          :error -> nil
+        end
+    end
+  end
+
+  defp existing_atom_key(key) when is_binary(key) do
+    {:ok, String.to_existing_atom(key)}
+  rescue
+    ArgumentError -> :error
   end
 
   defp fetch_palette(palette_id) do
