@@ -4,7 +4,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
   alias ColorMatching.{Persistence, PNG}
 
   setup %{conn: conn} do
-    {:ok, conn: put_req_header(conn, "accept", "*/*")}
+    {:ok, conn: put_req_header(conn, "accept", "application/json")}
   end
 
   describe "POST /api/multi_image_mapping" do
@@ -17,6 +17,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       response =
         conn
+        |> put_req_header("accept", "image/png")
         |> post(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           printer_profile_id: printer_profile.id,
