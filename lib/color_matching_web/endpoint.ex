@@ -1,6 +1,7 @@
 defmodule ColorMatchingWeb.Endpoint do
   use Phoenix.Endpoint, otp_app: :color_matching
 
+  @multi_image_mapping_request_limit_bytes 50_000_000
   @default_parser_options [
     parsers: [:urlencoded, :multipart, :json],
     pass: ["*/*"],
@@ -9,7 +10,7 @@ defmodule ColorMatchingWeb.Endpoint do
   @multi_image_mapping_parser_options [
     parsers: [:urlencoded, :multipart, :json],
     pass: ["*/*"],
-    length: 45_000_000,
+    length: @multi_image_mapping_request_limit_bytes,
     json_decoder: Phoenix.json_library()
   ]
 
@@ -67,10 +68,31 @@ defmodule ColorMatchingWeb.Endpoint do
   plug(ColorMatchingWeb.Router)
 
   defp parse_request(%Plug.Conn{request_path: "/api/multi_image_mapping"} = conn, _opts) do
-    Plug.Parsers.call(conn, Plug.Parsers.init(@multi_image_mapping_parser_options))
+    parse_with_options(conn, @multi_image_mapping_parser_options)
   end
 
   defp parse_request(conn, _opts) do
     Plug.Parsers.call(conn, Plug.Parsers.init(@default_parser_options))
+  end
+
+  @spec parse_with_options(Plug.Conn.t(), keyword()) :: Plug.Conn.t()
+  defp parse_with_options(conn, options) do
+    Plug.Parsers.call(conn, Plug.Parsers.init(options))
+  rescue
+    Plug.Parsers.ParseError ->
+      send_api_error(conn, :unprocessable_entity, "request body contains invalid JSON")
+
+    Plug.Parsers.RequestTooLargeError ->
+      send_api_error(conn, :payload_too_large, "request body exceeds the maximum allowed size")
+  end
+
+  @spec send_api_error(Plug.Conn.t(), Plug.Conn.status(), String.t()) :: Plug.Conn.t()
+  defp send_api_error(conn, status, message) do
+    body = Jason.encode!(%{errors: %{base: [message]}})
+
+    conn
+    |> Plug.Conn.put_resp_content_type("application/json")
+    |> Plug.Conn.send_resp(status, body)
+    |> Plug.Conn.halt()
   end
 end

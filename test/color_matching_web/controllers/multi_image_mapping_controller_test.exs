@@ -8,6 +8,20 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
   end
 
   describe "POST /api/multi_image_mapping" do
+    test "returns 422 when the request body contains invalid JSON", %{conn: conn} do
+      response =
+        conn
+        |> put_req_header("content-type", "application/json")
+        |> post(~p"/api/multi_image_mapping", "{")
+        |> json_response(422)
+
+      assert response == %{
+               "errors" => %{
+                 "base" => ["request body contains invalid JSON"]
+               }
+             }
+    end
+
     test "returns a mapped PNG on success", %{conn: conn} do
       %{palette: palette, printer_profile: printer_profile} = full_mapping_fixture()
 
