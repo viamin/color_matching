@@ -70,9 +70,8 @@ defmodule ColorMatching.MultiImagePaletteMapper do
              printer_profile,
              normalized_weights,
              scoring_module
-           ),
-         {:ok, png} <- PNG.encode_rgb(width, height, pixels) do
-      {:ok, png}
+           ) do
+      PNG.encode_rgb(width, height, pixels)
     else
       {:error, _reason} = error -> error
     end
@@ -125,7 +124,7 @@ defmodule ColorMatching.MultiImagePaletteMapper do
   end
 
   defp is_finite_number(value) when is_integer(value), do: true
-  defp is_finite_number(value) when is_float(value), do: value == value and abs(value) != :infinity
+  defp is_finite_number(value) when is_float(value), do: value == value
 
   defp validate_positive_weights(weights) do
     if Enum.any?(weights, fn {_source, weight} -> weight > 0 end) do
@@ -202,7 +201,7 @@ defmodule ColorMatching.MultiImagePaletteMapper do
     if Enum.all?(vectors, &match?(%ResponseVector{}, &1)) do
       {:ok, vectors}
     else
-      {:error, "response vector builder must return %ColorMatching.ResponseVector{}"}
+      {:error, "response vector builder must return %ResponseVector{}"}
     end
   end
 
