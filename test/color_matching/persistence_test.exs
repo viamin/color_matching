@@ -2,6 +2,7 @@ defmodule ColorMatching.PersistenceTest do
   use ColorMatching.DataCase, async: false
 
   alias ColorMatching.{Palette, Persistence}
+  alias ColorMatching.Persistence.{PaletteColor, PrinterProfile}
 
   describe "palettes" do
     test "creates and reads a palette with persisted colors" do
@@ -332,6 +333,33 @@ defmodule ColorMatching.PersistenceTest do
       assert second_vector.white == 0.75
       assert first_vector.red == :missing
       assert second_vector.red == :missing
+    end
+
+    test "raises when building a response vector for an unpersisted printer profile" do
+      %{color: color} = persisted_measurement_fixture()
+
+      assert_raise ArgumentError,
+                   "response_vector/2 requires persisted palette color and printer profile",
+                   fn ->
+                     Persistence.response_vector(color, %PrinterProfile{
+                       printer_make_model: "Fixture Printer",
+                       paper_type: "Fixture Paper",
+                       ink_type: "Fixture Ink"
+                     })
+                   end
+    end
+
+    test "raises when building response vectors for unpersisted palette colors" do
+      %{printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert_raise ArgumentError,
+                   "response_vectors/2 requires persisted palette colors with hex colors",
+                   fn ->
+                     Persistence.response_vectors(
+                       [%PaletteColor{hex_color: "#112233", sort_order: 0}],
+                       printer_profile
+                     )
+                   end
     end
 
     test "returns validation errors for uncastable measurement reference ids" do

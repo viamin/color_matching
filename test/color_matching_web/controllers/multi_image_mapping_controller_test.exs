@@ -35,6 +35,29 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
                PNG.decode_rgb(response.resp_body)
     end
 
+    test "accepts string ids in the request body", %{conn: conn} do
+      %{palette: palette, printer_profile: printer_profile} = full_mapping_fixture()
+
+      white_png = grayscale_png!(1, 1, [10])
+      red_png = grayscale_png!(1, 1, [245])
+
+      response =
+        conn
+        |> put_req_header("accept", "image/png")
+        |> post(~p"/api/multi_image_mapping", %{
+          "palette_id" => Integer.to_string(palette.id),
+          "printer_profile_id" => Integer.to_string(printer_profile.id),
+          "weights" => %{"white" => 1.0, "red" => 1.0},
+          "images" => %{
+            "white" => Base.encode64(white_png),
+            "red" => Base.encode64(red_png)
+          }
+        })
+
+      assert response.status == 200
+      assert get_resp_header(response, "content-type") == ["image/png"]
+    end
+
     test "accepts unpadded base64 image payloads", %{conn: conn} do
       %{palette: palette, printer_profile: printer_profile} = full_mapping_fixture()
 
@@ -76,6 +99,31 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
           images: %{
             " White " => Base.encode64(white_png),
             "rEd" => Base.encode64(red_png)
+          }
+        })
+
+      assert response.status == 200
+      assert get_resp_header(response, "content-type") == ["image/png"]
+    end
+
+    test "accepts weight light-source keys with surrounding whitespace and mixed case", %{
+      conn: conn
+    } do
+      %{palette: palette, printer_profile: printer_profile} = full_mapping_fixture()
+
+      white_png = grayscale_png!(1, 1, [10])
+      red_png = grayscale_png!(1, 1, [245])
+
+      response =
+        conn
+        |> put_req_header("accept", "image/png")
+        |> post(~p"/api/multi_image_mapping", %{
+          palette_id: palette.id,
+          printer_profile_id: printer_profile.id,
+          weights: %{" White " => 1.0, "rEd" => 1.0},
+          images: %{
+            white: Base.encode64(white_png),
+            red: Base.encode64(red_png)
           }
         })
 

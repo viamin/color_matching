@@ -4,6 +4,10 @@ defmodule ColorMatching.PNGTest do
   alias ColorMatching.PNG
 
   describe "decode_grayscale/1" do
+    test "rejects inputs that do not start with the PNG signature" do
+      assert {:error, "invalid PNG signature"} = PNG.decode_grayscale(<<0, 1, 2, 3>>)
+    end
+
     test "returns grayscale pixels in an indexable binary" do
       assert {:ok, png} = PNG.encode_grayscale(2, 2, [0, 64, 128, 255])
       assert {:ok, %{width: 2, height: 2, pixels: pixels}} = PNG.decode_grayscale(png)
@@ -50,6 +54,12 @@ defmodule ColorMatching.PNGTest do
       png = grayscale_png(1, 1, [:binary.copy(<<0>>, 8_192)])
 
       assert {:error, "PNG image data exceeds expected size"} = PNG.decode_grayscale(png)
+    end
+
+    test "rejects grayscale PNGs with invalid compressed image data" do
+      png = grayscale_png(1, 1, [<<0, 128>>], fn _compressed -> [<<"not-zlib">>] end)
+
+      assert {:error, "could not decompress PNG image data"} = PNG.decode_grayscale(png)
     end
   end
 
