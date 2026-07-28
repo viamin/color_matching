@@ -169,11 +169,7 @@ defmodule ColorMatching.MultiImagePaletteMapper do
   end
 
   defp normalize_weight_entry(source, weight) when is_float(weight) do
-    if finite_float?(weight) do
-      normalized_light_source(source, weight)
-    else
-      invalid_weight(source)
-    end
+    normalized_light_source(source, weight)
   end
 
   defp normalize_weight_entry(source, _weight), do: invalid_weight(source)
@@ -187,17 +183,6 @@ defmodule ColorMatching.MultiImagePaletteMapper do
 
   defp invalid_weight(source),
     do: {:error, "weight for #{inspect(source)} must be a finite number"}
-
-  defp finite_float?(value) when is_float(value) do
-    case :erlang.float_to_binary(value, [:compact]) do
-      "nan" -> false
-      "inf" -> false
-      "-inf" -> false
-      _other -> true
-    end
-  rescue
-    ArgumentError -> false
-  end
 
   defp validate_positive_weights(weights) do
     if Enum.any?(weights, fn {_source, weight} -> weight > 0 end) do
