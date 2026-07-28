@@ -1,6 +1,11 @@
 defmodule ColorMatchingWeb.Endpoint do
   use Phoenix.Endpoint, otp_app: :color_matching
 
+  # The multi-image mapping API accepts up to one base64-encoded PNG per
+  # supported light source, so the JSON parser must allow the combined request
+  # body to exceed Plug's default 8 MB limit.
+  @multi_image_mapping_body_limit_bytes 45_000_000
+
   # The session will be stored in the cookie and signed,
   # this means its contents can be read but not tampered with.
   # Set :encryption_salt if you would also like to encrypt it.
@@ -48,6 +53,7 @@ defmodule ColorMatchingWeb.Endpoint do
   plug Plug.Parsers,
     parsers: [:urlencoded, :multipart, :json],
     pass: ["*/*"],
+    length: @multi_image_mapping_body_limit_bytes,
     json_decoder: Phoenix.json_library()
 
   plug Plug.MethodOverride
