@@ -438,7 +438,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
   defp full_mapping_fixture do
     %{palette: palette, printer_profile: printer_profile} = palette_and_profile_fixture()
 
-    for color <- palette.colors do
+    Enum.each(palette.colors, fn color ->
       assert {:ok, _} =
                Persistence.create_illuminant_measurement(%{
                  palette_color_id: color.id,
@@ -454,7 +454,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
                  light_source: "red",
                  normalized_brightness: if(color.hex_color == "#111111", do: 0.9, else: 0.1)
                })
-    end
+    end)
 
     %{palette: palette, printer_profile: printer_profile}
   end

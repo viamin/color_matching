@@ -279,7 +279,7 @@ defmodule ColorMatching.PNG do
           end
         end
 
-      {need_dictionary, _adler32, _output} ->
+      {_need_dictionary, _adler32, _output} ->
         {:error, "PNG image data requires an unsupported dictionary"}
     end
   end
