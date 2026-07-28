@@ -227,23 +227,27 @@ defmodule ColorMatching.Persistence do
   end
 
   @spec response_vectors([PaletteColor.t()], PrinterProfile.t()) :: [ResponseVector.t()]
-  def response_vectors(palette_colors, %PrinterProfile{} = printer_profile)
-      when is_list(palette_colors) do
+  def response_vectors(palette_colors, %PrinterProfile{id: printer_profile_id})
+      when is_list(palette_colors) and is_integer(printer_profile_id) do
     palette_color_ids = Enum.map(palette_colors, & &1.id)
 
     measurements_by_palette_color =
       palette_color_ids
-      |> latest_illuminant_measurements_query(printer_profile.id)
+      |> latest_illuminant_measurements_query(printer_profile_id)
       |> Repo.all()
       |> Enum.group_by(& &1.palette_color_id, &{&1.light_source, &1})
       |> Map.new(fn {palette_color_id, measurements} ->
         {palette_color_id, Map.new(measurements)}
       end)
 
-    Enum.map(palette_colors, fn palette_color ->
-      measurements = Map.get(measurements_by_palette_color, palette_color.id, %{})
-      ResponseVector.new(palette_color.hex_color, printer_profile.id, measurements)
-    end)
+    Enum.map(
+      palette_colors,
+      &response_vector_from_measurements(&1, printer_profile_id, measurements_by_palette_color)
+    )
+  end
+
+  def response_vectors(_palette_colors, %PrinterProfile{}) do
+    raise ArgumentError, "response_vectors/2 requires a persisted printer profile"
   end
 
   @doc """
@@ -255,11 +259,20 @@ defmodule ColorMatching.Persistence do
   "measured as zero brightness".
   """
   @spec response_vector(PaletteColor.t(), PrinterProfile.t()) :: ResponseVector.t()
-  def response_vector(%PaletteColor{} = palette_color, %PrinterProfile{} = printer_profile) do
+  def response_vector(
+        %PaletteColor{id: palette_color_id, hex_color: hex_color},
+        %PrinterProfile{id: printer_profile_id}
+      )
+      when is_integer(palette_color_id) and is_binary(hex_color) and
+             is_integer(printer_profile_id) do
     measurements =
-      latest_illuminant_measurements_by_light_source(palette_color.id, printer_profile.id)
+      latest_illuminant_measurements_by_light_source(palette_color_id, printer_profile_id)
 
-    ResponseVector.new(palette_color.hex_color, printer_profile.id, measurements)
+    ResponseVector.new(hex_color, printer_profile_id, measurements)
+  end
+
+  def response_vector(%PaletteColor{}, %PrinterProfile{}) do
+    raise ArgumentError, "response_vector/2 requires persisted palette color and printer profile"
   end
 
   @spec latest_illuminant_measurements_query(
@@ -325,6 +338,20 @@ defmodule ColorMatching.Persistence do
 
   defp maybe_filter_light_source(query, light_source) do
     where(query, [measurement], measurement.light_source == ^light_source)
+  end
+
+  defp response_vector_from_measurements(
+         %PaletteColor{id: palette_color_id, hex_color: hex_color},
+         printer_profile_id,
+         measurements_by_palette_color
+       )
+       when is_integer(palette_color_id) and is_binary(hex_color) do
+    measurements = Map.get(measurements_by_palette_color, palette_color_id, %{})
+    ResponseVector.new(hex_color, printer_profile_id, measurements)
+  end
+
+  defp response_vector_from_measurements(%PaletteColor{}, _printer_profile_id, _measurements) do
+    raise ArgumentError, "response_vectors/2 requires persisted palette colors with hex colors"
   end
 
   @spec fetch_bulk_measurements(map()) ::

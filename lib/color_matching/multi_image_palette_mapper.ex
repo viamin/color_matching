@@ -313,7 +313,8 @@ defmodule ColorMatching.MultiImagePaletteMapper do
     end
   end
 
-  defp build_target_vector(pixel_index, decoded_images, printer_profile) do
+  defp build_target_vector(pixel_index, decoded_images, %PrinterProfile{id: printer_profile_id})
+       when is_integer(printer_profile_id) do
     brightnesses =
       ResponseVector.light_sources()
       |> Enum.map(fn source ->
@@ -330,7 +331,7 @@ defmodule ColorMatching.MultiImagePaletteMapper do
 
     %ResponseVector{
       hex_color: "#000000",
-      printer_profile_id: printer_profile.id,
+      printer_profile_id: printer_profile_id,
       measured_at: nil,
       inserted_at: nil,
       missing?: missing?,
@@ -340,6 +341,10 @@ defmodule ColorMatching.MultiImagePaletteMapper do
       blue: Keyword.get(brightnesses, :blue, :missing),
       lps: Keyword.get(brightnesses, :lps, :missing)
     }
+  end
+
+  defp build_target_vector(_pixel_index, _decoded_images, %PrinterProfile{}) do
+    raise ArgumentError, "map_to_png/5 requires a persisted printer profile"
   end
 
   defp candidate_rgb(%ResponseVector{hex_color: hex_color}) do
