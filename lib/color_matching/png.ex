@@ -285,13 +285,15 @@ defmodule ColorMatching.PNG do
   defp drain_inflater(zstream, acc, total_output_bytes, max_output_bytes) do
     output = :zlib.inflate(zstream, <<>>)
 
-    with false <- IO.iodata_length(output) == 0,
-         {:ok, acc, total_output_bytes} <-
-           append_inflated_output(output, acc, total_output_bytes, max_output_bytes) do
-      drain_inflater(zstream, acc, total_output_bytes, max_output_bytes)
-    else
-      true -> {:ok, acc}
-      {:error, _reason} = error -> error
+    case IO.iodata_length(output) do
+      0 ->
+        {:ok, acc}
+
+      _non_zero_length ->
+        with {:ok, acc, total_output_bytes} <-
+               append_inflated_output(output, acc, total_output_bytes, max_output_bytes) do
+          drain_inflater(zstream, acc, total_output_bytes, max_output_bytes)
+        end
     end
   end
 
