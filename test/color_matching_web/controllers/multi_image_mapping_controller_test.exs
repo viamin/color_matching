@@ -268,6 +268,25 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
       assert message =~ "maximum allowed image area"
     end
 
+    test "returns 422 when a PNG expands beyond its declared dimensions", %{conn: conn} do
+      %{palette: palette, printer_profile: printer_profile} = palette_and_profile_fixture()
+
+      oversized_inflate_png = png_with_oversized_inflate(1, 1)
+
+      response =
+        conn
+        |> post(~p"/api/multi_image_mapping", %{
+          palette_id: palette.id,
+          printer_profile_id: printer_profile.id,
+          weights: %{white: 1.0},
+          images: %{white: Base.encode64(oversized_inflate_png)}
+        })
+        |> json_response(422)
+
+      assert %{"errors" => %{"base" => [message]}} = response
+      assert message =~ "exceeds expected size"
+    end
+
     test "returns 422 for unsupported light source in weights", %{conn: conn} do
       %{palette: palette, printer_profile: printer_profile} = palette_and_profile_fixture()
       white_png = grayscale_png!(1, 1, [128])
@@ -362,5 +381,18 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
     <<137, 80, 78, 71, 13, 10, 26, 10, 13::big-unsigned-integer-size(32), "IHDR",
       width::big-unsigned-integer-size(32), height::big-unsigned-integer-size(32), 8, 0, 0, 0,
       0>>
+  end
+
+  defp png_with_oversized_inflate(width, height) do
+    compressed = :zlib.compress(:binary.copy(<<0>>, 8_192))
+    signature = <<137, 80, 78, 71, 13, 10, 26, 10>>
+    ihdr = <<width::32, height::32, 8, 0, 0, 0, 0>>
+
+    signature <> chunk("IHDR", ihdr) <> chunk("IDAT", compressed) <> chunk("IEND", <<>>)
+  end
+
+  defp chunk(type, data) do
+    crc = :erlang.crc32([type, data])
+    <<byte_size(data)::32, type::binary-size(4), data::binary, crc::32>>
   end
 end

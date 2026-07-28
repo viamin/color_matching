@@ -95,8 +95,9 @@ defmodule ColorMatching.PNG do
          {:ok, ihdr} <- fetch_chunk(chunks, @ihdr),
          {:ok, header} <- parse_ihdr(ihdr),
          :ok <- validate_header(header),
+         {:ok, expected_image_data_bytes} <- expected_image_data_bytes(header),
          {:ok, idat_chunks} <- fetch_chunks(chunks, @idat),
-         {:ok, decompressed} <- inflate(idat_chunks),
+         {:ok, decompressed} <- inflate(idat_chunks, expected_image_data_bytes),
          {:ok, rows} <-
            unfilter_scanlines(decompressed, header.width, header.height, header.color_type) do
       {:ok, Map.put(header, :rows, rows)}
@@ -188,19 +189,63 @@ defmodule ColorMatching.PNG do
   defp validate_bit_depth(8), do: :ok
   defp validate_bit_depth(_other), do: {:error, "only 8-bit PNGs are supported"}
 
-  defp inflate(chunks) do
+  defp expected_image_data_bytes(%{width: width, height: height, color_type: color_type}) do
+    case bytes_per_pixel(color_type) do
+      nil ->
+        {:error, "unsupported PNG color type"}
+
+      bytes_per_pixel ->
+        {:ok, height * (width * bytes_per_pixel + 1)}
+    end
+  end
+
+  defp inflate(chunks, max_output_bytes) do
     zstream = :zlib.open()
 
     try do
       :ok = :zlib.inflateInit(zstream)
-      inflated = chunks |> Enum.map(&:zlib.inflate(zstream, &1)) |> IO.iodata_to_binary()
-      :ok = :zlib.inflateEnd(zstream)
-      {:ok, inflated}
+      inflate_until_finished(zstream, chunks, max_output_bytes, 0, [])
     rescue
       _error -> {:error, "could not decompress PNG image data"}
+    catch
+      _kind, _reason -> {:error, "could not decompress PNG image data"}
     after
+      safe_inflate_end(zstream)
       :zlib.close(zstream)
     end
+  end
+
+  defp inflate_until_finished(zstream, input, max_output_bytes, total_output_bytes, acc) do
+    case :zlib.safeInflate(zstream, input) do
+      {status, output} when status in [:continue, :finished] ->
+        output_bytes = IO.iodata_length(output)
+        updated_total_output_bytes = total_output_bytes + output_bytes
+
+        if updated_total_output_bytes > max_output_bytes do
+          {:error, "PNG image data exceeds expected size"}
+        else
+          updated_acc = [output | acc]
+
+          case status do
+            :continue ->
+              inflate_until_finished(zstream, [], max_output_bytes, updated_total_output_bytes, updated_acc)
+
+            :finished ->
+              {:ok, updated_acc |> Enum.reverse() |> IO.iodata_to_binary()}
+          end
+        end
+
+      {need_dictionary, _adler32, _output} ->
+        {:error, "PNG image data requires an unsupported dictionary"}
+    end
+  end
+
+  defp safe_inflate_end(zstream) do
+    :zlib.inflateEnd(zstream)
+  rescue
+    _error -> :ok
+  catch
+    _kind, _reason -> :ok
   end
 
   defp unfilter_scanlines(data, width, height, color_type) do

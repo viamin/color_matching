@@ -30,6 +30,12 @@ defmodule ColorMatching.PNGTest do
       assert {:ok, %{width: 5, height: 1, pixels: <<10, 20, 30, 40, 50>>}} =
                PNG.decode_grayscale(png)
     end
+
+    test "rejects grayscale PNGs whose decompressed data exceeds IHDR dimensions" do
+      png = grayscale_png(1, 1, [:binary.copy(<<0>>, 8_192)])
+
+      assert {:error, "PNG image data exceeds expected size"} = PNG.decode_grayscale(png)
+    end
   end
 
   defp grayscale_png(width, height, rows) do
