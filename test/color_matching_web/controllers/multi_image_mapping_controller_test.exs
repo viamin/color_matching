@@ -592,6 +592,42 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
       assert message =~ "duplicate light source"
       assert message =~ "white"
     end
+
+    test "returns 422 when weights is an empty map", %{conn: conn} do
+      %{palette: palette, printer_profile: printer_profile} = palette_and_profile_fixture()
+      white_png = grayscale_png!(1, 1, [128])
+
+      response =
+        conn
+        |> post(~p"/api/multi_image_mapping", %{
+          palette_id: palette.id,
+          printer_profile_id: printer_profile.id,
+          weights: %{},
+          images: %{white: Base.encode64(white_png)}
+        })
+        |> json_response(422)
+
+      assert %{"errors" => %{"base" => [message]}} = response
+      assert message =~ "at least one light source weight must be greater than 0"
+    end
+
+    test "returns 422 when images is an empty map", %{conn: conn} do
+      %{palette: palette, printer_profile: printer_profile} = palette_and_profile_fixture()
+
+      response =
+        conn
+        |> post(~p"/api/multi_image_mapping", %{
+          palette_id: palette.id,
+          printer_profile_id: printer_profile.id,
+          weights: %{white: 1.0},
+          images: %{}
+        })
+        |> json_response(422)
+
+      assert %{"errors" => %{"base" => [message]}} = response
+      assert message =~ "missing source images"
+      assert message =~ "white"
+    end
   end
 
   # ---------------------------------------------------------------------------
