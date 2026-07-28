@@ -133,13 +133,45 @@ defmodule ColorMatching.MultiImagePaletteMapperTest do
                  [palette_color(1, "#FFFFFF")],
                  printer_profile(),
                  %{white: 1.0, red: 1.0},
-                 response_vector_builder: response_vector_builder(%{
-                   "#FFFFFF" => vector("#FFFFFF", white: 1.0, red: 1.0)
-                 })
+                 response_vector_builder:
+                   response_vector_builder(%{
+                     "#FFFFFF" => vector("#FFFFFF", white: 1.0, red: 1.0)
+                   })
                )
 
       assert message ==
                "source images must all have the same dimensions; red is 2x1 but white is 1x1"
+    end
+
+    test "maps larger images without relying on linear-time pixel indexing" do
+      pixels = Enum.to_list(0..255)
+
+      source_images = %{
+        white: grayscale_fixture!(256, 1, pixels)
+      }
+
+      palette_colors = [
+        palette_color(1, "#000000"),
+        palette_color(2, "#FFFFFF")
+      ]
+
+      vectors = %{
+        "#000000" => vector("#000000", white: 0.0),
+        "#FFFFFF" => vector("#FFFFFF", white: 1.0)
+      }
+
+      assert {:ok, png} =
+               MultiImagePaletteMapper.map_to_png(
+                 source_images,
+                 palette_colors,
+                 printer_profile(),
+                 %{white: 1.0},
+                 response_vector_builder: response_vector_builder(vectors)
+               )
+
+      assert {:ok, %{width: 256, height: 1, pixels: mapped_pixels}} = PNG.decode_rgb(png)
+      assert hd(mapped_pixels) == {0, 0, 0}
+      assert List.last(mapped_pixels) == {255, 255, 255}
     end
   end
 

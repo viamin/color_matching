@@ -8,7 +8,7 @@ defmodule ColorMatching.MultiImagePaletteMapper do
   version intentionally does not apply linear-luminance conversion.
   """
 
-  alias ColorMatching.{ColorFormat, IlluminantMatching, PNG, Persistence, ResponseVector}
+  alias ColorMatching.{ColorFormat, IlluminantMatching, Persistence, PNG, ResponseVector}
   alias ColorMatching.Persistence.{PaletteColor, PrinterProfile}
   @supported_light_sources ResponseVector.light_sources()
 
@@ -21,9 +21,21 @@ defmodule ColorMatching.MultiImagePaletteMapper do
 
   @spec map_to_png(source_images(), [PaletteColor.t()], PrinterProfile.t(), map(), options()) ::
           {:ok, binary()} | {:error, String.t() | tuple()}
-  def map_to_png(source_images_by_light_source, palette_colors, printer_profile, weights, options \\ [])
+  def map_to_png(
+        source_images_by_light_source,
+        palette_colors,
+        printer_profile,
+        weights,
+        options \\ []
+      )
 
-  def map_to_png(source_images_by_light_source, palette_colors, %PrinterProfile{} = printer_profile, weights, options)
+  def map_to_png(
+        source_images_by_light_source,
+        palette_colors,
+        %PrinterProfile{} = printer_profile,
+        weights,
+        options
+      )
       when is_map(source_images_by_light_source) and is_list(palette_colors) and is_map(weights) do
     response_vector_builder =
       Keyword.get(options, :response_vector_builder, &Persistence.response_vector/2)
@@ -56,12 +68,19 @@ defmodule ColorMatching.MultiImagePaletteMapper do
     end
   end
 
-  def map_to_png(_source_images_by_light_source, _palette_colors, _printer_profile, _weights, _options) do
+  def map_to_png(
+        _source_images_by_light_source,
+        _palette_colors,
+        _printer_profile,
+        _weights,
+        _options
+      ) do
     {:error, "invalid mapper arguments"}
   end
 
   defp normalize_source_images(source_images_by_light_source) do
-    Enum.reduce_while(source_images_by_light_source, {:ok, %{}}, fn {source, png_binary}, {:ok, acc} ->
+    Enum.reduce_while(source_images_by_light_source, {:ok, %{}}, fn {source, png_binary},
+                                                                    {:ok, acc} ->
       with {:ok, normalized_source} <- normalize_light_source(source),
            true <- is_binary(png_binary) do
         {:cont, {:ok, Map.put(acc, normalized_source, png_binary)}}
@@ -102,7 +121,8 @@ defmodule ColorMatching.MultiImagePaletteMapper do
     if missing_sources == [] do
       :ok
     else
-      {:error, "missing source images for weighted light sources: #{Enum.map_join(missing_sources, ", ", &Atom.to_string/1)}"}
+      {:error,
+       "missing source images for weighted light sources: #{Enum.map_join(missing_sources, ", ", &Atom.to_string/1)}"}
     end
   end
 
@@ -112,14 +132,23 @@ defmodule ColorMatching.MultiImagePaletteMapper do
   defp decode_source_images(source_images) do
     Enum.reduce_while(source_images, {:ok, %{}}, fn {source, png_binary}, {:ok, acc} ->
       case PNG.decode_grayscale(png_binary) do
-        {:ok, image} -> {:cont, {:ok, Map.put(acc, source, image)}}
-        {:error, message} -> {:halt, {:error, "#{Atom.to_string(source)} source image: #{message}"}}
+        {:ok, image} ->
+          {:cont, {:ok, Map.put(acc, source, image)}}
+
+        {:error, message} ->
+          {:halt, {:error, "#{Atom.to_string(source)} source image: #{message}"}}
       end
     end)
   end
 
   defp validate_dimensions(decoded_images) do
-    [{first_source, first_image} | rest] = Map.to_list(decoded_images)
+    [{first_source, first_image} | rest] =
+      decoded_images
+      |> Map.to_list()
+      |> Enum.sort_by(fn {source, _image} ->
+        Enum.find_index(@supported_light_sources, &(&1 == source))
+      end)
+
     dimensions = {first_image.width, first_image.height}
 
     case Enum.find(rest, fn {_source, image} -> {image.width, image.height} != dimensions end) do
@@ -189,7 +218,7 @@ defmodule ColorMatching.MultiImagePaletteMapper do
         brightness =
           case Map.get(decoded_images, source) do
             nil -> :missing
-            image -> normalize_grayscale(Enum.at(image.pixels, pixel_index))
+            image -> normalize_grayscale(:binary.at(image.pixels, pixel_index))
           end
 
         {source, brightness}
@@ -236,5 +265,6 @@ defmodule ColorMatching.MultiImagePaletteMapper do
     end
   end
 
-  defp normalize_light_source(source), do: {:error, "unsupported light source: #{inspect(source)}"}
+  defp normalize_light_source(source),
+    do: {:error, "unsupported light source: #{inspect(source)}"}
 end

@@ -23,8 +23,12 @@ defmodule ColorMatching.PNG do
   @idat "IDAT"
   @iend "IEND"
 
-  @type grayscale_image :: %{width: pos_integer(), height: pos_integer(), pixels: [0..255]}
-  @type rgb_image :: %{width: pos_integer(), height: pos_integer(), pixels: [{0..255, 0..255, 0..255}]}
+  @type grayscale_image :: %{width: pos_integer(), height: pos_integer(), pixels: binary()}
+  @type rgb_image :: %{
+          width: pos_integer(),
+          height: pos_integer(),
+          pixels: [{0..255, 0..255, 0..255}]
+        }
 
   @spec decode_grayscale(binary()) :: {:ok, grayscale_image()} | {:error, String.t()}
   def decode_grayscale(png_binary) when is_binary(png_binary) do
@@ -44,9 +48,11 @@ defmodule ColorMatching.PNG do
     end
   end
 
-  @spec encode_grayscale(pos_integer(), pos_integer(), [0..255]) :: {:ok, binary()} | {:error, String.t()}
+  @spec encode_grayscale(pos_integer(), pos_integer(), [0..255]) ::
+          {:ok, binary()} | {:error, String.t()}
   def encode_grayscale(width, height, pixels)
-      when is_integer(width) and is_integer(height) and width > 0 and height > 0 and is_list(pixels) do
+      when is_integer(width) and is_integer(height) and width > 0 and height > 0 and
+             is_list(pixels) do
     if length(pixels) == width * height and Enum.all?(pixels, &byte_value?/1) do
       scanlines =
         pixels
@@ -66,19 +72,13 @@ defmodule ColorMatching.PNG do
   @spec encode_rgb(pos_integer(), pos_integer(), [{0..255, 0..255, 0..255}]) ::
           {:ok, binary()} | {:error, String.t()}
   def encode_rgb(width, height, pixels)
-      when is_integer(width) and is_integer(height) and width > 0 and height > 0 and is_list(pixels) do
+      when is_integer(width) and is_integer(height) and width > 0 and height > 0 and
+             is_list(pixels) do
     if length(pixels) == width * height and Enum.all?(pixels, &rgb_tuple?/1) do
       scanlines =
         pixels
         |> Enum.chunk_every(width)
-        |> Enum.map(fn row ->
-          encoded_row =
-            Enum.map(row, fn {red, green, blue} ->
-              <<red, green, blue>>
-            end)
-
-          [<<0>>, encoded_row]
-        end)
+        |> Enum.map(&rgb_scanline/1)
 
       {:ok, encode_png(width, height, 8, 2, scanlines)}
     else
@@ -97,7 +97,8 @@ defmodule ColorMatching.PNG do
          :ok <- validate_header(header),
          {:ok, idat_chunks} <- fetch_chunks(chunks, @idat),
          {:ok, decompressed} <- inflate(idat_chunks),
-         {:ok, rows} <- unfilter_scanlines(decompressed, header.width, header.height, header.color_type) do
+         {:ok, rows} <-
+           unfilter_scanlines(decompressed, header.width, header.height, header.color_type) do
       {:ok, Map.put(header, :rows, rows)}
     end
   end
@@ -108,15 +109,21 @@ defmodule ColorMatching.PNG do
 
   defp parse_chunks(
          <<length::big-unsigned-integer-size(32), type::binary-size(4), data::binary-size(length),
-           _crc::binary-size(4), rest::binary>>,
+           crc::big-unsigned-integer-size(32), rest::binary>>,
          chunks
        ) do
-    updated_chunks = [{type, data} | chunks]
+    case validate_chunk_crc(type, data, crc) do
+      :ok ->
+        updated_chunks = [{type, data} | chunks]
 
-    if type == @iend do
-      {:ok, Enum.reverse(updated_chunks)}
-    else
-      parse_chunks(rest, updated_chunks)
+        if type == @iend do
+          {:ok, Enum.reverse(updated_chunks)}
+        else
+          parse_chunks(rest, updated_chunks)
+        end
+
+      {:error, _reason} = error ->
+        error
     end
   end
 
@@ -217,26 +224,23 @@ defmodule ColorMatching.PNG do
     {:ok, Enum.reverse(rows)}
   end
 
-  defp do_unfilter_scanlines(
-         <<filter_type, filtered_row::binary-size(row_bytes), rest::binary>>,
-         remaining_rows,
-         row_bytes,
-         bytes_per_pixel,
-         rows
-       ) do
-    previous_row =
-      case rows do
-        [row | _] -> row
-        [] -> :binary.copy(<<0>>, row_bytes)
+  defp do_unfilter_scanlines(data, remaining_rows, row_bytes, bytes_per_pixel, rows) do
+    with true <- byte_size(data) >= row_bytes + 1,
+         <<filter_type, row_data::binary>> <- data,
+         filtered_row <- binary_part(row_data, 0, row_bytes),
+         rest <- binary_part(row_data, row_bytes, byte_size(row_data) - row_bytes) do
+      previous_row =
+        case rows do
+          [row | _] -> row
+          [] -> :binary.copy(<<0>>, row_bytes)
+        end
+
+      with {:ok, row} <- unfilter_row(filter_type, filtered_row, previous_row, bytes_per_pixel) do
+        do_unfilter_scanlines(rest, remaining_rows - 1, row_bytes, bytes_per_pixel, [row | rows])
       end
-
-    with {:ok, row} <- unfilter_row(filter_type, filtered_row, previous_row, bytes_per_pixel) do
-      do_unfilter_scanlines(rest, remaining_rows - 1, row_bytes, bytes_per_pixel, [row | rows])
+    else
+      false -> {:error, "PNG image data does not match IHDR dimensions"}
     end
-  end
-
-  defp do_unfilter_scanlines(_other, _remaining_rows, _row_bytes, _bytes_per_pixel, _rows) do
-    {:error, "PNG image data does not match IHDR dimensions"}
   end
 
   defp unfilter_row(0, filtered_row, _previous_row, _bytes_per_pixel), do: {:ok, filtered_row}
@@ -246,7 +250,10 @@ defmodule ColorMatching.PNG do
   end
 
   defp unfilter_row(2, filtered_row, previous_row, bytes_per_pixel) do
-    {:ok, reconstruct_row(filtered_row, bytes_per_pixel, fn index, _left -> :binary.at(previous_row, index) end)}
+    {:ok,
+     reconstruct_row(filtered_row, bytes_per_pixel, fn index, _left ->
+       :binary.at(previous_row, index)
+     end)}
   end
 
   defp unfilter_row(3, filtered_row, previous_row, bytes_per_pixel) do
@@ -315,18 +322,19 @@ defmodule ColorMatching.PNG do
   end
 
   defp grayscale_pixels(%{color_type: 0, rows: rows}) do
-    {:ok, rows |> Enum.flat_map(&:binary.bin_to_list/1)}
+    {:ok, IO.iodata_to_binary(rows)}
   end
 
   defp grayscale_pixels(%{color_type: 4, rows: rows}) do
     pixels =
       rows
-      |> Enum.flat_map(fn row ->
+      |> Enum.map(fn row ->
         row
         |> :binary.bin_to_list()
         |> Enum.chunk_every(2)
         |> Enum.map(fn [gray, _alpha] -> gray end)
       end)
+      |> IO.iodata_to_binary()
 
     {:ok, pixels}
   end
@@ -417,7 +425,24 @@ defmodule ColorMatching.PNG do
   defp chunk(type, data) do
     size = byte_size(data)
     crc = :erlang.crc32([type, data])
-    <<size::big-unsigned-integer-size(32), type::binary-size(4), data::binary, crc::big-unsigned-integer-size(32)>>
+
+    <<size::big-unsigned-integer-size(32), type::binary-size(4), data::binary,
+      crc::big-unsigned-integer-size(32)>>
+  end
+
+  defp validate_chunk_crc(type, data, expected_crc) do
+    actual_crc = :erlang.crc32([type, data])
+
+    if actual_crc == expected_crc do
+      :ok
+    else
+      {:error, "PNG chunk CRC mismatch for #{type}"}
+    end
+  end
+
+  defp rgb_scanline(row) do
+    encoded_row = Enum.map(row, fn {red, green, blue} -> <<red, green, blue>> end)
+    [<<0>>, encoded_row]
   end
 
   defp bytes_per_pixel(0), do: 1
