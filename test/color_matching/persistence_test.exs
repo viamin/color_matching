@@ -86,6 +86,10 @@ defmodule ColorMatching.PersistenceTest do
     test "returns nil for get_palette_color/1 when the color id is unknown" do
       assert Persistence.get_palette_color(0) == nil
     end
+
+    test "returns nil for get_palette/1 when the palette id is unknown" do
+      assert Persistence.get_palette(0) == nil
+    end
   end
 
   describe "printer profiles" do
@@ -106,6 +110,10 @@ defmodule ColorMatching.PersistenceTest do
       assert persisted.ink_type == "OEM UltraChrome PRO10"
       assert persisted.icc_profile == "SC-P900 Premium Luster"
       assert persisted.calibration_date == ~D[2026-07-01]
+    end
+
+    test "returns nil for get_printer_profile/1 when the printer profile id is unknown" do
+      assert Persistence.get_printer_profile(0) == nil
     end
   end
 

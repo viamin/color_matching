@@ -46,6 +46,14 @@ defmodule ColorMatching.Persistence do
     |> Repo.preload(:colors)
   end
 
+  @spec get_palette(integer()) :: Palette.t() | nil
+  def get_palette(id) do
+    case Repo.get(Palette, id) do
+      %Palette{} = palette -> Repo.preload(palette, :colors)
+      nil -> nil
+    end
+  end
+
   @doc """
   Fetches a single palette color preloaded with its parent palette.
 
@@ -86,6 +94,9 @@ defmodule ColorMatching.Persistence do
 
   @spec get_printer_profile!(integer()) :: PrinterProfile.t()
   def get_printer_profile!(id), do: Repo.get!(PrinterProfile, id)
+
+  @spec get_printer_profile(integer()) :: PrinterProfile.t() | nil
+  def get_printer_profile(id), do: Repo.get(PrinterProfile, id)
 
   @spec create_printer_profile(map()) :: {:ok, PrinterProfile.t()} | {:error, Ecto.Changeset.t()}
   def create_printer_profile(attrs) when is_map(attrs) do

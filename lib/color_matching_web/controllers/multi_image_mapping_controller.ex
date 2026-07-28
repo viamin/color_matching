@@ -101,18 +101,16 @@ defmodule ColorMatchingWeb.MultiImageMappingController do
   end
 
   defp fetch_palette(palette_id) do
-    try do
-      {:ok, Persistence.get_palette!(palette_id)}
-    rescue
-      Ecto.NoResultsError -> {:error, {:not_found, "palette"}}
+    case Persistence.get_palette(palette_id) do
+      nil -> {:error, {:not_found, "palette"}}
+      palette -> {:ok, palette}
     end
   end
 
   defp fetch_printer_profile(printer_profile_id) do
-    try do
-      {:ok, Persistence.get_printer_profile!(printer_profile_id)}
-    rescue
-      Ecto.NoResultsError -> {:error, {:not_found, "printer profile"}}
+    case Persistence.get_printer_profile(printer_profile_id) do
+      nil -> {:error, {:not_found, "printer profile"}}
+      printer_profile -> {:ok, printer_profile}
     end
   end
 
