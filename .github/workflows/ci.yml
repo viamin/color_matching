@@ -61,6 +61,11 @@ jobs:
       - name: Check code formatting
         run: mix format --check-formatted
 
+      - name: Set up test database
+        run: |
+          mix ecto.create
+          mix ecto.migrate
+
       - name: Run tests with coverage
         run: mix coveralls
 
