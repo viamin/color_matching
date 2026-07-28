@@ -168,10 +168,16 @@ defmodule ColorMatching.MultiImagePaletteMapper do
   defp invalid_weight(source),
     do: {:error, "weight for #{inspect(source)} must be a finite number"}
 
-  defp finite_float?(value),
-    do: identity_equal?(value, value) and abs(value) != :infinity
-
-  defp identity_equal?(left, right), do: left == right
+  defp finite_float?(value) when is_float(value) do
+    case :erlang.float_to_binary(value, [:compact]) do
+      "nan" -> false
+      "inf" -> false
+      "-inf" -> false
+      _other -> true
+    end
+  rescue
+    ArgumentError -> false
+  end
 
   defp validate_positive_weights(weights) do
     if Enum.any?(weights, fn {_source, weight} -> weight > 0 end) do
