@@ -29,9 +29,6 @@ defmodule ColorMatchingWeb.Router do
 
     post "/illuminant_measurements", IlluminantMeasurementController, :create
     post "/illuminant_measurements/bulk", IlluminantMeasurementController, :bulk_create
-  end
-
-  scope "/api", ColorMatchingWeb do
     post "/multi_image_mapping", MultiImageMappingController, :create
   end
 
