@@ -14,6 +14,10 @@ defmodule ColorMatchingWeb.Router do
     plug(:accepts, ["json"])
   end
 
+  pipeline :api_auth do
+    plug ColorMatchingWeb.Plugs.ApiAuth
+  end
+
   scope "/", ColorMatchingWeb do
     pipe_through(:browser)
 
@@ -22,6 +26,13 @@ defmodule ColorMatchingWeb.Router do
     live("/palettes/:palette_id/colors/:color_id", ColorDetailLive)
     live("/pair", ColorPairLive)
     get("/home", PageController, :home)
+  end
+
+  scope "/api/v1", ColorMatchingWeb do
+    pipe_through [:api, :api_auth]
+
+    get "/test_sheets/recent", TestSheetController, :recent
+    get "/test_sheets/:sheet_id/manifest", TestSheetController, :manifest
   end
 
   scope "/api", ColorMatchingWeb do

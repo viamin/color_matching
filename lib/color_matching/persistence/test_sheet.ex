@@ -44,8 +44,8 @@ defmodule ColorMatching.Persistence.TestSheet do
           patch_layout: String.t() | nil,
           safe_inset_mm: float() | nil,
           pairs: [TestSheetPair.t()] | Ecto.Association.NotLoaded.t(),
-          inserted_at: DateTime.t() | nil,
-          updated_at: DateTime.t() | nil
+          inserted_at: DateTime.t() | NaiveDateTime.t() | nil,
+          updated_at: DateTime.t() | NaiveDateTime.t() | nil
         }
 
   schema "test_sheets" do

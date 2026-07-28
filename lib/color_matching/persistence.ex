@@ -108,12 +108,21 @@ defmodule ColorMatching.Persistence do
   # Test sheets
   # ---------------------------------------------------------------------------
 
-  @spec list_test_sheets() :: [TestSheet.t()]
-  def list_test_sheets do
+  @doc """
+  Returns the most recent test sheets up to `limit`, without preloading
+  associations.
+
+  Use this instead of `list_test_sheets/0` when only top-level sheet fields
+  (e.g. `lookup_code`) are needed, to avoid loading unnecessary data.
+  """
+  @spec list_recent_test_sheets(keyword()) :: [TestSheet.t()]
+  def list_recent_test_sheets(opts \\ []) do
+    limit = Keyword.get(opts, :limit, 20)
+
     TestSheet
     |> order_by([sheet], desc: sheet.inserted_at, desc: sheet.id)
+    |> limit(^limit)
     |> Repo.all()
-    |> preload_test_sheet_associations()
   end
 
   @spec get_test_sheet!(integer()) :: TestSheet.t()
@@ -125,6 +134,22 @@ defmodule ColorMatching.Persistence do
 
   @doc """
   Fetches a test sheet by its stable lookup code.
+
+  Returns `nil` when no sheet with that code exists.
+  """
+  @spec get_test_sheet_by_lookup_code(String.t()) :: TestSheet.t() | nil
+  def get_test_sheet_by_lookup_code(lookup_code) do
+    TestSheet
+    |> Repo.get_by(lookup_code: lookup_code)
+    |> case do
+      nil -> nil
+      test_sheet -> preload_test_sheet_associations(test_sheet)
+    end
+  end
+
+  @doc """
+  Fetches a test sheet by its stable lookup code, preloading the palette
+  with its colors in addition to the printer profile and pairs.
 
   Raises `Ecto.NoResultsError` when no sheet with that code exists.
   """

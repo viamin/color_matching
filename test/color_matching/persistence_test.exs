@@ -295,8 +295,7 @@ defmodule ColorMatching.PersistenceTest do
                color.id,
                printer_profile.id,
                "blue"
-             ) ==
-               nil
+             ) == nil
 
       refute latest_by_light_source["red"].id == oldest_red.id
       refute latest_by_light_source["green"].id == first_green.id
