@@ -5,6 +5,28 @@ defmodule ColorMatching.MultiImagePaletteMapperTest do
   alias ColorMatching.Persistence.{PaletteColor, PrinterProfile}
 
   describe "map_to_png/5" do
+    test "uses a batch response-vector builder by default" do
+      source_images = %{white: grayscale_fixture!(1, 1, [0])}
+      palette_colors = [palette_color(1, "#111111"), palette_color(2, "#222222")]
+      parent = self()
+
+      batch_builder = fn colors, _printer_profile ->
+        send(parent, {:batch, Enum.map(colors, & &1.id)})
+        Enum.map(colors, &vector(&1.hex_color, white: 0.0))
+      end
+
+      assert {:ok, _png} =
+               MultiImagePaletteMapper.map_to_png(
+                 source_images,
+                 palette_colors,
+                 printer_profile(),
+                 %{white: 1.0},
+                 response_vector_batch_builder: batch_builder
+               )
+
+      assert_receive {:batch, [1, 2]}
+    end
+
     test "maps multiple grayscale fixtures into palette colors deterministically" do
       source_images = %{
         white: grayscale_fixture!(2, 1, [0, 255]),

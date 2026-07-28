@@ -14,8 +14,10 @@ defmodule ColorMatching.MultiImagePaletteMapper do
 
   @type source_images :: %{required(ResponseVector.light_source() | String.t()) => binary()}
   @type response_vector_builder :: (PaletteColor.t(), PrinterProfile.t() -> ResponseVector.t())
+  @type response_vector_batch_builder :: ([PaletteColor.t()], PrinterProfile.t() -> [ResponseVector.t()])
   @type option ::
           {:response_vector_builder, response_vector_builder()}
+          | {:response_vector_batch_builder, response_vector_batch_builder()}
           | {:scoring_module, module()}
   @type options :: [option()]
 
@@ -37,8 +39,10 @@ defmodule ColorMatching.MultiImagePaletteMapper do
         options
       )
       when is_map(source_images_by_light_source) and is_list(palette_colors) and is_map(weights) do
-    response_vector_builder =
-      Keyword.get(options, :response_vector_builder, &Persistence.response_vector/2)
+    response_vector_builder = Keyword.get(options, :response_vector_builder)
+
+    response_vector_batch_builder =
+      Keyword.get(options, :response_vector_batch_builder, &Persistence.response_vectors/2)
 
     scoring_module = Keyword.get(options, :scoring_module, ColorMatching.WeightedSquaredError)
 
@@ -50,7 +54,13 @@ defmodule ColorMatching.MultiImagePaletteMapper do
          {:ok, decoded_images} <- decode_source_images(normalized_images),
          {:ok, width, height} <- validate_dimensions(decoded_images),
          {:ok, candidates} <-
-           build_candidates(palette_colors, printer_profile, response_vector_builder),
+           build_candidates(
+             palette_colors,
+             printer_profile,
+             response_vector_batch_builder,
+             response_vector_builder
+           ),
+
          {:ok, pixels} <-
            map_pixels(
              width,
@@ -161,19 +171,23 @@ defmodule ColorMatching.MultiImagePaletteMapper do
     end
   end
 
-  defp build_candidates(palette_colors, printer_profile, response_vector_builder) do
-    Enum.reduce_while(palette_colors, {:ok, []}, fn palette_color, {:ok, acc} ->
-      case response_vector_builder.(palette_color, printer_profile) do
-        %ResponseVector{} = vector ->
-          {:cont, {:ok, [vector | acc]}}
-
-        _other ->
-          {:halt, {:error, "response vector builder must return %ColorMatching.ResponseVector{}"}}
+  defp build_candidates(
+         palette_colors,
+         printer_profile,
+         response_vector_batch_builder,
+         response_vector_builder
+       ) do
+    vectors =
+      if response_vector_builder do
+        Enum.map(palette_colors, &response_vector_builder.(&1, printer_profile))
+      else
+        response_vector_batch_builder.(palette_colors, printer_profile)
       end
-    end)
-    |> case do
-      {:ok, vectors} -> {:ok, Enum.reverse(vectors)}
-      {:error, _reason} = error -> error
+
+    if Enum.all?(vectors, &match?(%ResponseVector{}, &1)) do
+      {:ok, vectors}
+    else
+      {:error, "response vector builder must return %ColorMatching.ResponseVector{}"}
     end
   end
 

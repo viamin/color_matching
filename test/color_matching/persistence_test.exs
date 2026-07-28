@@ -294,6 +294,38 @@ defmodule ColorMatching.PersistenceTest do
       refute latest_by_light_source["white"].id == nil_timestamp_white.id
     end
 
+    test "builds response vectors for multiple palette colors from latest measurements" do
+      %{color: first_color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, second_palette} =
+               Persistence.create_palette(%{
+                 name: "Second Measured Swatch",
+                 colors: [%{hex_color: "#445566", sort_order: 0}]
+               })
+
+      second_color = Persistence.get_palette!(second_palette.id).colors |> List.first()
+
+      for {color, brightness} <- [{first_color, 0.25}, {second_color, 0.75}] do
+        assert {:ok, _measurement} =
+                 Persistence.create_illuminant_measurement(%{
+                   palette_color_id: color.id,
+                   printer_profile_id: printer_profile.id,
+                   light_source: "white",
+                   normalized_brightness: brightness
+                 })
+      end
+
+      assert [first_vector, second_vector] =
+               Persistence.response_vectors([first_color, second_color], printer_profile)
+
+      assert first_vector.hex_color == first_color.hex_color
+      assert first_vector.white == 0.25
+      assert second_vector.hex_color == second_color.hex_color
+      assert second_vector.white == 0.75
+      assert first_vector.red == :missing
+      assert second_vector.red == :missing
+    end
+
     test "returns validation errors for uncastable measurement reference ids" do
       invalid_ids = ["abc", %{"id" => 1}]
 
