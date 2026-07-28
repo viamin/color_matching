@@ -88,43 +88,80 @@ defmodule ColorMatching.MultiImagePaletteMapper do
   end
 
   defp normalize_source_images(source_images_by_light_source) do
-    Enum.reduce_while(source_images_by_light_source, {:ok, %{}}, fn entry, {:ok, acc} ->
-      case entry do
-        {source, png_binary} ->
-          with {:ok, normalized_source} <- normalize_light_source(source),
-               true <- is_binary(png_binary) do
-            {:cont, {:ok, Map.put(acc, normalized_source, png_binary)}}
-          else
-            false -> {:halt, {:error, "source image for #{inspect(source)} must be a PNG binary"}}
-            {:error, message} -> {:halt, {:error, message}}
-          end
-
-        _other ->
-          {:halt, {:error, "source images must be a map of light sources to PNG binaries"}}
-      end
-    end)
+    Enum.reduce_while(source_images_by_light_source, {:ok, %{}}, &normalize_source_image/2)
   end
+
+  defp normalize_source_image({source, png_binary}, {:ok, acc}) do
+    case normalize_source_image_entry(source, png_binary) do
+      {:ok, normalized_source} ->
+        {:cont, {:ok, Map.put(acc, normalized_source, png_binary)}}
+
+      {:error, message} ->
+        {:halt, {:error, message}}
+    end
+  end
+
+  defp normalize_source_image(_entry, _acc),
+    do: {:halt, {:error, "source images must be a map of light sources to PNG binaries"}}
+
+  defp normalize_source_image_entry(source, png_binary) when is_binary(png_binary) do
+    case normalize_light_source(source) do
+      {:ok, normalized_source} -> {:ok, normalized_source}
+      {:error, _message} = error -> error
+    end
+  end
+
+  defp normalize_source_image_entry(source, _png_binary),
+    do: {:error, "source image for #{inspect(source)} must be a PNG binary"}
 
   defp normalize_weights(weights) do
-    Enum.reduce_while(weights, {:ok, %{}}, fn entry, {:ok, acc} ->
-      case entry do
-        {source, weight} ->
-          with {:ok, normalized_source} <- normalize_light_source(source),
-               true <- is_number(weight) and is_finite_number(weight) do
-            {:cont, {:ok, Map.put(acc, normalized_source, weight * 1.0)}}
-          else
-            false -> {:halt, {:error, "weight for #{inspect(source)} must be a finite number"}}
-            {:error, message} -> {:halt, {:error, message}}
-          end
-
-        _other ->
-          {:halt, {:error, "weights must be a map of light sources to numbers"}}
-      end
-    end)
+    Enum.reduce_while(weights, {:ok, %{}}, &normalize_weight/2)
   end
 
-  defp is_finite_number(value) when is_integer(value), do: true
-  defp is_finite_number(value) when is_float(value), do: value == value
+  defp normalize_weight({source, weight}, {:ok, acc}) do
+    case normalize_weight_entry(source, weight) do
+      {:ok, normalized_source, normalized_weight} ->
+        {:cont, {:ok, Map.put(acc, normalized_source, normalized_weight)}}
+
+      {:error, message} ->
+        {:halt, {:error, message}}
+    end
+  end
+
+  defp normalize_weight(_entry, _acc),
+    do: {:halt, {:error, "weights must be a map of light sources to numbers"}}
+
+  defp normalize_weight_entry(source, weight) when is_integer(weight) do
+    case normalize_light_source(source) do
+      {:ok, normalized_source} -> {:ok, normalized_source, weight * 1.0}
+      {:error, _message} = error -> error
+    end
+  end
+
+  defp normalize_weight_entry(source, weight) when is_float(weight) do
+    if finite_float?(weight) do
+      normalized_light_source(source, weight)
+    else
+      invalid_weight(source)
+    end
+  end
+
+  defp normalize_weight_entry(source, _weight), do: invalid_weight(source)
+
+  defp normalized_light_source(source, weight) do
+    case normalize_light_source(source) do
+      {:ok, normalized_source} -> {:ok, normalized_source, weight}
+      {:error, _message} = error -> error
+    end
+  end
+
+  defp invalid_weight(source),
+    do: {:error, "weight for #{inspect(source)} must be a finite number"}
+
+  defp finite_float?(value),
+    do: identity_equal?(value, value) and abs(value) != :infinity
+
+  defp identity_equal?(left, right), do: left == right
 
   defp validate_positive_weights(weights) do
     if Enum.any?(weights, fn {_source, weight} -> weight > 0 end) do
@@ -165,23 +202,37 @@ defmodule ColorMatching.MultiImagePaletteMapper do
   end
 
   defp validate_dimensions(decoded_images) do
-    case decoded_images |> Map.to_list() |> Enum.sort_by(fn {source, _image} ->
-           Enum.find_index(@supported_light_sources, &(&1 == source))
-         end) do
+    decoded_images
+    |> sorted_decoded_images()
+    |> case do
       [] ->
         {:error, "at least one source image is required"}
 
       [{first_source, first_image} | rest] ->
-        dimensions = {first_image.width, first_image.height}
+        uniform_dimensions(first_source, first_image, rest)
+    end
+  end
 
-        case Enum.find(rest, fn {_source, image} -> {image.width, image.height} != dimensions end) do
-          {source, image} ->
-            {:error,
-             "source images must all have the same dimensions; #{Atom.to_string(source)} is #{image.width}x#{image.height} but #{Atom.to_string(first_source)} is #{first_image.width}x#{first_image.height}"}
+  defp sorted_decoded_images(decoded_images) do
+    decoded_images
+    |> Map.to_list()
+    |> Enum.sort_by(fn {source, _image} ->
+      Enum.find_index(@supported_light_sources, &(&1 == source))
+    end)
+  end
 
-          nil ->
-            {:ok, first_image.width, first_image.height}
-        end
+  defp uniform_dimensions(first_source, first_image, rest) do
+    first_dimensions = {first_image.width, first_image.height}
+
+    case Enum.find(rest, fn {_source, image} ->
+           {image.width, image.height} != first_dimensions
+         end) do
+      nil ->
+        {:ok, first_image.width, first_image.height}
+
+      {source, image} ->
+        {:error,
+         "source images must all have the same dimensions; #{Atom.to_string(source)} is #{image.width}x#{image.height} but #{Atom.to_string(first_source)} is #{first_image.width}x#{first_image.height}"}
     end
   end
 
