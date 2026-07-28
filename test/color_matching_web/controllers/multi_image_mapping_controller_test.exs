@@ -29,7 +29,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
         })
 
       assert response.status == 200
-      assert get_resp_header(response, "content-type") == ["image/png; charset=utf-8"]
+      assert get_resp_header(response, "content-type") == ["image/png"]
 
       assert {:ok, %{width: 2, height: 1, pixels: [_left, _right]}} =
                PNG.decode_rgb(response.resp_body)
