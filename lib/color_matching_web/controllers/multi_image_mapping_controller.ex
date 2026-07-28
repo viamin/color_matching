@@ -117,25 +117,22 @@ defmodule ColorMatchingWeb.MultiImageMappingController do
     end
   end
 
-  defp normalize_light_source_map(values, param_name) when is_map(values) do
-    Enum.reduce_while(values, {:ok, %{}}, fn
-      {key, value}, {:ok, acc} ->
-        case normalize_light_source(key) do
-          {:ok, source} ->
-            if Map.has_key?(acc, source) do
-              {:halt,
-               {:error,
-                "#{param_name} contains duplicate light source after normalization: #{Atom.to_string(source)}"}}
-            else
-              {:cont, {:ok, Map.put(acc, source, value)}}
-            end
+  defp normalize_light_source_map(values, param_name)
+       when is_map(values) do
+    Enum.reduce_while(values, {:ok, %{}}, fn {key, value}, {:ok, acc} ->
+      case normalize_light_source(key) do
+        {:ok, source} ->
+          if Map.has_key?(acc, source) do
+            {:halt,
+             {:error,
+              "#{param_name} contains duplicate light source after normalization: #{Atom.to_string(source)}"}}
+          else
+            {:cont, {:ok, Map.put(acc, source, value)}}
+          end
 
-          {:error, _reason} = error ->
-            {:halt, error}
-        end
-
-      _entry, {:ok, _acc} ->
-        {:halt, {:error, "#{param_name} must be a JSON object"}}
+        {:error, _reason} = error ->
+          {:halt, error}
+      end
     end)
   end
 
