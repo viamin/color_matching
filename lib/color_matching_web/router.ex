@@ -29,6 +29,7 @@ defmodule ColorMatchingWeb.Router do
 
     post "/illuminant_measurements", IlluminantMeasurementController, :create
     post "/illuminant_measurements/bulk", IlluminantMeasurementController, :bulk_create
+    post "/multi_image_mapping", MultiImageMappingController, :create
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
