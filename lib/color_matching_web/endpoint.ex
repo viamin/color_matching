@@ -7,7 +7,7 @@ defmodule ColorMatchingWeb.Endpoint do
     json_decoder: Phoenix.json_library()
   ]
   @multi_image_mapping_parser_options [
-    parsers: [:json],
+    parsers: [:urlencoded, :multipart, :json],
     pass: ["*/*"],
     length: 45_000_000,
     json_decoder: Phoenix.json_library()

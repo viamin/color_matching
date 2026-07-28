@@ -11,7 +11,7 @@ defmodule ColorMatchingWeb.Router do
   end
 
   pipeline :api do
-    plug :accepts, ["json"]
+    plug :accepts, ["json", "png"]
   end
 
   scope "/", ColorMatchingWeb do
