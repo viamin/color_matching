@@ -1,6 +1,18 @@
 defmodule ColorMatchingWeb.Endpoint do
   use Phoenix.Endpoint, otp_app: :color_matching
 
+  @default_parser_options [
+    parsers: [:urlencoded, :multipart, :json],
+    pass: ["*/*"],
+    json_decoder: Phoenix.json_library()
+  ]
+  @multi_image_mapping_parser_options [
+    parsers: [:json],
+    pass: ["*/*"],
+    length: 45_000_000,
+    json_decoder: Phoenix.json_library()
+  ]
+
   # The session will be stored in the cookie and signed,
   # this means its contents can be read but not tampered with.
   # Set :encryption_salt if you would also like to encrypt it.
@@ -44,9 +56,18 @@ defmodule ColorMatchingWeb.Endpoint do
 
   plug Plug.RequestId
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
+  plug :parse_request
 
   plug Plug.MethodOverride
   plug Plug.Head
   plug Plug.Session, @session_options
   plug ColorMatchingWeb.Router
+
+  defp parse_request(%Plug.Conn{request_path: "/api/multi_image_mapping"} = conn, _opts) do
+    Plug.Parsers.call(conn, Plug.Parsers.init(@multi_image_mapping_parser_options))
+  end
+
+  defp parse_request(conn, _opts) do
+    Plug.Parsers.call(conn, Plug.Parsers.init(@default_parser_options))
+  end
 end

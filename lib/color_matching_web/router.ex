@@ -1,8 +1,6 @@
 defmodule ColorMatchingWeb.Router do
   use ColorMatchingWeb, :router
 
-  @multi_image_mapping_body_limit_bytes 45_000_000
-
   pipeline :browser do
     plug :accepts, ["html"]
     plug :fetch_session
@@ -14,15 +12,6 @@ defmodule ColorMatchingWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
-    plug Plug.Parsers, parsers: [:json], pass: ["*/*"], json_decoder: Phoenix.json_library()
-  end
-
-  pipeline :api_png do
-    plug Plug.Parsers,
-      parsers: [:json],
-      pass: ["*/*"],
-      length: @multi_image_mapping_body_limit_bytes,
-      json_decoder: Phoenix.json_library()
   end
 
   scope "/", ColorMatchingWeb do
@@ -43,8 +32,6 @@ defmodule ColorMatchingWeb.Router do
   end
 
   scope "/api", ColorMatchingWeb do
-    pipe_through :api_png
-
     post "/multi_image_mapping", MultiImageMappingController, :create
   end
 

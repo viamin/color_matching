@@ -177,9 +177,15 @@ defmodule ColorMatchingWeb.MultiImageMappingController do
   end
 
   defp decode_base64_image(label, value) do
-    case Base.decode64(value, padding: false) do
-      {:ok, binary} -> {:ok, binary}
-      :error -> {:error, "images[#{label}] is not valid base64"}
+    case Base.decode64(value) do
+      {:ok, binary} ->
+        {:ok, binary}
+
+      :error ->
+        case Base.decode64(value, padding: false) do
+          {:ok, binary} -> {:ok, binary}
+          :error -> {:error, "images[#{label}] is not valid base64"}
+        end
     end
   end
 
