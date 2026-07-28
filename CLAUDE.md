@@ -71,3 +71,5 @@ Standard Phoenix test structure with ExUnit. Tests are minimal as this was a dem
 - Uses Bandit as the HTTP server
 - All color logic is client-side with LiveView handling state management
 - CSS triangles are achieved with clip-path rather than complex SVG or canvas solutions
+- `docs/solutions/` contains documented solutions and planning learnings, organized by category with YAML frontmatter. Relevant when implementing, debugging, or planning in documented areas.
+- `CONCEPTS.md` captures shared domain vocabulary for palettes, swatches, printer profiles, illuminants, and mapping concepts.

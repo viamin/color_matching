@@ -1,7 +1,7 @@
 defmodule ColorMatchingWeb.PalettesLive do
   use ColorMatchingWeb, :live_view
 
-  alias ColorMatching.{ColorFormat, Palette, PaletteStorage}
+  alias ColorMatching.{ColorFormat, Palette, PaletteStorage, Persistence}
 
   @default_colors ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#FD79A8"]
 
@@ -25,7 +25,29 @@ defmodule ColorMatchingWeb.PalettesLive do
      |> assign(:editor_errors, %{})
      |> assign(:new_palette_name, "")
      |> assign(:new_color_value, "#FFFFFF")
-     |> assign(:max_grid_colors, @max_grid_colors)}
+     |> assign(:max_grid_colors, @max_grid_colors)
+     |> assign(:persisted_palettes, persisted_palettes_view())}
+  end
+
+  defp persisted_palettes_view do
+    Enum.map(Persistence.list_palettes(), &persisted_palette_view/1)
+  end
+
+  defp persisted_palette_view(palette) do
+    %{
+      id: palette.id,
+      name: palette.name,
+      is_preset: palette.is_preset,
+      colors: Enum.map(palette.colors, &persisted_color_view/1)
+    }
+  end
+
+  defp persisted_color_view(color) do
+    %{
+      id: color.id,
+      hex_color: color.hex_color,
+      display_label: color.display_label
+    }
   end
 
   def handle_event("palettes_updated", %{"palettes" => palettes}, socket) do
@@ -521,6 +543,66 @@ defmodule ColorMatchingWeb.PalettesLive do
                     >
                       Delete
                     </button>
+                  </div>
+                </div>
+              <% end %>
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div class="flex items-center justify-between">
+              <h2 class="text-lg font-semibold text-gray-900">Persisted Palettes</h2>
+              <span class="text-xs text-gray-500">
+                {length(@persisted_palettes)} stored
+              </span>
+            </div>
+            <p class="mt-1 text-sm text-gray-600">
+              Database-backed palettes for the color detail and illuminant response tooling.
+            </p>
+
+            <div
+              :if={@persisted_palettes == []}
+              class="mt-4 rounded-xl border border-dashed border-gray-300 p-4 text-sm text-gray-500"
+            >
+              No persisted palettes yet. Use the API or import preset palettes to populate this list.
+            </div>
+
+            <div :if={@persisted_palettes != []} class="mt-4 space-y-3">
+              <%= for palette <- @persisted_palettes do %>
+                <div class="rounded-xl border border-gray-200 p-4">
+                  <div class="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 class="font-semibold text-gray-900">{palette.name}</h3>
+                      <p class="mt-1 text-xs text-gray-500">
+                        {length(palette.colors)} colors
+                        <%= if palette.is_preset do %>
+                          · <span class="font-medium text-blue-700">preset</span>
+                        <% end %>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div class="mt-3 flex flex-wrap gap-2">
+                    <%= for color <- Enum.take(palette.colors, 8) do %>
+                      <div class="flex flex-col items-center gap-1">
+                        <.link
+                          navigate={~p"/palettes/#{palette.id}/colors/#{color.id}"}
+                          class="block"
+                          title={"View #{color.hex_color}"}
+                        >
+                          <div
+                            class="h-8 w-8 rounded-md border border-gray-200 hover:ring-2 hover:ring-blue-400"
+                            style={"background-color: #{color.hex_color}"}
+                          >
+                          </div>
+                        </.link>
+                      </div>
+                    <% end %>
+                    <%= if length(palette.colors) > 8 do %>
+                      <div class="flex h-8 items-center text-xs text-gray-500">
+                        +{length(palette.colors) - 8}
+                      </div>
+                    <% end %>
                   </div>
                 </div>
               <% end %>

@@ -46,6 +46,30 @@ defmodule ColorMatching.Persistence do
     |> Repo.preload(:colors)
   end
 
+  @doc """
+  Fetches a single palette color preloaded with its parent palette.
+
+  Raises `Ecto.NoResultsError` when the color id is unknown.
+  """
+  @spec get_palette_color!(integer()) :: PaletteColor.t()
+  def get_palette_color!(id) do
+    PaletteColor
+    |> Repo.get!(id)
+    |> Repo.preload(:palette)
+  end
+
+  @doc """
+  Fetches a single palette color preloaded with its parent palette, or
+  returns `nil` when no row matches the given id.
+  """
+  @spec get_palette_color(integer()) :: PaletteColor.t() | nil
+  def get_palette_color(id) do
+    case Repo.get(PaletteColor, id) do
+      %PaletteColor{} = palette_color -> Repo.preload(palette_color, :palette)
+      nil -> nil
+    end
+  end
+
   @spec create_palette(palette_attrs()) :: {:ok, Palette.t()} | {:error, Ecto.Changeset.t()}
   def create_palette(attrs) when is_map(attrs) do
     %Palette{}
@@ -216,6 +240,26 @@ defmodule ColorMatching.Persistence do
     |> Map.new(&{&1.light_source, &1})
   end
 
+  @spec response_vectors([PaletteColor.t()], PrinterProfile.t()) :: [ResponseVector.t()]
+  def response_vectors(palette_colors, %PrinterProfile{} = printer_profile)
+      when is_list(palette_colors) do
+    palette_color_ids = Enum.map(palette_colors, & &1.id)
+
+    measurements_by_palette_color =
+      palette_color_ids
+      |> latest_illuminant_measurements_query(printer_profile.id)
+      |> Repo.all()
+      |> Enum.group_by(& &1.palette_color_id, &{&1.light_source, &1})
+      |> Map.new(fn {palette_color_id, measurements} ->
+        {palette_color_id, Map.new(measurements)}
+      end)
+
+    Enum.map(palette_colors, fn palette_color ->
+      measurements = Map.get(measurements_by_palette_color, palette_color.id, %{})
+      ResponseVector.new(palette_color.hex_color, printer_profile.id, measurements)
+    end)
+  end
+
   @doc """
   Builds a response vector for a palette color under a printer profile using
   the latest persisted illuminant measurements.
@@ -232,16 +276,22 @@ defmodule ColorMatching.Persistence do
     ResponseVector.new(palette_color.hex_color, printer_profile.id, measurements)
   end
 
-  @spec latest_illuminant_measurements_query(integer(), integer(), String.t() | nil) ::
-          Ecto.Query.t()
+  @spec latest_illuminant_measurements_query(
+          integer() | [integer()],
+          integer(),
+          String.t() | nil
+        ) :: Ecto.Query.t()
   defp latest_illuminant_measurements_query(
-         palette_color_id,
+         palette_color_ids,
          printer_profile_id,
          light_source \\ nil
        ) do
     ranked_measurement_ids_query =
-      palette_color_id
-      |> ranked_illuminant_measurement_ids_query(printer_profile_id, light_source)
+      ranked_illuminant_measurement_ids_query(
+        List.wrap(palette_color_ids),
+        printer_profile_id,
+        light_source
+      )
       |> subquery()
 
     from(ranked_measurement in ranked_measurement_ids_query,
@@ -253,23 +303,23 @@ defmodule ColorMatching.Persistence do
     )
   end
 
-  @spec ranked_illuminant_measurement_ids_query(integer(), integer(), String.t() | nil) ::
+  @spec ranked_illuminant_measurement_ids_query([integer()], integer(), String.t() | nil) ::
           Ecto.Query.t()
   defp ranked_illuminant_measurement_ids_query(
-         palette_color_id,
+         palette_color_ids,
          printer_profile_id,
          light_source
        ) do
     IlluminantMeasurement
     |> where(
       [measurement],
-      measurement.palette_color_id == ^palette_color_id and
+      measurement.palette_color_id in ^palette_color_ids and
         measurement.printer_profile_id == ^printer_profile_id
     )
     |> maybe_filter_light_source(light_source)
     |> windows([measurement],
       per_light_source: [
-        partition_by: measurement.light_source,
+        partition_by: [measurement.palette_color_id, measurement.light_source],
         order_by: [
           asc: fragment("CASE WHEN ? IS NULL THEN 1 ELSE 0 END", measurement.measured_at),
           desc: measurement.measured_at,
