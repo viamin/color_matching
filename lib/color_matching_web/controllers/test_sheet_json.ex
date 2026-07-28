@@ -60,9 +60,7 @@ defmodule ColorMatchingWeb.TestSheetJSON do
     }
   end
 
-  @spec render_printer_profile(ColorMatching.Persistence.PrinterProfile.t() | nil) :: map() | nil
-  defp render_printer_profile(nil), do: nil
-
+  @spec render_printer_profile(ColorMatching.Persistence.PrinterProfile.t()) :: map()
   defp render_printer_profile(profile) do
     %{
       printer_make_model: profile.printer_make_model,
