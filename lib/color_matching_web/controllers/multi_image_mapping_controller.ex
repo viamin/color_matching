@@ -57,7 +57,7 @@ defmodule ColorMatchingWeb.MultiImageMappingController do
              weights
            ) do
       conn
-      |> put_resp_header("content-type", "image/png")
+      |> put_resp_content_type("image/png")
       |> send_resp(200, png_binary)
     else
       {:error, {:not_found, resource}} ->
