@@ -89,29 +89,43 @@ defmodule ColorMatching.MultiImagePaletteMapper do
   end
 
   defp normalize_source_images(source_images_by_light_source) do
-    Enum.reduce_while(source_images_by_light_source, {:ok, %{}}, fn {source, png_binary},
-                                                                    {:ok, acc} ->
-      with {:ok, normalized_source} <- normalize_light_source(source),
-           true <- is_binary(png_binary) do
-        {:cont, {:ok, Map.put(acc, normalized_source, png_binary)}}
-      else
-        false -> {:halt, {:error, "source image for #{inspect(source)} must be a PNG binary"}}
-        {:error, message} -> {:halt, {:error, message}}
+    Enum.reduce_while(source_images_by_light_source, {:ok, %{}}, fn entry, {:ok, acc} ->
+      case entry do
+        {source, png_binary} ->
+          with {:ok, normalized_source} <- normalize_light_source(source),
+               true <- is_binary(png_binary) do
+            {:cont, {:ok, Map.put(acc, normalized_source, png_binary)}}
+          else
+            false -> {:halt, {:error, "source image for #{inspect(source)} must be a PNG binary"}}
+            {:error, message} -> {:halt, {:error, message}}
+          end
+
+        _other ->
+          {:halt, {:error, "source images must be a map of light sources to PNG binaries"}}
       end
     end)
   end
 
   defp normalize_weights(weights) do
-    Enum.reduce_while(weights, {:ok, %{}}, fn {source, weight}, {:ok, acc} ->
-      with {:ok, normalized_source} <- normalize_light_source(source),
-           true <- is_number(weight) do
-        {:cont, {:ok, Map.put(acc, normalized_source, weight * 1.0)}}
-      else
-        false -> {:halt, {:error, "weight for #{inspect(source)} must be numeric"}}
-        {:error, message} -> {:halt, {:error, message}}
+    Enum.reduce_while(weights, {:ok, %{}}, fn entry, {:ok, acc} ->
+      case entry do
+        {source, weight} ->
+          with {:ok, normalized_source} <- normalize_light_source(source),
+               true <- is_number(weight) and is_finite_number(weight) do
+            {:cont, {:ok, Map.put(acc, normalized_source, weight * 1.0)}}
+          else
+            false -> {:halt, {:error, "weight for #{inspect(source)} must be a finite number"}}
+            {:error, message} -> {:halt, {:error, message}}
+          end
+
+        _other ->
+          {:halt, {:error, "weights must be a map of light sources to numbers"}}
       end
     end)
   end
+
+  defp is_finite_number(value) when is_integer(value), do: true
+  defp is_finite_number(value) when is_float(value), do: value == value and abs(value) != :infinity
 
   defp validate_positive_weights(weights) do
     if Enum.any?(weights, fn {_source, weight} -> weight > 0 end) do
@@ -152,22 +166,23 @@ defmodule ColorMatching.MultiImagePaletteMapper do
   end
 
   defp validate_dimensions(decoded_images) do
-    [{first_source, first_image} | rest] =
-      decoded_images
-      |> Map.to_list()
-      |> Enum.sort_by(fn {source, _image} ->
-        Enum.find_index(@supported_light_sources, &(&1 == source))
-      end)
+    case decoded_images |> Map.to_list() |> Enum.sort_by(fn {source, _image} ->
+           Enum.find_index(@supported_light_sources, &(&1 == source))
+         end) do
+      [] ->
+        {:error, "at least one source image is required"}
 
-    dimensions = {first_image.width, first_image.height}
+      [{first_source, first_image} | rest] ->
+        dimensions = {first_image.width, first_image.height}
 
-    case Enum.find(rest, fn {_source, image} -> {image.width, image.height} != dimensions end) do
-      {source, image} ->
-        {:error,
-         "source images must all have the same dimensions; #{Atom.to_string(source)} is #{image.width}x#{image.height} but #{Atom.to_string(first_source)} is #{first_image.width}x#{first_image.height}"}
+        case Enum.find(rest, fn {_source, image} -> {image.width, image.height} != dimensions end) do
+          {source, image} ->
+            {:error,
+             "source images must all have the same dimensions; #{Atom.to_string(source)} is #{image.width}x#{image.height} but #{Atom.to_string(first_source)} is #{first_image.width}x#{first_image.height}"}
 
-      nil ->
-        {:ok, first_image.width, first_image.height}
+          nil ->
+            {:ok, first_image.width, first_image.height}
+        end
     end
   end
 
