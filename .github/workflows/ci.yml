@@ -21,24 +21,24 @@ jobs:
       - name: Setup Elixir and Erlang/OTP
         uses: erlef/setup-beam@v1
         with:
-          elixir-version: '1.16'
-          otp-version: '26'
+          elixir-version: '1.16.3'
+          otp-version: '26.2.5'
 
       - name: Cache deps
         uses: actions/cache@v6
         with:
           path: deps
-          key: ${{ runner.os }}-mix-1.16-26-${{ hashFiles('**/mix.lock') }}
+          key: ${{ runner.os }}-mix-1.16.3-26.2.5-${{ hashFiles('**/mix.lock') }}
           restore-keys: |
-            ${{ runner.os }}-mix-1.16-26-
+            ${{ runner.os }}-mix-1.16.3-26.2.5-
 
       - name: Cache _build
         uses: actions/cache@v6
         with:
           path: _build
-          key: ${{ runner.os }}-build-1.16-26-${{ hashFiles('**/mix.lock') }}
+          key: ${{ runner.os }}-build-1.16.3-26.2.5-${{ hashFiles('**/mix.lock') }}
           restore-keys: |
-            ${{ runner.os }}-build-1.16-26-
+            ${{ runner.os }}-build-1.16.3-26.2.5-
 
       - name: Install Hex and Rebar
         run: |
@@ -80,24 +80,24 @@ jobs:
       - name: Setup Elixir and Erlang/OTP
         uses: erlef/setup-beam@v1
         with:
-          elixir-version: '1.16'
-          otp-version: '26'
+          elixir-version: '1.16.3'
+          otp-version: '26.2.5'
 
       - name: Cache deps
         uses: actions/cache@v6
         with:
           path: deps
-          key: ${{ runner.os }}-mix-1.16-26-${{ hashFiles('**/mix.lock') }}
+          key: ${{ runner.os }}-mix-1.16.3-26.2.5-${{ hashFiles('**/mix.lock') }}
           restore-keys: |
-            ${{ runner.os }}-mix-1.16-26-
+            ${{ runner.os }}-mix-1.16.3-26.2.5-
 
       - name: Cache _build
         uses: actions/cache@v6
         with:
           path: _build
-          key: ${{ runner.os }}-build-1.16-26-${{ hashFiles('**/mix.lock') }}
+          key: ${{ runner.os }}-build-1.16.3-26.2.5-${{ hashFiles('**/mix.lock') }}
           restore-keys: |
-            ${{ runner.os }}-build-1.16-26-
+            ${{ runner.os }}-build-1.16.3-26.2.5-
 
       - name: Install Hex and Rebar
         run: |
