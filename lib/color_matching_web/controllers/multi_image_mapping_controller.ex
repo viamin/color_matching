@@ -77,7 +77,7 @@ defmodule ColorMatchingWeb.MultiImageMappingController do
   # ---------------------------------------------------------------------------
 
   defp require_integer(params, key) do
-    case Map.get(params, key) do
+    case fetch_param(params, key) do
       nil ->
         {:error, "#{key} is required"}
 
@@ -96,11 +96,16 @@ defmodule ColorMatchingWeb.MultiImageMappingController do
   end
 
   defp require_map(params, key) do
-    case Map.get(params, key) do
+    case fetch_param(params, key) do
       nil -> {:error, "#{key} is required"}
       value when is_map(value) -> {:ok, value}
       _ -> {:error, "#{key} must be a JSON object"}
     end
+  end
+
+  defp fetch_param(params, key) when is_map(params) and is_binary(key) do
+    atom_key = String.to_existing_atom(key)
+    Map.get_lazy(params, key, fn -> Map.get(params, atom_key) end)
   end
 
   defp fetch_palette(palette_id) do
@@ -181,6 +186,7 @@ defmodule ColorMatchingWeb.MultiImageMappingController do
 
   defp image_label(key) when is_atom(key), do: Atom.to_string(key)
   defp image_label(key) when is_binary(key), do: key
+  defp image_label(key), do: inspect(key)
 
   defp normalize_light_source(source) when is_atom(source),
     do: normalize_light_source(Atom.to_string(source))
