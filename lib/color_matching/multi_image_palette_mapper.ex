@@ -13,7 +13,6 @@ defmodule ColorMatching.MultiImagePaletteMapper do
   @supported_light_sources ResponseVector.light_sources()
 
   @type source_images :: %{required(ResponseVector.light_source() | String.t()) => binary()}
-  @type persisted_printer_profile :: %PrinterProfile{id: integer()}
   @type response_vector_builder :: (PaletteColor.t(), PrinterProfile.t() -> ResponseVector.t())
   @type response_vector_batch_builder ::
           ([PaletteColor.t()], PrinterProfile.t() -> [ResponseVector.t()])
@@ -23,7 +22,7 @@ defmodule ColorMatching.MultiImagePaletteMapper do
           | {:scoring_module, module()}
   @type options :: [option()]
 
-  @spec map_to_png(source_images(), [PaletteColor.t()], persisted_printer_profile(), map(), options()) ::
+  @spec map_to_png(source_images(), [PaletteColor.t()], PrinterProfile.t(), map(), options()) ::
           {:ok, binary()} | {:error, String.t() | tuple()}
   def map_to_png(
         source_images_by_light_source,
