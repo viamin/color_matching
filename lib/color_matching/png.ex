@@ -30,13 +30,14 @@ defmodule ColorMatching.PNG do
           pixels: [{0..255, 0..255, 0..255}]
         }
   @type header :: %{width: non_neg_integer(), height: non_neg_integer()}
+  @type inspect_header_option :: {:max_pixels, pos_integer()}
 
   @default_max_image_pixels 4_000_000
 
-  @spec inspect_header(binary(), keyword()) ::
+  @spec inspect_header(binary(), [inspect_header_option()]) ::
           {:ok, header()} | {:error, String.t()}
   def inspect_header(png_binary, opts \\ []) when is_binary(png_binary) do
-    max_pixels = Keyword.get(opts, :max_pixels, @default_max_image_pixels)
+    max_pixels = normalized_max_pixels(opts)
 
     with {:ok, width, height} <- parse_header_dimensions(png_binary),
          :ok <- validate_image_area(width, height, max_pixels) do
@@ -72,6 +73,13 @@ defmodule ColorMatching.PNG do
       :ok
     else
       {:error, "exceeds the maximum allowed image area"}
+    end
+  end
+
+  defp normalized_max_pixels(opts) do
+    case Keyword.get(opts, :max_pixels, @default_max_image_pixels) do
+      max_pixels when is_integer(max_pixels) and max_pixels > 0 -> max_pixels
+      _other -> @default_max_image_pixels
     end
   end
 

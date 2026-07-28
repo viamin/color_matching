@@ -30,6 +30,33 @@ defmodule ColorMatching.Persistence do
           color_id: term(),
           errors: measurement_error_map()
         }
+  @type persisted_palette_color :: %PaletteColor{
+          id: integer(),
+          hex_color: String.t(),
+          display_label: String.t() | nil,
+          sort_order: integer() | nil,
+          palette_id: integer() | nil,
+          palette: Palette.t() | Ecto.Association.NotLoaded.t(),
+          illuminant_measurements: [IlluminantMeasurement.t()] | Ecto.Association.NotLoaded.t(),
+          inserted_at: DateTime.t() | nil,
+          updated_at: DateTime.t() | nil
+        }
+  @type persisted_printer_profile :: %PrinterProfile{
+          id: integer(),
+          printer_make_model: String.t() | nil,
+          paper_type: String.t() | nil,
+          ink_type: String.t() | nil,
+          icc_profile: String.t() | nil,
+          print_settings: String.t() | nil,
+          driver_name: String.t() | nil,
+          driver_version: String.t() | nil,
+          calibration_date: Date.t() | nil,
+          calibration_version: String.t() | nil,
+          notes: String.t() | nil,
+          illuminant_measurements: [IlluminantMeasurement.t()] | Ecto.Association.NotLoaded.t(),
+          inserted_at: DateTime.t() | nil,
+          updated_at: DateTime.t() | nil
+        }
 
   @spec list_palettes() :: [Palette.t()]
   def list_palettes do
@@ -226,7 +253,8 @@ defmodule ColorMatching.Persistence do
     |> Map.new(&{&1.light_source, &1})
   end
 
-  @spec response_vectors([PaletteColor.t()], PrinterProfile.t()) :: [ResponseVector.t()]
+  @spec response_vectors([persisted_palette_color()], persisted_printer_profile()) ::
+          [ResponseVector.t()]
   def response_vectors(palette_colors, %PrinterProfile{id: printer_profile_id})
       when is_list(palette_colors) and is_integer(printer_profile_id) do
     palette_color_ids = Enum.map(palette_colors, & &1.id)
@@ -258,7 +286,8 @@ defmodule ColorMatching.Persistence do
   the resulting vector so callers can distinguish "never measured" from
   "measured as zero brightness".
   """
-  @spec response_vector(PaletteColor.t(), PrinterProfile.t()) :: ResponseVector.t()
+  @spec response_vector(persisted_palette_color(), persisted_printer_profile()) ::
+          ResponseVector.t()
   def response_vector(
         %PaletteColor{id: palette_color_id, hex_color: hex_color},
         %PrinterProfile{id: printer_profile_id}

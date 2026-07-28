@@ -13,6 +13,7 @@ defmodule ColorMatching.MultiImagePaletteMapper do
   @supported_light_sources ResponseVector.light_sources()
 
   @type source_images :: %{required(ResponseVector.light_source() | String.t()) => binary()}
+  @type persisted_printer_profile :: %PrinterProfile{id: integer()}
   @type response_vector_builder :: (PaletteColor.t(), PrinterProfile.t() -> ResponseVector.t())
   @type response_vector_batch_builder ::
           ([PaletteColor.t()], PrinterProfile.t() -> [ResponseVector.t()])
@@ -22,7 +23,7 @@ defmodule ColorMatching.MultiImagePaletteMapper do
           | {:scoring_module, module()}
   @type options :: [option()]
 
-  @spec map_to_png(source_images(), [PaletteColor.t()], PrinterProfile.t(), map(), options()) ::
+  @spec map_to_png(source_images(), [PaletteColor.t()], persisted_printer_profile(), map(), options()) ::
           {:ok, binary()} | {:error, String.t() | tuple()}
   def map_to_png(
         source_images_by_light_source,
@@ -40,6 +41,20 @@ defmodule ColorMatching.MultiImagePaletteMapper do
         options
       )
       when is_map(source_images_by_light_source) and is_list(palette_colors) and is_map(weights) do
+    if is_integer(printer_profile.id) do
+      do_map_to_png(source_images_by_light_source, palette_colors, printer_profile, weights, options)
+    else
+      {:error, "invalid mapper arguments"}
+    end
+  end
+
+  defp do_map_to_png(
+         source_images_by_light_source,
+         palette_colors,
+         %PrinterProfile{} = printer_profile,
+         weights,
+         options
+       ) do
     response_vector_builder = Keyword.get(options, :response_vector_builder)
 
     response_vector_batch_builder =
@@ -341,10 +356,6 @@ defmodule ColorMatching.MultiImagePaletteMapper do
       blue: Keyword.get(brightnesses, :blue, :missing),
       lps: Keyword.get(brightnesses, :lps, :missing)
     }
-  end
-
-  defp build_target_vector(_pixel_index, _decoded_images, %PrinterProfile{}) do
-    raise ArgumentError, "map_to_png/5 requires a persisted printer profile"
   end
 
   defp candidate_rgb(%ResponseVector{hex_color: hex_color}) do
