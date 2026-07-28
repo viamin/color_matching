@@ -41,8 +41,6 @@ defmodule ColorMatchingWeb.MultiImageMappingController do
   @max_image_base64_bytes 8_000_000
   @max_image_pixels 4_000_000
   @png_signature <<137, 80, 78, 71, 13, 10, 26, 10>>
-  @supported_light_sources ResponseVector.light_sources()
-
   def create(conn, params) do
     with {:ok, palette_id} <- require_integer(params, "palette_id"),
          {:ok, printer_profile_id} <- require_integer(params, "printer_profile_id"),
@@ -188,19 +186,19 @@ defmodule ColorMatchingWeb.MultiImageMappingController do
     {:error, "images[#{key}] is not a valid PNG"}
   end
 
-  defp normalize_light_source(source) when is_atom(source) and source in @supported_light_sources,
-    do: {:ok, source}
+  defp normalize_light_source(source) when is_atom(source),
+    do: normalize_light_source(Atom.to_string(source))
 
   defp normalize_light_source(source) when is_binary(source) do
-    case String.to_existing_atom(source) do
-      normalized_source when normalized_source in @supported_light_sources ->
-        {:ok, normalized_source}
+    normalized_source =
+      source
+      |> String.trim()
+      |> String.downcase()
 
-      _other ->
-        {:error, "unsupported light source: #{inspect(source)}"}
+    case Enum.find(ResponseVector.light_sources(), &(Atom.to_string(&1) == normalized_source)) do
+      nil -> {:error, "unsupported light source: #{inspect(source)}"}
+      atom_source -> {:ok, atom_source}
     end
-  rescue
-    ArgumentError -> {:error, "unsupported light source: #{inspect(source)}"}
   end
 
   defp normalize_light_source(source), do: {:error, "unsupported light source: #{inspect(source)}"}
