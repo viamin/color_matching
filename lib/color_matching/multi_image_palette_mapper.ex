@@ -14,7 +14,8 @@ defmodule ColorMatching.MultiImagePaletteMapper do
 
   @type source_images :: %{required(ResponseVector.light_source() | String.t()) => binary()}
   @type response_vector_builder :: (PaletteColor.t(), PrinterProfile.t() -> ResponseVector.t())
-  @type response_vector_batch_builder :: ([PaletteColor.t()], PrinterProfile.t() -> [ResponseVector.t()])
+  @type response_vector_batch_builder ::
+          ([PaletteColor.t()], PrinterProfile.t() -> [ResponseVector.t()])
   @type option ::
           {:response_vector_builder, response_vector_builder()}
           | {:response_vector_batch_builder, response_vector_batch_builder()}
@@ -60,7 +61,6 @@ defmodule ColorMatching.MultiImagePaletteMapper do
              response_vector_batch_builder,
              response_vector_builder
            ),
-
          {:ok, pixels} <-
            map_pixels(
              width,
