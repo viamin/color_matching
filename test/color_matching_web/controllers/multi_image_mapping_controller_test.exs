@@ -230,6 +230,40 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
       assert %{"errors" => %{"base" => ["printer_profile_id is required"]}} = response
     end
 
+    test "returns 422 when palette_id is not an integer", %{conn: conn} do
+      %{printer_profile: printer_profile} = palette_and_profile_fixture()
+      white_png = grayscale_png!(1, 1, [128])
+
+      response =
+        conn
+        |> post(~p"/api/multi_image_mapping", %{
+          palette_id: "not-an-integer",
+          printer_profile_id: printer_profile.id,
+          weights: %{white: 1.0},
+          images: %{white: Base.encode64(white_png)}
+        })
+        |> json_response(422)
+
+      assert %{"errors" => %{"base" => ["palette_id must be an integer"]}} = response
+    end
+
+    test "returns 422 when printer_profile_id is not an integer", %{conn: conn} do
+      %{palette: palette} = palette_and_profile_fixture()
+      white_png = grayscale_png!(1, 1, [128])
+
+      response =
+        conn
+        |> post(~p"/api/multi_image_mapping", %{
+          palette_id: palette.id,
+          printer_profile_id: "not-an-integer",
+          weights: %{white: 1.0},
+          images: %{white: Base.encode64(white_png)}
+        })
+        |> json_response(422)
+
+      assert %{"errors" => %{"base" => ["printer_profile_id must be an integer"]}} = response
+    end
+
     test "returns 422 when weights are missing", %{conn: conn} do
       %{palette: palette, printer_profile: printer_profile} = palette_and_profile_fixture()
       white_png = grayscale_png!(1, 1, [128])
@@ -244,6 +278,23 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
         |> json_response(422)
 
       assert %{"errors" => %{"base" => ["weights is required"]}} = response
+    end
+
+    test "returns 422 when weights is not a JSON object", %{conn: conn} do
+      %{palette: palette, printer_profile: printer_profile} = palette_and_profile_fixture()
+      white_png = grayscale_png!(1, 1, [128])
+
+      response =
+        conn
+        |> post(~p"/api/multi_image_mapping", %{
+          palette_id: palette.id,
+          printer_profile_id: printer_profile.id,
+          weights: ["white"],
+          images: %{white: Base.encode64(white_png)}
+        })
+        |> json_response(422)
+
+      assert %{"errors" => %{"base" => ["weights must be a JSON object"]}} = response
     end
 
     test "returns 422 when images are missing", %{conn: conn} do
@@ -261,6 +312,22 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
       assert %{"errors" => %{"base" => ["images is required"]}} = response
     end
 
+    test "returns 422 when images is not a JSON object", %{conn: conn} do
+      %{palette: palette, printer_profile: printer_profile} = palette_and_profile_fixture()
+
+      response =
+        conn
+        |> post(~p"/api/multi_image_mapping", %{
+          palette_id: palette.id,
+          printer_profile_id: printer_profile.id,
+          weights: %{white: 1.0},
+          images: ["white"]
+        })
+        |> json_response(422)
+
+      assert %{"errors" => %{"base" => ["images must be a JSON object"]}} = response
+    end
+
     test "returns 422 when images contain invalid base64", %{conn: conn} do
       %{palette: palette, printer_profile: printer_profile} = palette_and_profile_fixture()
 
@@ -276,6 +343,39 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       assert %{"errors" => %{"base" => [message]}} = response
       assert message =~ "not valid base64"
+    end
+
+    test "returns 422 when an image value is not a base64 string", %{conn: conn} do
+      %{palette: palette, printer_profile: printer_profile} = palette_and_profile_fixture()
+
+      response =
+        conn
+        |> post(~p"/api/multi_image_mapping", %{
+          palette_id: palette.id,
+          printer_profile_id: printer_profile.id,
+          weights: %{white: 1.0},
+          images: %{white: 123}
+        })
+        |> json_response(422)
+
+      assert %{"errors" => %{"base" => ["images[white] must be a base64-encoded string"]}} =
+               response
+    end
+
+    test "returns 422 when an image is not a PNG", %{conn: conn} do
+      %{palette: palette, printer_profile: printer_profile} = palette_and_profile_fixture()
+
+      response =
+        conn
+        |> post(~p"/api/multi_image_mapping", %{
+          palette_id: palette.id,
+          printer_profile_id: printer_profile.id,
+          weights: %{white: 1.0},
+          images: %{white: Base.encode64("not-a-png")}
+        })
+        |> json_response(422)
+
+      assert %{"errors" => %{"base" => ["images[white] not a valid PNG"]}} = response
     end
 
     test "returns 422 when an encoded image exceeds the upload size limit", %{conn: conn} do
@@ -333,6 +433,25 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       assert %{"errors" => %{"base" => [message]}} = response
       assert message =~ "exceeds expected size"
+    end
+
+    test "returns 422 when weighted light sources are missing images", %{conn: conn} do
+      %{palette: palette, printer_profile: printer_profile} = full_mapping_fixture()
+      white_png = grayscale_png!(1, 1, [128])
+
+      response =
+        conn
+        |> post(~p"/api/multi_image_mapping", %{
+          palette_id: palette.id,
+          printer_profile_id: printer_profile.id,
+          weights: %{white: 1.0, red: 1.0},
+          images: %{white: Base.encode64(white_png)}
+        })
+        |> json_response(422)
+
+      assert %{"errors" => %{"base" => [message]}} = response
+      assert message =~ "missing source images"
+      assert message =~ "red"
     end
 
     test "returns 422 for unsupported light source in weights", %{conn: conn} do
