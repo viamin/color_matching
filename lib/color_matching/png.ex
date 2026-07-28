@@ -29,6 +29,50 @@ defmodule ColorMatching.PNG do
           height: pos_integer(),
           pixels: [{0..255, 0..255, 0..255}]
         }
+  @type header :: %{width: non_neg_integer(), height: non_neg_integer()}
+
+  @default_max_image_pixels 4_000_000
+
+  @spec inspect_header(binary(), keyword()) ::
+          {:ok, header()} | {:error, String.t()}
+  def inspect_header(png_binary, opts \\ []) when is_binary(png_binary) do
+    max_pixels = Keyword.get(opts, :max_pixels, @default_max_image_pixels)
+
+    with {:ok, width, height} <- parse_header_dimensions(png_binary),
+         :ok <- validate_image_area(width, height, max_pixels) do
+      {:ok, %{width: width, height: height}}
+    end
+  end
+
+  @spec valid_image_area?(non_neg_integer(), non_neg_integer(), pos_integer()) :: boolean()
+  def valid_image_area?(width, height, max_pixels)
+      when is_integer(width) and is_integer(height) and is_integer(max_pixels) do
+    width * height <= max_pixels
+  end
+
+  defp parse_header_dimensions(
+         <<@png_signature, 13::big-unsigned-integer-size(32), @ihdr,
+           width::big-unsigned-integer-size(32), height::big-unsigned-integer-size(32),
+           _rest::binary>>
+       ) do
+    {:ok, width, height}
+  end
+
+  defp parse_header_dimensions(<<@png_signature, _rest::binary>>) do
+    {:error, "invalid PNG header"}
+  end
+
+  defp parse_header_dimensions(_binary) do
+    {:error, "not a valid PNG"}
+  end
+
+  defp validate_image_area(width, height, max_pixels) do
+    if valid_image_area?(width, height, max_pixels) do
+      :ok
+    else
+      {:error, "exceeds the maximum allowed image area"}
+    end
+  end
 
   @spec decode_grayscale(binary()) :: {:ok, grayscale_image()} | {:error, String.t()}
   def decode_grayscale(png_binary) when is_binary(png_binary) do

@@ -18,7 +18,6 @@ defmodule ColorMatchingWeb.Router do
   end
 
   pipeline :api_png do
-    plug :accepts, ["json", "png"]
     plug Plug.Parsers,
       parsers: [:json],
       pass: ["*/*"],

@@ -38,6 +38,48 @@ defmodule ColorMatching.PNGTest do
     end
   end
 
+  describe "inspect_header/2" do
+    test "extracts width and height from a valid PNG header" do
+      assert {:ok, png} = PNG.encode_grayscale(3, 2, [0, 64, 128, 192, 200, 250])
+
+      assert {:ok, %{width: 3, height: 2}} = PNG.inspect_header(png)
+    end
+
+    test "rejects inputs that do not start with the PNG signature" do
+      assert {:error, "not a valid PNG"} = PNG.inspect_header(<<0, 1, 2, 3>>)
+    end
+
+    test "rejects PNGs whose IHDR chunk is malformed" do
+      truncated_ihdr =
+        <<137, 80, 78, 71, 13, 10, 26, 10, 13::big-unsigned-integer-size(32), "JUNK",
+          1::big-unsigned-integer-size(32), 2::big-unsigned-integer-size(32)>>
+
+      assert {:error, "invalid PNG header"} = PNG.inspect_header(truncated_ihdr)
+    end
+
+    test "rejects PNGs that exceed the configured pixel area" do
+      oversized = png_with_dimensions_header(2_001, 2_000)
+
+      assert {:error, "exceeds the maximum allowed image area"} =
+               PNG.inspect_header(oversized, max_pixels: 4_000_000)
+    end
+  end
+
+  describe "valid_image_area?/3" do
+    test "returns true when width * height is within the limit" do
+      assert PNG.valid_image_area?(100, 100, 4_000_000)
+    end
+
+    test "returns false when width * height exceeds the limit" do
+      refute PNG.valid_image_area?(2_001, 2_000, 4_000_000)
+    end
+
+    test "returns true when either dimension is zero" do
+      assert PNG.valid_image_area?(0, 1_000, 4_000_000)
+      assert PNG.valid_image_area?(1_000, 0, 4_000_000)
+    end
+  end
+
   defp grayscale_png(width, height, rows) do
     compressed =
       rows
@@ -48,6 +90,11 @@ defmodule ColorMatching.PNGTest do
     ihdr = <<width::32, height::32, 8, 0, 0, 0, 0>>
 
     signature <> chunk("IHDR", ihdr) <> chunk("IDAT", compressed) <> chunk("IEND", <<>>)
+  end
+
+  defp png_with_dimensions_header(width, height) do
+    <<137, 80, 78, 71, 13, 10, 26, 10, 13::big-unsigned-integer-size(32), "IHDR",
+      width::big-unsigned-integer-size(32), height::big-unsigned-integer-size(32), 8, 0, 0, 0, 0>>
   end
 
   defp chunk(type, data) do

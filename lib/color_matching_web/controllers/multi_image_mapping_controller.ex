@@ -36,11 +36,9 @@ defmodule ColorMatchingWeb.MultiImageMappingController do
 
   use ColorMatchingWeb, :controller
 
-  alias ColorMatching.{MultiImagePaletteMapper, Persistence, ResponseVector}
+  alias ColorMatching.{MultiImagePaletteMapper, Persistence, PNG, ResponseVector}
 
   @max_image_base64_bytes 8_000_000
-  @max_image_pixels 4_000_000
-  @png_signature <<137, 80, 78, 71, 13, 10, 26, 10>>
   def create(conn, params) do
     with {:ok, palette_id} <- require_integer(params, "palette_id"),
          {:ok, printer_profile_id} <- require_integer(params, "printer_profile_id"),
@@ -151,50 +149,42 @@ defmodule ColorMatchingWeb.MultiImageMappingController do
   end
 
   defp decode_image(key, value) when is_binary(value) do
-    with :ok <- validate_base64_size(key, value),
-         {:ok, binary} <- decode_base64_image(key, value),
-         :ok <- validate_png_header(key, binary) do
+    label = image_label(key)
+
+    with :ok <- validate_base64_size(label, value),
+         {:ok, binary} <- decode_base64_image(label, value),
+         :ok <- validate_png_header(label, binary) do
       {:ok, binary}
     end
   end
 
-  defp decode_image(key, _value), do: {:error, "images[#{key}] must be a base64-encoded string"}
+  defp decode_image(key, _value),
+    do: {:error, "images[#{image_label(key)}] must be a base64-encoded string"}
 
-  defp validate_base64_size(key, value) do
+  defp validate_png_header(label, binary) do
+    case PNG.inspect_header(binary) do
+      {:ok, _header} -> :ok
+      {:error, reason} -> {:error, "images[#{label}] #{reason}"}
+    end
+  end
+
+  defp validate_base64_size(label, value) do
     if byte_size(value) <= @max_image_base64_bytes do
       :ok
     else
-      {:error, "images[#{key}] exceeds the maximum allowed upload size"}
+      {:error, "images[#{label}] exceeds the maximum allowed upload size"}
     end
   end
 
-  defp decode_base64_image(key, value) do
+  defp decode_base64_image(label, value) do
     case Base.decode64(value, padding: false) do
       {:ok, binary} -> {:ok, binary}
-      :error -> {:error, "images[#{key}] is not valid base64"}
+      :error -> {:error, "images[#{label}] is not valid base64"}
     end
   end
 
-  defp validate_png_header(
-         key,
-         <<@png_signature, 13::big-unsigned-integer-size(32), "IHDR",
-           width::big-unsigned-integer-size(32), height::big-unsigned-integer-size(32),
-           _rest::binary>>
-       ) do
-    if width * height <= @max_image_pixels do
-      :ok
-    else
-      {:error, "images[#{key}] exceeds the maximum allowed image area"}
-    end
-  end
-
-  defp validate_png_header(key, <<@png_signature, _rest::binary>>) do
-    {:error, "images[#{key}] has an invalid PNG header"}
-  end
-
-  defp validate_png_header(key, _binary) do
-    {:error, "images[#{key}] is not a valid PNG"}
-  end
+  defp image_label(key) when is_atom(key), do: Atom.to_string(key)
+  defp image_label(key) when is_binary(key), do: key
 
   defp normalize_light_source(source) when is_atom(source),
     do: normalize_light_source(Atom.to_string(source))
