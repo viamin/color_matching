@@ -2,33 +2,37 @@ defmodule ColorMatchingWeb.Router do
   use ColorMatchingWeb, :router
 
   pipeline :browser do
-    plug :accepts, ["html"]
-    plug :fetch_session
-    plug :fetch_live_flash
-    plug :put_root_layout, html: {ColorMatchingWeb.Layouts, :root}
-    plug :protect_from_forgery
-    plug :put_secure_browser_headers
+    plug(:accepts, ["html"])
+    plug(:fetch_session)
+    plug(:fetch_live_flash)
+    plug(:put_root_layout, html: {ColorMatchingWeb.Layouts, :root})
+    plug(:protect_from_forgery)
+    plug(:put_secure_browser_headers)
   end
 
   pipeline :api do
-    plug :accepts, ["json"]
+    plug(:accepts, ["json"])
   end
 
   scope "/", ColorMatchingWeb do
-    pipe_through :browser
+    pipe_through(:browser)
 
-    live "/", ColorGridLive
-    live "/palettes", PalettesLive
-    live "/palettes/:palette_id/colors/:color_id", ColorDetailLive
-    live "/pair", ColorPairLive
-    get "/home", PageController, :home
+    live("/", ColorGridLive)
+    live("/palettes", PalettesLive)
+    live("/palettes/:palette_id/colors/:color_id", ColorDetailLive)
+    live("/pair", ColorPairLive)
+    get("/home", PageController, :home)
   end
 
   scope "/api", ColorMatchingWeb do
-    pipe_through :api
+    pipe_through(:api)
 
-    post "/illuminant_measurements", IlluminantMeasurementController, :create
-    post "/illuminant_measurements/bulk", IlluminantMeasurementController, :bulk_create
+    post("/illuminant_measurements", IlluminantMeasurementController, :create)
+    post("/illuminant_measurements/bulk", IlluminantMeasurementController, :bulk_create)
+  end
+
+  scope "/api", ColorMatchingWeb do
+    post("/multi_image_mapping", MultiImageMappingController, :create)
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
@@ -41,10 +45,10 @@ defmodule ColorMatchingWeb.Router do
     import Phoenix.LiveDashboard.Router
 
     scope "/dev" do
-      pipe_through :browser
+      pipe_through(:browser)
 
-      live_dashboard "/dashboard", metrics: ColorMatchingWeb.Telemetry
-      forward "/mailbox", Plug.Swoosh.MailboxPreview
+      live_dashboard("/dashboard", metrics: ColorMatchingWeb.Telemetry)
+      forward("/mailbox", Plug.Swoosh.MailboxPreview)
     end
   end
 end

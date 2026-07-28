@@ -40,6 +40,36 @@ defmodule ColorMatching.MultiImagePaletteMapper do
         options
       )
       when is_map(source_images_by_light_source) and is_list(palette_colors) and is_map(weights) do
+    if is_integer(printer_profile.id) do
+      do_map_to_png(
+        source_images_by_light_source,
+        palette_colors,
+        printer_profile,
+        weights,
+        options
+      )
+    else
+      {:error, "invalid mapper arguments"}
+    end
+  end
+
+  def map_to_png(
+        _source_images_by_light_source,
+        _palette_colors,
+        _printer_profile,
+        _weights,
+        _options
+      ) do
+    {:error, "invalid mapper arguments"}
+  end
+
+  defp do_map_to_png(
+         source_images_by_light_source,
+         palette_colors,
+         %PrinterProfile{} = printer_profile,
+         weights,
+         options
+       ) do
     response_vector_builder = Keyword.get(options, :response_vector_builder)
 
     response_vector_batch_builder =
@@ -77,16 +107,6 @@ defmodule ColorMatching.MultiImagePaletteMapper do
     end
   end
 
-  def map_to_png(
-        _source_images_by_light_source,
-        _palette_colors,
-        _printer_profile,
-        _weights,
-        _options
-      ) do
-    {:error, "invalid mapper arguments"}
-  end
-
   defp normalize_source_images(source_images_by_light_source) do
     Enum.reduce_while(source_images_by_light_source, {:ok, %{}}, &normalize_source_image/2)
   end
@@ -94,7 +114,12 @@ defmodule ColorMatching.MultiImagePaletteMapper do
   defp normalize_source_image({source, png_binary}, {:ok, acc}) do
     case normalize_source_image_entry(source, png_binary) do
       {:ok, normalized_source} ->
-        {:cont, {:ok, Map.put(acc, normalized_source, png_binary)}}
+        put_normalized_entry(
+          acc,
+          normalized_source,
+          png_binary,
+          "source images contain duplicate light source after normalization"
+        )
 
       {:error, message} ->
         {:halt, {:error, message}}
@@ -121,7 +146,12 @@ defmodule ColorMatching.MultiImagePaletteMapper do
   defp normalize_weight({source, weight}, {:ok, acc}) do
     case normalize_weight_entry(source, weight) do
       {:ok, normalized_source, normalized_weight} ->
-        {:cont, {:ok, Map.put(acc, normalized_source, normalized_weight)}}
+        put_normalized_entry(
+          acc,
+          normalized_source,
+          normalized_weight,
+          "weights contain duplicate light source after normalization"
+        )
 
       {:error, message} ->
         {:halt, {:error, message}}
@@ -173,7 +203,8 @@ defmodule ColorMatching.MultiImagePaletteMapper do
       :ok
     else
       {:error,
-       "missing source images for weighted light sources: #{Enum.map_join(missing_sources, ", ", &Atom.to_string/1)}"}
+       "missing source images for weighted light sources: " <>
+         Enum.map_join(missing_sources, ", ", &Atom.to_string/1)}
     end
   end
 
@@ -222,8 +253,13 @@ defmodule ColorMatching.MultiImagePaletteMapper do
         {:ok, first_image.width, first_image.height}
 
       {source, image} ->
+        first_label = Atom.to_string(first_source)
+        source_label = Atom.to_string(source)
+
         {:error,
-         "source images must all have the same dimensions; #{Atom.to_string(source)} is #{image.width}x#{image.height} but #{Atom.to_string(first_source)} is #{first_image.width}x#{first_image.height}"}
+         "source images must all have the same dimensions; " <>
+           "#{source_label} is #{image.width}x#{image.height} but " <>
+           "#{first_label} is #{first_image.width}x#{first_image.height}"}
     end
   end
 
@@ -272,7 +308,8 @@ defmodule ColorMatching.MultiImagePaletteMapper do
 
           {:halt,
            {:error,
-            "no eligible palette color for output pixel (#{x}, #{y}); all candidates were excluded for the weighted light sources"}}
+            "no eligible palette color for output pixel (#{x}, #{y}); " <>
+              "all candidates were excluded for the weighted light sources"}}
       end
     end)
     |> case do
@@ -281,7 +318,8 @@ defmodule ColorMatching.MultiImagePaletteMapper do
     end
   end
 
-  defp build_target_vector(pixel_index, decoded_images, printer_profile) do
+  defp build_target_vector(pixel_index, decoded_images, %PrinterProfile{id: printer_profile_id})
+       when is_integer(printer_profile_id) do
     brightnesses =
       ResponseVector.light_sources()
       |> Enum.map(fn source ->
@@ -298,7 +336,7 @@ defmodule ColorMatching.MultiImagePaletteMapper do
 
     %ResponseVector{
       hex_color: "#000000",
-      printer_profile_id: printer_profile.id,
+      printer_profile_id: printer_profile_id,
       measured_at: nil,
       inserted_at: nil,
       missing?: missing?,
@@ -337,4 +375,12 @@ defmodule ColorMatching.MultiImagePaletteMapper do
 
   defp normalize_light_source(source),
     do: {:error, "unsupported light source: #{inspect(source)}"}
+
+  defp put_normalized_entry(acc, normalized_source, value, duplicate_prefix) do
+    if Map.has_key?(acc, normalized_source) do
+      {:halt, {:error, "#{duplicate_prefix}: #{Atom.to_string(normalized_source)}"}}
+    else
+      {:cont, {:ok, Map.put(acc, normalized_source, value)}}
+    end
+  end
 end

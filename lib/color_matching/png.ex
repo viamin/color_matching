@@ -29,6 +29,59 @@ defmodule ColorMatching.PNG do
           height: pos_integer(),
           pixels: [{0..255, 0..255, 0..255}]
         }
+  @type header :: %{width: non_neg_integer(), height: non_neg_integer()}
+  @type inspect_header_option :: {:max_pixels, pos_integer()}
+
+  @default_max_image_pixels 4_000_000
+
+  @spec inspect_header(binary(), [inspect_header_option()]) ::
+          {:ok, header()} | {:error, String.t()}
+  def inspect_header(png_binary, opts \\ []) when is_binary(png_binary) do
+    max_pixels = normalized_max_pixels(opts)
+
+    with {:ok, width, height} <- parse_header_dimensions(png_binary),
+         :ok <- validate_image_area(width, height, max_pixels) do
+      {:ok, %{width: width, height: height}}
+    end
+  end
+
+  @spec valid_image_area?(non_neg_integer(), non_neg_integer(), pos_integer()) :: boolean()
+  def valid_image_area?(width, height, max_pixels)
+      when is_integer(width) and is_integer(height) and is_integer(max_pixels) do
+    width * height <= max_pixels
+  end
+
+  defp parse_header_dimensions(
+         <<@png_signature, 13::big-unsigned-integer-size(32), @ihdr,
+           width::big-unsigned-integer-size(32), height::big-unsigned-integer-size(32),
+           _bit_depth, _color_type, _compression_method, _filter_method, _interlace_method,
+           _rest::binary>>
+       ) do
+    {:ok, width, height}
+  end
+
+  defp parse_header_dimensions(<<@png_signature, _rest::binary>>) do
+    {:error, "invalid PNG header"}
+  end
+
+  defp parse_header_dimensions(_binary) do
+    {:error, "not a valid PNG"}
+  end
+
+  defp validate_image_area(width, height, max_pixels) do
+    if valid_image_area?(width, height, max_pixels) do
+      :ok
+    else
+      {:error, "exceeds the maximum allowed image area"}
+    end
+  end
+
+  defp normalized_max_pixels(opts) do
+    case Keyword.get(opts, :max_pixels, @default_max_image_pixels) do
+      max_pixels when is_integer(max_pixels) and max_pixels > 0 -> max_pixels
+      _other -> @default_max_image_pixels
+    end
+  end
 
   @spec decode_grayscale(binary()) :: {:ok, grayscale_image()} | {:error, String.t()}
   def decode_grayscale(png_binary) when is_binary(png_binary) do
@@ -95,8 +148,9 @@ defmodule ColorMatching.PNG do
          {:ok, ihdr} <- fetch_chunk(chunks, @ihdr),
          {:ok, header} <- parse_ihdr(ihdr),
          :ok <- validate_header(header),
+         {:ok, expected_image_data_bytes} <- expected_image_data_bytes(header),
          {:ok, idat_chunks} <- fetch_chunks(chunks, @idat),
-         {:ok, decompressed} <- inflate(idat_chunks),
+         {:ok, decompressed} <- inflate(idat_chunks, expected_image_data_bytes),
          {:ok, rows} <-
            unfilter_scanlines(decompressed, header.width, header.height, header.color_type) do
       {:ok, Map.put(header, :rows, rows)}
@@ -188,19 +242,86 @@ defmodule ColorMatching.PNG do
   defp validate_bit_depth(8), do: :ok
   defp validate_bit_depth(_other), do: {:error, "only 8-bit PNGs are supported"}
 
-  defp inflate(chunks) do
+  defp expected_image_data_bytes(%{width: width, height: height, color_type: color_type}) do
+    case bytes_per_pixel(color_type) do
+      nil ->
+        {:error, "unsupported PNG color type"}
+
+      bytes_per_pixel ->
+        {:ok, height * (width * bytes_per_pixel + 1)}
+    end
+  end
+
+  defp inflate(chunks, max_output_bytes) do
     zstream = :zlib.open()
 
     try do
       :ok = :zlib.inflateInit(zstream)
-      inflated = chunks |> Enum.map(&:zlib.inflate(zstream, &1)) |> IO.iodata_to_binary()
-      :ok = :zlib.inflateEnd(zstream)
-      {:ok, inflated}
+
+      with {:ok, outputs, total_output_bytes} <-
+             inflate_chunks(zstream, chunks, max_output_bytes, [], 0),
+           {:ok, outputs} <-
+             drain_inflater(zstream, outputs, total_output_bytes, max_output_bytes) do
+        {:ok, outputs |> Enum.reverse() |> IO.iodata_to_binary()}
+      end
     rescue
       _error -> {:error, "could not decompress PNG image data"}
+    catch
+      _kind, _reason -> {:error, "could not decompress PNG image data"}
     after
+      safe_inflate_end(zstream)
       :zlib.close(zstream)
     end
+  end
+
+  defp inflate_chunks(_zstream, [], _max_output_bytes, acc, total_output_bytes) do
+    {:ok, acc, total_output_bytes}
+  end
+
+  defp inflate_chunks(zstream, [chunk | rest], max_output_bytes, acc, total_output_bytes) do
+    with {:ok, acc, total_output_bytes} <-
+           append_inflated_output(
+             :zlib.inflate(zstream, chunk),
+             acc,
+             total_output_bytes,
+             max_output_bytes
+           ) do
+      inflate_chunks(zstream, rest, max_output_bytes, acc, total_output_bytes)
+    end
+  end
+
+  defp drain_inflater(zstream, acc, total_output_bytes, max_output_bytes) do
+    output = :zlib.inflate(zstream, <<>>)
+
+    case IO.iodata_length(output) do
+      0 ->
+        {:ok, acc}
+
+      _non_zero_length ->
+        with {:ok, acc, total_output_bytes} <-
+               append_inflated_output(output, acc, total_output_bytes, max_output_bytes) do
+          drain_inflater(zstream, acc, total_output_bytes, max_output_bytes)
+        end
+    end
+  end
+
+  defp append_inflated_output(output, acc, total_output_bytes, max_output_bytes) do
+    output_bytes = IO.iodata_length(output)
+    updated_total_output_bytes = total_output_bytes + output_bytes
+
+    if updated_total_output_bytes > max_output_bytes do
+      {:error, "PNG image data exceeds expected size"}
+    else
+      {:ok, [output | acc], updated_total_output_bytes}
+    end
+  end
+
+  defp safe_inflate_end(zstream) do
+    :zlib.inflateEnd(zstream)
+  rescue
+    _error -> :ok
+  catch
+    _kind, _reason -> :ok
   end
 
   defp unfilter_scanlines(data, width, height, color_type) do
