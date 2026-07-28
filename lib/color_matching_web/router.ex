@@ -11,7 +11,10 @@ defmodule ColorMatchingWeb.Router do
   end
 
   pipeline :api do
-    plug(:accepts, ["json", "png"])
+    plug(:accepts, ["json"])
+  end
+
+  pipeline :api_binary_response do
   end
 
   scope "/", ColorMatchingWeb do
@@ -29,6 +32,11 @@ defmodule ColorMatchingWeb.Router do
 
     post("/illuminant_measurements", IlluminantMeasurementController, :create)
     post("/illuminant_measurements/bulk", IlluminantMeasurementController, :bulk_create)
+  end
+
+  scope "/api", ColorMatchingWeb do
+    pipe_through(:api_binary_response)
+
     post("/multi_image_mapping", MultiImageMappingController, :create)
   end
 
