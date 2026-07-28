@@ -36,11 +36,12 @@ defmodule ColorMatchingWeb.MultiImageMappingController do
 
   use ColorMatchingWeb, :controller
 
-  alias ColorMatching.{MultiImagePaletteMapper, Persistence}
+  alias ColorMatching.{MultiImagePaletteMapper, Persistence, ResponseVector}
 
   @max_image_base64_bytes 8_000_000
   @max_image_pixels 4_000_000
   @png_signature <<137, 80, 78, 71, 13, 10, 26, 10>>
+  @supported_light_sources ResponseVector.light_sources()
 
   def create(conn, params) do
     with {:ok, palette_id} <- require_integer(params, "palette_id"),
@@ -49,6 +50,7 @@ defmodule ColorMatchingWeb.MultiImageMappingController do
          {:ok, raw_images} <- require_map(params, "images"),
          {:ok, palette} <- fetch_palette(palette_id),
          {:ok, printer_profile} <- fetch_printer_profile(printer_profile_id),
+         :ok <- validate_image_keys(raw_images),
          {:ok, images} <- decode_images(raw_images),
          {:ok, png_binary} <-
            MultiImagePaletteMapper.map_to_png(
@@ -118,6 +120,19 @@ defmodule ColorMatchingWeb.MultiImageMappingController do
     end
   end
 
+  defp validate_image_keys(raw_images) do
+    Enum.reduce_while(raw_images, :ok, fn
+      {key, _value}, :ok ->
+        case normalize_light_source(key) do
+          {:ok, _source} -> {:cont, :ok}
+          {:error, _reason} = error -> {:halt, error}
+        end
+
+      _entry, :ok ->
+        {:halt, {:error, "images must be a JSON object"}}
+    end)
+  end
+
   defp decode_images(raw_images) do
     Enum.reduce_while(raw_images, {:ok, %{}}, fn {key, value}, {:ok, acc} ->
       case decode_image(key, value) do
@@ -172,4 +187,21 @@ defmodule ColorMatchingWeb.MultiImageMappingController do
   defp validate_png_header(key, _binary) do
     {:error, "images[#{key}] is not a valid PNG"}
   end
+
+  defp normalize_light_source(source) when is_atom(source) and source in @supported_light_sources,
+    do: {:ok, source}
+
+  defp normalize_light_source(source) when is_binary(source) do
+    case String.to_existing_atom(source) do
+      normalized_source when normalized_source in @supported_light_sources ->
+        {:ok, normalized_source}
+
+      _other ->
+        {:error, "unsupported light source: #{inspect(source)}"}
+    end
+  rescue
+    ArgumentError -> {:error, "unsupported light source: #{inspect(source)}"}
+  end
+
+  defp normalize_light_source(source), do: {:error, "unsupported light source: #{inspect(source)}"}
 end

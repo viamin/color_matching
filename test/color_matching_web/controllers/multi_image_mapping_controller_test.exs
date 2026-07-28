@@ -285,6 +285,24 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
       assert %{"errors" => %{"base" => [message]}} = response
       assert message =~ "unsupported light source"
     end
+
+    test "returns 422 for unsupported light source in images before decoding", %{conn: conn} do
+      %{palette: palette, printer_profile: printer_profile} = palette_and_profile_fixture()
+      oversized_base64 = String.duplicate("A", 8_000_001)
+
+      response =
+        conn
+        |> post(~p"/api/multi_image_mapping", %{
+          palette_id: palette.id,
+          printer_profile_id: printer_profile.id,
+          weights: %{white: 1.0},
+          images: %{ultraviolet: oversized_base64}
+        })
+        |> json_response(422)
+
+      assert %{"errors" => %{"base" => [message]}} = response
+      assert message =~ "unsupported light source"
+    end
   end
 
   # ---------------------------------------------------------------------------
