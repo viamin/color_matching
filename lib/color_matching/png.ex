@@ -249,7 +249,11 @@ defmodule ColorMatching.PNG do
 
     try do
       :ok = :zlib.inflateInit(zstream)
-      inflate_until_finished(zstream, chunks, max_output_bytes, 0, [])
+      with {:ok, outputs, total_output_bytes} <-
+             inflate_chunks(zstream, chunks, max_output_bytes, [], 0),
+           {:ok, outputs} <- drain_inflater(zstream, outputs, total_output_bytes, max_output_bytes) do
+        {:ok, outputs |> Enum.reverse() |> IO.iodata_to_binary()}
+      end
     rescue
       _error -> {:error, "could not decompress PNG image data"}
     catch
@@ -260,64 +264,44 @@ defmodule ColorMatching.PNG do
     end
   end
 
-  defp inflate_until_finished(zstream, input, max_output_bytes, total_output_bytes, acc) do
-    case :zlib.safeInflate(zstream, input) do
-      {status, output} when status in [:continue, :finished] ->
-        output_bytes = IO.iodata_length(output)
-        updated_total_output_bytes = total_output_bytes + output_bytes
+  defp inflate_chunks(_zstream, [], _max_output_bytes, acc, total_output_bytes) do
+    {:ok, acc, total_output_bytes}
+  end
 
-        continue_or_finish(
-          status,
-          output,
-          zstream,
-          max_output_bytes,
-          updated_total_output_bytes,
-          acc
-        )
-
-      {_need_dictionary, _adler32, _output} ->
-        {:error, "PNG image data requires an unsupported dictionary"}
+  defp inflate_chunks(zstream, [chunk | rest], max_output_bytes, acc, total_output_bytes) do
+    with {:ok, acc, total_output_bytes} <-
+           append_inflated_output(
+             :zlib.inflate(zstream, chunk),
+             acc,
+             total_output_bytes,
+             max_output_bytes
+           ) do
+      inflate_chunks(zstream, rest, max_output_bytes, acc, total_output_bytes)
     end
   end
 
-  defp continue_or_finish(
-         _status,
-         _output,
-         _zstream,
-         max_output_bytes,
-         updated_total_output_bytes,
-         _acc
-       )
-       when updated_total_output_bytes > max_output_bytes do
-    {:error, "PNG image data exceeds expected size"}
+  defp drain_inflater(zstream, acc, total_output_bytes, max_output_bytes) do
+    case :zlib.inflate(zstream, <<>>) do
+      output when IO.iodata_length(output) == 0 ->
+        {:ok, acc}
+
+      output ->
+        with {:ok, acc, total_output_bytes} <-
+               append_inflated_output(output, acc, total_output_bytes, max_output_bytes) do
+          drain_inflater(zstream, acc, total_output_bytes, max_output_bytes)
+        end
+    end
   end
 
-  defp continue_or_finish(
-         :continue,
-         output,
-         zstream,
-         max_output_bytes,
-         updated_total_output_bytes,
-         acc
-       ) do
-    inflate_until_finished(
-      zstream,
-      [],
-      max_output_bytes,
-      updated_total_output_bytes,
-      [output | acc]
-    )
-  end
+  defp append_inflated_output(output, acc, total_output_bytes, max_output_bytes) do
+    output_bytes = IO.iodata_length(output)
+    updated_total_output_bytes = total_output_bytes + output_bytes
 
-  defp continue_or_finish(
-         :finished,
-         output,
-         _zstream,
-         _max_output_bytes,
-         _updated_total_output_bytes,
-         acc
-       ) do
-    {:ok, [output | acc] |> Enum.reverse() |> IO.iodata_to_binary()}
+    if updated_total_output_bytes > max_output_bytes do
+      {:error, "PNG image data exceeds expected size"}
+    else
+      {:ok, [output | acc], updated_total_output_bytes}
+    end
   end
 
   defp safe_inflate_end(zstream) do

@@ -31,6 +31,21 @@ defmodule ColorMatching.PNGTest do
                PNG.decode_grayscale(png)
     end
 
+    test "decodes grayscale PNGs whose IDAT payload is split across chunks" do
+      png =
+        grayscale_png(3, 1, [<<0, 10, 20, 30>>], fn compressed ->
+          midpoint = div(byte_size(compressed), 2)
+
+          [
+            binary_part(compressed, 0, midpoint),
+            binary_part(compressed, midpoint, byte_size(compressed) - midpoint)
+          ]
+        end)
+
+      assert {:ok, %{width: 3, height: 1, pixels: <<10, 20, 30>>}} =
+               PNG.decode_grayscale(png)
+    end
+
     test "rejects grayscale PNGs whose decompressed data exceeds IHDR dimensions" do
       png = grayscale_png(1, 1, [:binary.copy(<<0>>, 8_192)])
 
@@ -80,7 +95,7 @@ defmodule ColorMatching.PNGTest do
     end
   end
 
-  defp grayscale_png(width, height, rows) do
+  defp grayscale_png(width, height, rows, chunk_splitter \\ fn compressed -> [compressed] end) do
     compressed =
       rows
       |> IO.iodata_to_binary()
@@ -89,7 +104,13 @@ defmodule ColorMatching.PNGTest do
     signature = <<137, 80, 78, 71, 13, 10, 26, 10>>
     ihdr = <<width::32, height::32, 8, 0, 0, 0, 0>>
 
-    signature <> chunk("IHDR", ihdr) <> chunk("IDAT", compressed) <> chunk("IEND", <<>>)
+    idat_chunks =
+      compressed
+      |> chunk_splitter.()
+      |> Enum.map(&chunk("IDAT", &1))
+      |> IO.iodata_to_binary()
+
+    signature <> chunk("IHDR", ihdr) <> idat_chunks <> chunk("IEND", <<>>)
   end
 
   defp png_with_dimensions_header(width, height) do
