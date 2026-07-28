@@ -41,10 +41,26 @@ defmodule ColorMatching.MultiImagePaletteMapper do
       )
       when is_map(source_images_by_light_source) and is_list(palette_colors) and is_map(weights) do
     if is_integer(printer_profile.id) do
-      do_map_to_png(source_images_by_light_source, palette_colors, printer_profile, weights, options)
+      do_map_to_png(
+        source_images_by_light_source,
+        palette_colors,
+        printer_profile,
+        weights,
+        options
+      )
     else
       {:error, "invalid mapper arguments"}
     end
+  end
+
+  def map_to_png(
+        _source_images_by_light_source,
+        _palette_colors,
+        _printer_profile,
+        _weights,
+        _options
+      ) do
+    {:error, "invalid mapper arguments"}
   end
 
   defp do_map_to_png(
@@ -89,16 +105,6 @@ defmodule ColorMatching.MultiImagePaletteMapper do
     else
       {:error, _reason} = error -> error
     end
-  end
-
-  def map_to_png(
-        _source_images_by_light_source,
-        _palette_colors,
-        _printer_profile,
-        _weights,
-        _options
-      ) do
-    {:error, "invalid mapper arguments"}
   end
 
   defp normalize_source_images(source_images_by_light_source) do
