@@ -225,21 +225,16 @@ defmodule ColorMatching.PNG do
   end
 
   defp do_unfilter_scanlines(data, remaining_rows, row_bytes, bytes_per_pixel, rows) do
-    with true <- byte_size(data) >= row_bytes + 1,
-         <<filter_type, row_data::binary>> <- data,
-         filtered_row <- binary_part(row_data, 0, row_bytes),
-         rest <- binary_part(row_data, row_bytes, byte_size(row_data) - row_bytes) do
-      previous_row =
-        case rows do
-          [row | _] -> row
-          [] -> :binary.copy(<<0>>, row_bytes)
-        end
+    <<filter_type, filtered_row::binary-size(^row_bytes), rest::binary>> = data
 
-      with {:ok, row} <- unfilter_row(filter_type, filtered_row, previous_row, bytes_per_pixel) do
-        do_unfilter_scanlines(rest, remaining_rows - 1, row_bytes, bytes_per_pixel, [row | rows])
+    previous_row =
+      case rows do
+        [row | _] -> row
+        [] -> :binary.copy(<<0>>, row_bytes)
       end
-    else
-      false -> {:error, "PNG image data does not match IHDR dimensions"}
+
+    with {:ok, row} <- unfilter_row(filter_type, filtered_row, previous_row, bytes_per_pixel) do
+      do_unfilter_scanlines(rest, remaining_rows - 1, row_bytes, bytes_per_pixel, [row | rows])
     end
   end
 
