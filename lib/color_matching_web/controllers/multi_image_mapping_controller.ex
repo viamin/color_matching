@@ -44,15 +44,16 @@ defmodule ColorMatchingWeb.MultiImageMappingController do
   def create(conn, params) do
     with {:ok, palette_id} <- require_integer(params, "palette_id"),
          {:ok, printer_profile_id} <- require_integer(params, "printer_profile_id"),
-         {:ok, weights} <- require_map(params, "weights"),
+         {:ok, raw_weights} <- require_map(params, "weights"),
+         {:ok, weights} <- normalize_light_source_map(raw_weights, "weights"),
          {:ok, raw_images} <- require_map(params, "images"),
+         {:ok, images} <- normalize_light_source_map(raw_images, "images"),
          {:ok, palette} <- fetch_palette(palette_id),
          {:ok, printer_profile} <- fetch_printer_profile(printer_profile_id),
-         :ok <- validate_image_keys(raw_images),
-         {:ok, images} <- decode_images(raw_images),
+         {:ok, decoded_images} <- decode_images(images),
          {:ok, png_binary} <-
            MultiImagePaletteMapper.map_to_png(
-             images,
+             decoded_images,
              palette.colors,
              printer_profile,
              weights
@@ -118,16 +119,25 @@ defmodule ColorMatchingWeb.MultiImageMappingController do
     end
   end
 
-  defp validate_image_keys(raw_images) do
-    Enum.reduce_while(raw_images, :ok, fn
-      {key, _value}, :ok ->
+  defp normalize_light_source_map(values, param_name) when is_map(values) do
+    Enum.reduce_while(values, {:ok, %{}}, fn
+      {key, value}, {:ok, acc} ->
         case normalize_light_source(key) do
-          {:ok, _source} -> {:cont, :ok}
-          {:error, _reason} = error -> {:halt, error}
+          {:ok, source} ->
+            if Map.has_key?(acc, source) do
+              {:halt,
+               {:error,
+                "#{param_name} contains duplicate light source after normalization: #{Atom.to_string(source)}"}}
+            else
+              {:cont, {:ok, Map.put(acc, source, value)}}
+            end
+
+          {:error, _reason} = error ->
+            {:halt, error}
         end
 
-      _entry, :ok ->
-        {:halt, {:error, "images must be a JSON object"}}
+      _entry, {:ok, _acc} ->
+        {:halt, {:error, "#{param_name} must be a JSON object"}}
     end)
   end
 

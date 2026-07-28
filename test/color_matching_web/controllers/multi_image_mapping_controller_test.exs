@@ -345,6 +345,47 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
       assert %{"errors" => %{"base" => [message]}} = response
       assert message =~ "unsupported light source"
     end
+
+    test "returns 422 for duplicate normalized light sources in weights", %{conn: conn} do
+      %{palette: palette, printer_profile: printer_profile} = palette_and_profile_fixture()
+      white_png = grayscale_png!(1, 1, [128])
+
+      response =
+        conn
+        |> post(~p"/api/multi_image_mapping", %{
+          palette_id: palette.id,
+          printer_profile_id: printer_profile.id,
+          weights: %{"white" => 1.0, " White " => 0.5},
+          images: %{white: Base.encode64(white_png)}
+        })
+        |> json_response(422)
+
+      assert %{"errors" => %{"base" => [message]}} = response
+      assert message =~ "duplicate light source"
+      assert message =~ "white"
+    end
+
+    test "returns 422 for duplicate normalized light sources in images", %{conn: conn} do
+      %{palette: palette, printer_profile: printer_profile} = palette_and_profile_fixture()
+      white_png = grayscale_png!(1, 1, [128])
+
+      response =
+        conn
+        |> post(~p"/api/multi_image_mapping", %{
+          palette_id: palette.id,
+          printer_profile_id: printer_profile.id,
+          weights: %{white: 1.0},
+          images: %{
+            "white" => Base.encode64(white_png),
+            " White " => Base.encode64(white_png)
+          }
+        })
+        |> json_response(422)
+
+      assert %{"errors" => %{"base" => [message]}} = response
+      assert message =~ "duplicate light source"
+      assert message =~ "white"
+    end
   end
 
   # ---------------------------------------------------------------------------
