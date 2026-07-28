@@ -58,7 +58,9 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
       assert get_resp_header(response, "content-type") == ["image/png"]
     end
 
-    test "accepts image light-source keys with surrounding whitespace and mixed case", %{conn: conn} do
+    test "accepts image light-source keys with surrounding whitespace and mixed case", %{
+      conn: conn
+    } do
       %{palette: palette, printer_profile: printer_profile} = full_mapping_fixture()
 
       white_png = grayscale_png!(1, 1, [10])
@@ -466,8 +468,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
   defp png_with_dimensions_header(width, height) do
     <<137, 80, 78, 71, 13, 10, 26, 10, 13::big-unsigned-integer-size(32), "IHDR",
-      width::big-unsigned-integer-size(32), height::big-unsigned-integer-size(32), 8, 0, 0, 0,
-      0>>
+      width::big-unsigned-integer-size(32), height::big-unsigned-integer-size(32), 8, 0, 0, 0, 0>>
   end
 
   defp png_with_oversized_inflate(width, height) do
@@ -475,10 +476,13 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
     signature = <<137, 80, 78, 71, 13, 10, 26, 10>>
     ihdr = <<width::32, height::32, 8, 0, 0, 0, 0>>
 
-    signature <> chunk("IHDR", ihdr) <> chunk("IDAT", compressed) <> chunk("IEND", <<>>)
+    signature <>
+      png_chunk("IHDR", ihdr) <>
+      png_chunk("IDAT", compressed) <>
+      png_chunk("IEND", <<>>)
   end
 
-  defp chunk(type, data) do
+  defp png_chunk(type, data) do
     crc = :erlang.crc32([type, data])
     <<byte_size(data)::32, type::binary-size(4), data::binary, crc::32>>
   end

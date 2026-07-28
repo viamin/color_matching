@@ -121,13 +121,7 @@ defmodule ColorMatchingWeb.MultiImageMappingController do
     Enum.reduce_while(values, {:ok, %{}}, fn {key, value}, {:ok, acc} ->
       case normalize_light_source(key) do
         {:ok, source} ->
-          if Map.has_key?(acc, source) do
-            {:halt,
-             {:error,
-              "#{param_name} contains duplicate light source after normalization: #{Atom.to_string(source)}"}}
-          else
-            {:cont, {:ok, Map.put(acc, source, value)}}
-          end
+          put_unique_light_source(acc, source, value, param_name)
 
         {:error, _reason} = error ->
           {:halt, error}
@@ -203,5 +197,16 @@ defmodule ColorMatchingWeb.MultiImageMappingController do
     end
   end
 
-  defp normalize_light_source(source), do: {:error, "unsupported light source: #{inspect(source)}"}
+  defp normalize_light_source(source),
+    do: {:error, "unsupported light source: #{inspect(source)}"}
+
+  defp put_unique_light_source(acc, source, value, param_name) do
+    if Map.has_key?(acc, source) do
+      {:halt,
+       {:error,
+        "#{param_name} contains duplicate light source after normalization: #{Atom.to_string(source)}"}}
+    else
+      {:cont, {:ok, Map.put(acc, source, value)}}
+    end
+  end
 end

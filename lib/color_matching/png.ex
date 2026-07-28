@@ -53,6 +53,7 @@ defmodule ColorMatching.PNG do
   defp parse_header_dimensions(
          <<@png_signature, 13::big-unsigned-integer-size(32), @ihdr,
            width::big-unsigned-integer-size(32), height::big-unsigned-integer-size(32),
+           _bit_depth, _color_type, _compression_method, _filter_method, _interlace_method,
            _rest::binary>>
        ) do
     {:ok, width, height}
@@ -265,23 +266,58 @@ defmodule ColorMatching.PNG do
         output_bytes = IO.iodata_length(output)
         updated_total_output_bytes = total_output_bytes + output_bytes
 
-        if updated_total_output_bytes > max_output_bytes do
-          {:error, "PNG image data exceeds expected size"}
-        else
-          updated_acc = [output | acc]
-
-          case status do
-            :continue ->
-              inflate_until_finished(zstream, [], max_output_bytes, updated_total_output_bytes, updated_acc)
-
-            :finished ->
-              {:ok, updated_acc |> Enum.reverse() |> IO.iodata_to_binary()}
-          end
-        end
+        continue_or_finish(
+          status,
+          output,
+          zstream,
+          max_output_bytes,
+          updated_total_output_bytes,
+          acc
+        )
 
       {_need_dictionary, _adler32, _output} ->
         {:error, "PNG image data requires an unsupported dictionary"}
     end
+  end
+
+  defp continue_or_finish(
+         _status,
+         _output,
+         _zstream,
+         max_output_bytes,
+         updated_total_output_bytes,
+         _acc
+       )
+       when updated_total_output_bytes > max_output_bytes do
+    {:error, "PNG image data exceeds expected size"}
+  end
+
+  defp continue_or_finish(
+         :continue,
+         output,
+         zstream,
+         max_output_bytes,
+         updated_total_output_bytes,
+         acc
+       ) do
+    inflate_until_finished(
+      zstream,
+      [],
+      max_output_bytes,
+      updated_total_output_bytes,
+      [output | acc]
+    )
+  end
+
+  defp continue_or_finish(
+         :finished,
+         output,
+         _zstream,
+         _max_output_bytes,
+         _updated_total_output_bytes,
+         acc
+       ) do
+    {:ok, [output | acc] |> Enum.reverse() |> IO.iodata_to_binary()}
   end
 
   defp safe_inflate_end(zstream) do

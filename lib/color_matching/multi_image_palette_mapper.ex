@@ -94,7 +94,12 @@ defmodule ColorMatching.MultiImagePaletteMapper do
   defp normalize_source_image({source, png_binary}, {:ok, acc}) do
     case normalize_source_image_entry(source, png_binary) do
       {:ok, normalized_source} ->
-        {:cont, {:ok, Map.put(acc, normalized_source, png_binary)}}
+        put_normalized_entry(
+          acc,
+          normalized_source,
+          png_binary,
+          "source images contain duplicate light source after normalization"
+        )
 
       {:error, message} ->
         {:halt, {:error, message}}
@@ -121,7 +126,12 @@ defmodule ColorMatching.MultiImagePaletteMapper do
   defp normalize_weight({source, weight}, {:ok, acc}) do
     case normalize_weight_entry(source, weight) do
       {:ok, normalized_source, normalized_weight} ->
-        {:cont, {:ok, Map.put(acc, normalized_source, normalized_weight)}}
+        put_normalized_entry(
+          acc,
+          normalized_source,
+          normalized_weight,
+          "weights contain duplicate light source after normalization"
+        )
 
       {:error, message} ->
         {:halt, {:error, message}}
@@ -182,7 +192,8 @@ defmodule ColorMatching.MultiImagePaletteMapper do
       :ok
     else
       {:error,
-       "missing source images for weighted light sources: #{Enum.map_join(missing_sources, ", ", &Atom.to_string/1)}"}
+       "missing source images for weighted light sources: " <>
+         Enum.map_join(missing_sources, ", ", &Atom.to_string/1)}
     end
   end
 
@@ -231,8 +242,13 @@ defmodule ColorMatching.MultiImagePaletteMapper do
         {:ok, first_image.width, first_image.height}
 
       {source, image} ->
+        first_label = Atom.to_string(first_source)
+        source_label = Atom.to_string(source)
+
         {:error,
-         "source images must all have the same dimensions; #{Atom.to_string(source)} is #{image.width}x#{image.height} but #{Atom.to_string(first_source)} is #{first_image.width}x#{first_image.height}"}
+         "source images must all have the same dimensions; " <>
+           "#{source_label} is #{image.width}x#{image.height} but " <>
+           "#{first_label} is #{first_image.width}x#{first_image.height}"}
     end
   end
 
@@ -281,7 +297,8 @@ defmodule ColorMatching.MultiImagePaletteMapper do
 
           {:halt,
            {:error,
-            "no eligible palette color for output pixel (#{x}, #{y}); all candidates were excluded for the weighted light sources"}}
+            "no eligible palette color for output pixel (#{x}, #{y}); " <>
+              "all candidates were excluded for the weighted light sources"}}
       end
     end)
     |> case do
@@ -346,4 +363,12 @@ defmodule ColorMatching.MultiImagePaletteMapper do
 
   defp normalize_light_source(source),
     do: {:error, "unsupported light source: #{inspect(source)}"}
+
+  defp put_normalized_entry(acc, normalized_source, value, duplicate_prefix) do
+    if Map.has_key?(acc, normalized_source) do
+      {:halt, {:error, "#{duplicate_prefix}: #{Atom.to_string(normalized_source)}"}}
+    else
+      {:cont, {:ok, Map.put(acc, normalized_source, value)}}
+    end
+  end
 end

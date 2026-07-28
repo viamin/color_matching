@@ -165,6 +165,46 @@ defmodule ColorMatching.MultiImagePaletteMapperTest do
                "source images must all have the same dimensions; red is 2x1 but white is 1x1"
     end
 
+    test "rejects duplicate normalized light sources in source images" do
+      source_images = %{
+        "white" => grayscale_fixture!(1, 1, [0]),
+        " White " => grayscale_fixture!(1, 1, [255])
+      }
+
+      assert {:error, message} =
+               MultiImagePaletteMapper.map_to_png(
+                 source_images,
+                 [palette_color(1, "#FFFFFF")],
+                 printer_profile(),
+                 %{white: 1.0},
+                 response_vector_builder:
+                   response_vector_builder(%{
+                     "#FFFFFF" => vector("#FFFFFF", white: 1.0)
+                   })
+               )
+
+      assert message ==
+               "source images contain duplicate light source after normalization: white"
+    end
+
+    test "rejects duplicate normalized light sources in weights" do
+      source_images = %{white: grayscale_fixture!(1, 1, [0])}
+
+      assert {:error, message} =
+               MultiImagePaletteMapper.map_to_png(
+                 source_images,
+                 [palette_color(1, "#FFFFFF")],
+                 printer_profile(),
+                 %{"white" => 1.0, " White " => 0.5},
+                 response_vector_builder:
+                   response_vector_builder(%{
+                     "#FFFFFF" => vector("#FFFFFF", white: 1.0)
+                   })
+               )
+
+      assert message == "weights contain duplicate light source after normalization: white"
+    end
+
     test "maps larger images without relying on linear-time pixel indexing" do
       pixels = Enum.to_list(0..255)
 
