@@ -249,9 +249,11 @@ defmodule ColorMatching.PNG do
 
     try do
       :ok = :zlib.inflateInit(zstream)
+
       with {:ok, outputs, total_output_bytes} <-
              inflate_chunks(zstream, chunks, max_output_bytes, [], 0),
-           {:ok, outputs} <- drain_inflater(zstream, outputs, total_output_bytes, max_output_bytes) do
+           {:ok, outputs} <-
+             drain_inflater(zstream, outputs, total_output_bytes, max_output_bytes) do
         {:ok, outputs |> Enum.reverse() |> IO.iodata_to_binary()}
       end
     rescue
@@ -281,15 +283,15 @@ defmodule ColorMatching.PNG do
   end
 
   defp drain_inflater(zstream, acc, total_output_bytes, max_output_bytes) do
-    case :zlib.inflate(zstream, <<>>) do
-      output when IO.iodata_length(output) == 0 ->
-        {:ok, acc}
+    output = :zlib.inflate(zstream, <<>>)
 
-      output ->
-        with {:ok, acc, total_output_bytes} <-
-               append_inflated_output(output, acc, total_output_bytes, max_output_bytes) do
-          drain_inflater(zstream, acc, total_output_bytes, max_output_bytes)
-        end
+    with false <- IO.iodata_length(output) == 0,
+         {:ok, acc, total_output_bytes} <-
+           append_inflated_output(output, acc, total_output_bytes, max_output_bytes) do
+      drain_inflater(zstream, acc, total_output_bytes, max_output_bytes)
+    else
+      true -> {:ok, acc}
+      {:error, _reason} = error -> error
     end
   end
 
