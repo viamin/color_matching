@@ -286,18 +286,25 @@ defmodule ColorMatching.PNG do
 
   defp reconstruct_row(filtered_row, bytes_per_pixel, predictor_fun) do
     filtered_row
-    |> :binary.bin_to_list()
-    |> do_reconstruct_row(bytes_per_pixel, predictor_fun, 0, [])
+    |> do_reconstruct_row(bytes_per_pixel, predictor_fun, 0, [], [])
     |> Enum.reverse()
     |> IO.iodata_to_binary()
   end
 
-  defp do_reconstruct_row([], _bytes_per_pixel, _predictor_fun, _index, acc), do: acc
+  defp do_reconstruct_row(<<>>, _bytes_per_pixel, _predictor_fun, _index, acc, _left_bytes),
+    do: acc
 
-  defp do_reconstruct_row([filtered_byte | rest], bytes_per_pixel, predictor_fun, index, acc) do
+  defp do_reconstruct_row(
+         <<filtered_byte, rest::binary>>,
+         bytes_per_pixel,
+         predictor_fun,
+         index,
+         acc,
+         left_bytes
+       ) do
     left =
       if index >= bytes_per_pixel do
-        Enum.at(acc, bytes_per_pixel - 1)
+        hd(left_bytes)
       else
         0
       end
@@ -305,7 +312,23 @@ defmodule ColorMatching.PNG do
     predicted = predictor_fun.(index, left)
     reconstructed_byte = rem(filtered_byte + predicted, 256)
 
-    do_reconstruct_row(rest, bytes_per_pixel, predictor_fun, index + 1, [reconstructed_byte | acc])
+    do_reconstruct_row(
+      rest,
+      bytes_per_pixel,
+      predictor_fun,
+      index + 1,
+      [reconstructed_byte | acc],
+      update_left_bytes(left_bytes, reconstructed_byte, bytes_per_pixel)
+    )
+  end
+
+  defp update_left_bytes(left_bytes, reconstructed_byte, bytes_per_pixel)
+       when length(left_bytes) < bytes_per_pixel do
+    left_bytes ++ [reconstructed_byte]
+  end
+
+  defp update_left_bytes([_oldest | rest], reconstructed_byte, _bytes_per_pixel) do
+    rest ++ [reconstructed_byte]
   end
 
   defp paeth_predictor(left, up, up_left) do
