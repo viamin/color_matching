@@ -38,6 +38,10 @@ defmodule ColorMatchingWeb.MultiImageMappingController do
 
   alias ColorMatching.{MultiImagePaletteMapper, Persistence}
 
+  @max_image_base64_bytes 8_000_000
+  @max_image_pixels 4_000_000
+  @png_signature <<137, 80, 78, 71, 13, 10, 26, 10>>
+
   def create(conn, params) do
     with {:ok, palette_id} <- require_integer(params, "palette_id"),
          {:ok, printer_profile_id} <- require_integer(params, "printer_profile_id"),
@@ -124,11 +128,48 @@ defmodule ColorMatchingWeb.MultiImageMappingController do
   end
 
   defp decode_image(key, value) when is_binary(value) do
+    with :ok <- validate_base64_size(key, value),
+         {:ok, binary} <- decode_base64_image(key, value),
+         :ok <- validate_png_header(key, binary) do
+      {:ok, binary}
+    end
+  end
+
+  defp decode_image(key, _value), do: {:error, "images[#{key}] must be a base64-encoded string"}
+
+  defp validate_base64_size(key, value) do
+    if byte_size(value) <= @max_image_base64_bytes do
+      :ok
+    else
+      {:error, "images[#{key}] exceeds the maximum allowed upload size"}
+    end
+  end
+
+  defp decode_base64_image(key, value) do
     case Base.decode64(value, padding: false) do
       {:ok, binary} -> {:ok, binary}
       :error -> {:error, "images[#{key}] is not valid base64"}
     end
   end
 
-  defp decode_image(key, _value), do: {:error, "images[#{key}] must be a base64-encoded string"}
+  defp validate_png_header(
+         key,
+         <<@png_signature, 13::big-unsigned-integer-size(32), "IHDR",
+           width::big-unsigned-integer-size(32), height::big-unsigned-integer-size(32),
+           _rest::binary>>
+       ) do
+    if width * height <= @max_image_pixels do
+      :ok
+    else
+      {:error, "images[#{key}] exceeds the maximum allowed image area"}
+    end
+  end
+
+  defp validate_png_header(key, <<@png_signature, _rest::binary>>) do
+    {:error, "images[#{key}] has an invalid PNG header"}
+  end
+
+  defp validate_png_header(key, _binary) do
+    {:error, "images[#{key}] is not a valid PNG"}
+  end
 end
