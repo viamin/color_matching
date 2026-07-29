@@ -116,6 +116,19 @@ defmodule ColorMatching.CaptureTest do
     }
   end
 
+  defp judgment_payload(sheet, judgment) do
+    [first_pair | _rest] = sheet.pairs
+
+    %{
+      judgments: [
+        %{
+          pair_id: first_pair.pair_id,
+          judgment: judgment
+        }
+      ]
+    }
+  end
+
   describe "capture persistence" do
     test "creates a capture and stores encoded metadata" do
       sheet = create_sheet("CAPT-2345")
@@ -160,6 +173,147 @@ defmodule ColorMatching.CaptureTest do
 
       [first_measurement | _rest] = Persistence.list_capture_patch_measurements(capture.id)
       assert Jason.decode!(first_measurement.linear_rgb_median) |> length() == 3
+    end
+
+    test "appends judgment observations and derives the current finding from the latest one" do
+      sheet = create_sheet("CAPT-2347")
+      {:ok, first_capture} = Persistence.create_capture(sheet.lookup_code, capture_attrs())
+      pair_id = hd(sheet.pairs).pair_id
+
+      assert {:ok, [first_observation]} =
+               Persistence.upload_capture_judgments(
+                 first_capture.id,
+                 judgment_payload(sheet, "near_match")
+               )
+
+      first_finding = Persistence.get_pair_finding_by_pair_id(pair_id)
+
+      assert first_observation.capture_id == first_capture.id
+      assert first_observation.pair_id == pair_id
+      assert first_observation.judgment == "near_match"
+      assert first_finding.current_capture_id == first_capture.id
+      assert first_finding.current_judgment == "near_match"
+      assert first_finding.color_a_hex == "#FF0000"
+      assert first_finding.color_b_hex == "#00FFFF"
+
+      {:ok, second_capture} =
+        Persistence.create_capture(
+          sheet.lookup_code,
+          Map.put(capture_attrs(), :timestamp, "2026-07-28T12:35:56.123456Z")
+        )
+
+      assert {:ok, [second_observation]} =
+               Persistence.upload_capture_judgments(
+                 second_capture.id,
+                 judgment_payload(sheet, "match")
+               )
+
+      observations = Persistence.list_pair_finding_observations(pair_id)
+      latest_finding = Persistence.get_pair_finding_by_pair_id(pair_id)
+
+      assert Enum.map(observations, & &1.judgment) == ["near_match", "match"]
+      assert Enum.map(observations, & &1.capture_id) == [first_capture.id, second_capture.id]
+      assert latest_finding.current_capture_id == second_capture.id
+      assert latest_finding.current_judgment == "match"
+      assert latest_finding.current_observed_at == second_observation.observed_at
+    end
+
+    test "keeps the current finding on the latest observed capture when uploads arrive out of order" do
+      sheet = create_sheet("CAPT-2348")
+
+      {:ok, older_capture} = Persistence.create_capture(sheet.lookup_code, capture_attrs())
+
+      {:ok, newer_capture} =
+        Persistence.create_capture(
+          sheet.lookup_code,
+          Map.put(capture_attrs(), :timestamp, "2026-07-28T12:35:56.123456Z")
+        )
+
+      pair_id = hd(sheet.pairs).pair_id
+
+      assert {:ok, [newer_observation]} =
+               Persistence.upload_capture_judgments(
+                 newer_capture.id,
+                 judgment_payload(sheet, "match")
+               )
+
+      assert {:ok, [older_observation]} =
+               Persistence.upload_capture_judgments(
+                 older_capture.id,
+                 judgment_payload(sheet, "near_match")
+               )
+
+      observations = Persistence.list_pair_finding_observations(pair_id)
+      pair_finding = Persistence.get_pair_finding_by_pair_id(pair_id)
+
+      assert Enum.map(observations, & &1.capture_id) == [older_capture.id, newer_capture.id]
+
+      assert Enum.map(observations, & &1.observed_at) == [
+               older_observation.observed_at,
+               newer_observation.observed_at
+             ]
+
+      assert pair_finding.current_capture_id == newer_capture.id
+      assert pair_finding.current_judgment == "match"
+      assert pair_finding.current_observed_at == newer_observation.observed_at
+    end
+
+    test "uses insertion order to break ties when captures share the same observed_at" do
+      sheet = create_sheet("CAPT-235Q")
+      shared_timestamp = "2026-07-28T12:34:56.123456Z"
+
+      {:ok, first_capture} =
+        Persistence.create_capture(
+          sheet.lookup_code,
+          Map.put(capture_attrs(), :timestamp, shared_timestamp)
+        )
+
+      {:ok, second_capture} =
+        Persistence.create_capture(
+          sheet.lookup_code,
+          Map.put(capture_attrs(), :timestamp, shared_timestamp)
+        )
+
+      pair_id = hd(sheet.pairs).pair_id
+
+      assert {:ok, [first_observation]} =
+               Persistence.upload_capture_judgments(
+                 first_capture.id,
+                 judgment_payload(sheet, "near_match")
+               )
+
+      assert {:ok, [second_observation]} =
+               Persistence.upload_capture_judgments(
+                 second_capture.id,
+                 judgment_payload(sheet, "match")
+               )
+
+      pair_finding = Persistence.get_pair_finding_by_pair_id(pair_id)
+
+      assert first_observation.observed_at == second_observation.observed_at
+      assert first_observation.id < second_observation.id
+      assert pair_finding.current_capture_id == second_capture.id
+      assert pair_finding.current_judgment == "match"
+      assert pair_finding.current_observed_at == second_observation.observed_at
+    end
+
+    test "returns row-level errors for invalid judgments" do
+      sheet = create_sheet("CAPT-2349")
+      {:ok, capture} = Persistence.create_capture(sheet.lookup_code, capture_attrs())
+      pair_id = hd(sheet.pairs).pair_id
+
+      assert {:error, {:invalid_rows, invalid_rows}} =
+               Persistence.upload_capture_judgments(capture.id, %{
+                 judgments: [%{pair_id: pair_id, judgment: "close_enough"}]
+               })
+
+      assert invalid_rows == [
+               %{
+                 index: 0,
+                 identifier: pair_id,
+                 errors: %{judgment: ["is invalid"]}
+               }
+             ]
     end
   end
 end

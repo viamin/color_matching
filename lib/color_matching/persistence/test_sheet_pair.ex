@@ -20,7 +20,7 @@ defmodule ColorMatching.Persistence.TestSheetPair do
   use Ecto.Schema
   import Ecto.Changeset
 
-  alias ColorMatching.Persistence.TestSheet
+  alias ColorMatching.Persistence.{PairFinding, PairFindingObservation, TestSheet}
 
   @type t :: %__MODULE__{
           id: integer() | nil,
@@ -31,6 +31,9 @@ defmodule ColorMatching.Persistence.TestSheetPair do
           col: integer() | nil,
           color_a_hex: String.t() | nil,
           color_b_hex: String.t() | nil,
+          pair_finding: PairFinding.t() | Ecto.Association.NotLoaded.t(),
+          pair_finding_observations:
+            [PairFindingObservation.t()] | Ecto.Association.NotLoaded.t(),
           inserted_at: DateTime.t() | nil,
           updated_at: DateTime.t() | nil
         }
@@ -43,6 +46,8 @@ defmodule ColorMatching.Persistence.TestSheetPair do
     field(:color_b_hex, :string)
 
     belongs_to(:test_sheet, TestSheet)
+    has_one(:pair_finding, PairFinding)
+    has_many(:pair_finding_observations, PairFindingObservation)
 
     timestamps()
   end

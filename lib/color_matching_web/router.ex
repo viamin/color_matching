@@ -35,6 +35,7 @@ defmodule ColorMatchingWeb.Router do
     get "/test_sheets/:sheet_id/manifest", TestSheetController, :manifest
     post "/test_sheets/:sheet_id/captures", CaptureController, :create
     post "/captures/:capture_id/measurements", CaptureController, :upload_measurements
+    post "/captures/:capture_id/judgments", CaptureController, :upload_judgments
   end
 
   scope "/api", ColorMatchingWeb do
