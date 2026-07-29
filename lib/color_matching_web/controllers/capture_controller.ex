@@ -88,7 +88,9 @@ defmodule ColorMatchingWeb.CaptureController do
       {:error, {:invalid_rows, invalid_rows}} ->
         conn
         |> put_status(:unprocessable_entity)
-        |> json(%{errors: %{judgments: Enum.map(invalid_rows, &externalize_invalid_row(&1, :pair_id))}})
+        |> json(%{
+          errors: %{judgments: Enum.map(invalid_rows, &externalize_invalid_row(&1, :pair_id))}
+        })
     end
   end
 

@@ -7,9 +7,9 @@ defmodule ColorMatching.Persistence.Capture do
   import Ecto.Changeset
 
   alias ColorMatching.Persistence.{
-    PairFindingObservation,
     CapturePairScore,
     CapturePatchMeasurement,
+    PairFindingObservation,
     TestSheet
   }
 

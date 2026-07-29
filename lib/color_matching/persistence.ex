@@ -13,10 +13,10 @@ defmodule ColorMatching.Persistence do
     CaptureJudgmentUpload,
     CaptureUpload,
     IlluminantMeasurement,
-    Palette,
-    PaletteColor,
     PairFinding,
     PairFindingObservation,
+    Palette,
+    PaletteColor,
     PrinterProfile,
     TestSheet
   }

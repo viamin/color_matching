@@ -489,7 +489,9 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
     test "returns structured 404 JSON for an unknown capture", %{conn: conn} do
       response =
         conn
-        |> post(~p"/api/v1/captures/999999/judgments", %{judgments: [%{pair_id: "pair-1", judgment: "match"}]})
+        |> post(~p"/api/v1/captures/999999/judgments", %{
+          judgments: [%{pair_id: "pair-1", judgment: "match"}]
+        })
         |> json_response(404)
 
       assert response == %{"errors" => %{"detail" => "Capture not found"}}

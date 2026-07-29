@@ -4,7 +4,7 @@ defmodule ColorMatching.Persistence.CaptureJudgmentUpload do
   """
 
   import Ecto.Changeset, only: [add_error: 3]
-  import Ecto.Query, only: [from: 2]
+  import Ecto.Query, only: [from: 2, where: 3]
 
   alias ColorMatching.Persistence.{
     Capture,

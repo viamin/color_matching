@@ -74,9 +74,7 @@ defmodule ColorMatching.Persistence.TestSheet do
       preload_order: [asc: :row, asc: :col, asc: :id]
     )
 
-    has_many(:pair_finding_observations, PairFindingObservation,
-      foreign_key: :test_sheet_id
-    )
+    has_many(:pair_finding_observations, PairFindingObservation, foreign_key: :test_sheet_id)
 
     timestamps()
   end

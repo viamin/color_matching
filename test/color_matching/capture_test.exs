@@ -259,14 +259,20 @@ defmodule ColorMatching.CaptureTest do
     end
 
     test "uses insertion order to break ties when captures share the same observed_at" do
-      sheet = create_sheet("CAPT-2350")
+      sheet = create_sheet("CAPT-235Q")
       shared_timestamp = "2026-07-28T12:34:56.123456Z"
 
       {:ok, first_capture} =
-        Persistence.create_capture(sheet.lookup_code, Map.put(capture_attrs(), :timestamp, shared_timestamp))
+        Persistence.create_capture(
+          sheet.lookup_code,
+          Map.put(capture_attrs(), :timestamp, shared_timestamp)
+        )
 
       {:ok, second_capture} =
-        Persistence.create_capture(sheet.lookup_code, Map.put(capture_attrs(), :timestamp, shared_timestamp))
+        Persistence.create_capture(
+          sheet.lookup_code,
+          Map.put(capture_attrs(), :timestamp, shared_timestamp)
+        )
 
       pair_id = hd(sheet.pairs).pair_id
 
