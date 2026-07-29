@@ -224,22 +224,35 @@ defmodule ColorMatching.Persistence.CaptureJudgmentUpload do
   @spec maybe_update_current_finding(PairFinding.t(), PairFindingObservation.t()) ::
           {non_neg_integer(), nil}
   defp maybe_update_current_finding(pair_finding, observation) do
-    from(
-      current_finding in PairFinding,
-      where:
-        current_finding.id == ^pair_finding.id and
-          (current_finding.current_observed_at < ^observation.observed_at or
-             (current_finding.current_observed_at == ^observation.observed_at and
-                current_finding.current_capture_id == ^observation.capture_id)),
-      update: [
-        set: [
-          current_judgment: ^observation.judgment,
-          current_capture_id: ^observation.capture_id,
-          current_observed_at: ^observation.observed_at
+    if latest_observation?(pair_finding.id, observation) do
+      from(
+        current_finding in PairFinding,
+        where: current_finding.id == ^pair_finding.id,
+        update: [
+          set: [
+            current_judgment: ^observation.judgment,
+            current_capture_id: ^observation.capture_id,
+            current_observed_at: ^observation.observed_at
+          ]
         ]
-      ]
+      )
+      |> Repo.update_all([])
+    else
+      {0, nil}
+    end
+  end
+
+  @spec latest_observation?(integer(), PairFindingObservation.t()) :: boolean()
+  defp latest_observation?(pair_finding_id, observation) do
+    PairFindingObservation
+    |> where([existing], existing.pair_finding_id == ^pair_finding_id)
+    |> where(
+      [existing],
+      existing.observed_at > ^observation.observed_at or
+        (existing.observed_at == ^observation.observed_at and existing.id > ^observation.id)
     )
-    |> Repo.update_all([])
+    |> Repo.exists?()
+    |> Kernel.not()
   end
 
   @spec pair_finding_attrs(map()) :: map()

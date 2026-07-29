@@ -258,6 +258,39 @@ defmodule ColorMatching.CaptureTest do
       assert pair_finding.current_observed_at == newer_observation.observed_at
     end
 
+    test "uses insertion order to break ties when captures share the same observed_at" do
+      sheet = create_sheet("CAPT-2350")
+      shared_timestamp = "2026-07-28T12:34:56.123456Z"
+
+      {:ok, first_capture} =
+        Persistence.create_capture(sheet.lookup_code, Map.put(capture_attrs(), :timestamp, shared_timestamp))
+
+      {:ok, second_capture} =
+        Persistence.create_capture(sheet.lookup_code, Map.put(capture_attrs(), :timestamp, shared_timestamp))
+
+      pair_id = hd(sheet.pairs).pair_id
+
+      assert {:ok, [first_observation]} =
+               Persistence.upload_capture_judgments(
+                 first_capture.id,
+                 judgment_payload(sheet, "near_match")
+               )
+
+      assert {:ok, [second_observation]} =
+               Persistence.upload_capture_judgments(
+                 second_capture.id,
+                 judgment_payload(sheet, "match")
+               )
+
+      pair_finding = Persistence.get_pair_finding_by_pair_id(pair_id)
+
+      assert first_observation.observed_at == second_observation.observed_at
+      assert first_observation.id < second_observation.id
+      assert pair_finding.current_capture_id == second_capture.id
+      assert pair_finding.current_judgment == "match"
+      assert pair_finding.current_observed_at == second_observation.observed_at
+    end
+
     test "returns row-level errors for invalid judgments" do
       sheet = create_sheet("CAPT-2349")
       {:ok, capture} = Persistence.create_capture(sheet.lookup_code, capture_attrs())
