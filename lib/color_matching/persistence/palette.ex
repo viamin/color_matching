@@ -32,7 +32,15 @@ defmodule ColorMatching.Persistence.Palette do
     |> cast(attrs, [:name, :is_preset])
     |> validate_required([:name])
     |> cast_assoc(:colors, with: &PaletteColor.changeset/2)
-    |> reorder_assoc(:colors)
+    |> reorder_colors_assoc()
     |> unique_constraint(:name)
+  end
+
+  defp reorder_colors_assoc(changeset) do
+    if is_list(get_change(changeset, :colors)) do
+      reorder_assoc(changeset, :colors)
+    else
+      changeset
+    end
   end
 end
