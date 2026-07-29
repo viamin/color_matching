@@ -116,7 +116,7 @@ defmodule ColorMatching.CaptureTest do
     }
   end
 
-  defp judgment_payload(sheet, judgment \\ "near_match") do
+  defp judgment_payload(sheet, judgment) do
     [first_pair | _rest] = sheet.pairs
 
     %{
@@ -218,8 +218,48 @@ defmodule ColorMatching.CaptureTest do
       assert latest_finding.current_observed_at == second_observation.observed_at
     end
 
-    test "returns row-level errors for invalid judgments" do
+    test "keeps the current finding on the latest observed capture when uploads arrive out of order" do
       sheet = create_sheet("CAPT-2348")
+
+      {:ok, older_capture} = Persistence.create_capture(sheet.lookup_code, capture_attrs())
+
+      {:ok, newer_capture} =
+        Persistence.create_capture(
+          sheet.lookup_code,
+          Map.put(capture_attrs(), :timestamp, "2026-07-28T12:35:56.123456Z")
+        )
+
+      pair_id = hd(sheet.pairs).pair_id
+
+      assert {:ok, [newer_observation]} =
+               Persistence.upload_capture_judgments(
+                 newer_capture.id,
+                 judgment_payload(sheet, "match")
+               )
+
+      assert {:ok, [older_observation]} =
+               Persistence.upload_capture_judgments(
+                 older_capture.id,
+                 judgment_payload(sheet, "near_match")
+               )
+
+      observations = Persistence.list_pair_finding_observations(pair_id)
+      pair_finding = Persistence.get_pair_finding_by_pair_id(pair_id)
+
+      assert Enum.map(observations, & &1.capture_id) == [older_capture.id, newer_capture.id]
+
+      assert Enum.map(observations, & &1.observed_at) == [
+               older_observation.observed_at,
+               newer_observation.observed_at
+             ]
+
+      assert pair_finding.current_capture_id == newer_capture.id
+      assert pair_finding.current_judgment == "match"
+      assert pair_finding.current_observed_at == newer_observation.observed_at
+    end
+
+    test "returns row-level errors for invalid judgments" do
+      sheet = create_sheet("CAPT-2349")
       {:ok, capture} = Persistence.create_capture(sheet.lookup_code, capture_attrs())
       pair_id = hd(sheet.pairs).pair_id
 

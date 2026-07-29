@@ -37,11 +37,17 @@ defmodule ColorMatching.Persistence.CaptureJudgmentUpload do
           {:ok, [PairFindingObservation.t()]}
           | {:error, {:invalid_request, invalid_request()}}
           | {:error, {:invalid_rows, [invalid_row()]}}
-  def upload(%Capture{id: capture_id, test_sheet_id: test_sheet_id}, attrs)
-      when is_integer(capture_id) and is_integer(test_sheet_id) and is_map(attrs) do
+  def upload(
+        %Capture{id: capture_id, test_sheet_id: test_sheet_id, timestamp: observed_at},
+        attrs
+      )
+      when is_integer(capture_id) and is_integer(test_sheet_id) and
+             is_struct(observed_at, DateTime) and
+             is_map(attrs) do
     with {:ok, judgments} <- fetch_judgments(attrs),
          pair_context_by_id <- pair_context_by_id(test_sheet_id),
-         prepared_judgments <- prepare_judgments(judgments, capture_id, pair_context_by_id),
+         prepared_judgments <-
+           prepare_judgments(judgments, capture_id, observed_at, pair_context_by_id),
          [] <- collect_invalid_rows(prepared_judgments),
          {:ok, observations} <- persist(prepared_judgments) do
       {:ok, observations}
@@ -92,11 +98,15 @@ defmodule ColorMatching.Persistence.CaptureJudgmentUpload do
     |> Map.new(&{&1.pair_id, &1})
   end
 
-  @spec prepare_judgments([map()], integer(), %{optional(String.t()) => pair_context()}) :: [map()]
-  defp prepare_judgments(judgments, capture_id, pair_context_by_id) do
+  @spec prepare_judgments([map()], integer(), DateTime.t(), %{
+          optional(String.t()) => pair_context()
+        }) ::
+          [map()]
+  defp prepare_judgments(judgments, capture_id, observed_at, pair_context_by_id) do
     Enum.with_index(judgments)
     |> Enum.map(fn {judgment_attrs, index} ->
-      attrs = normalize_judgment_attrs(judgment_attrs, capture_id, pair_context_by_id)
+      attrs =
+        normalize_judgment_attrs(judgment_attrs, capture_id, observed_at, pair_context_by_id)
 
       changeset =
         %PairFindingObservation{}
@@ -107,8 +117,13 @@ defmodule ColorMatching.Persistence.CaptureJudgmentUpload do
     end)
   end
 
-  @spec normalize_judgment_attrs(map(), integer(), %{optional(String.t()) => pair_context()}) :: map()
-  defp normalize_judgment_attrs(attrs, capture_id, pair_context_by_id) do
+  @spec normalize_judgment_attrs(
+          map(),
+          integer(),
+          DateTime.t(),
+          %{optional(String.t()) => pair_context()}
+        ) :: map()
+  defp normalize_judgment_attrs(attrs, capture_id, observed_at, pair_context_by_id) do
     pair_id = fetch_value(attrs, :pair_id)
     pair_context = Map.get(pair_context_by_id, pair_id, %{})
 
@@ -121,7 +136,7 @@ defmodule ColorMatching.Persistence.CaptureJudgmentUpload do
       color_a_hex: pair_context[:color_a_hex],
       color_b_hex: pair_context[:color_b_hex],
       judgment: fetch_value(attrs, :judgment),
-      observed_at: DateTime.utc_now(:microsecond)
+      observed_at: observed_at
     }
   end
 
@@ -183,41 +198,63 @@ defmodule ColorMatching.Persistence.CaptureJudgmentUpload do
       |> then(&PairFindingObservation.changeset(%PairFindingObservation{}, &1))
       |> Repo.insert()
 
-    pair_finding
-    |> PairFinding.changeset(%{
-      current_judgment: observation.judgment,
-      current_capture_id: observation.capture_id,
-      current_observed_at: observation.observed_at
-    })
-    |> Repo.update!()
+    maybe_update_current_finding(pair_finding, observation)
 
     observation
   end
 
   @spec find_or_create_pair_finding(map()) :: PairFinding.t()
   defp find_or_create_pair_finding(attrs) do
-    case Repo.get_by(PairFinding, test_sheet_pair_id: attrs[:test_sheet_pair_id]) do
-      %PairFinding{} = pair_finding ->
+    attrs
+    |> pair_finding_attrs()
+    |> then(fn pair_finding_attrs ->
+      %PairFinding{}
+      |> PairFinding.changeset(pair_finding_attrs)
+      |> Repo.insert(on_conflict: :nothing, conflict_target: :test_sheet_pair_id)
+    end)
+    |> case do
+      {:ok, %PairFinding{id: id} = pair_finding} when not is_nil(id) ->
         pair_finding
 
-      nil ->
-        {:ok, pair_finding} =
-          %PairFinding{}
-          |> PairFinding.changeset(%{
-            test_sheet_id: attrs[:test_sheet_id],
-            test_sheet_pair_id: attrs[:test_sheet_pair_id],
-            printer_profile_id: attrs[:printer_profile_id],
-            pair_id: attrs[:pair_id],
-            color_a_hex: attrs[:color_a_hex],
-            color_b_hex: attrs[:color_b_hex],
-            current_judgment: attrs[:judgment],
-            current_capture_id: attrs[:capture_id],
-            current_observed_at: attrs[:observed_at]
-          })
-          |> Repo.insert()
-
-        pair_finding
+      {:ok, %PairFinding{}} ->
+        Repo.get_by!(PairFinding, test_sheet_pair_id: attrs[:test_sheet_pair_id])
     end
+  end
+
+  @spec maybe_update_current_finding(PairFinding.t(), PairFindingObservation.t()) ::
+          {non_neg_integer(), nil}
+  defp maybe_update_current_finding(pair_finding, observation) do
+    from(
+      current_finding in PairFinding,
+      where:
+        current_finding.id == ^pair_finding.id and
+          (current_finding.current_observed_at < ^observation.observed_at or
+             (current_finding.current_observed_at == ^observation.observed_at and
+                current_finding.current_capture_id == ^observation.capture_id)),
+      update: [
+        set: [
+          current_judgment: ^observation.judgment,
+          current_capture_id: ^observation.capture_id,
+          current_observed_at: ^observation.observed_at
+        ]
+      ]
+    )
+    |> Repo.update_all([])
+  end
+
+  @spec pair_finding_attrs(map()) :: map()
+  defp pair_finding_attrs(attrs) do
+    %{
+      test_sheet_id: attrs[:test_sheet_id],
+      test_sheet_pair_id: attrs[:test_sheet_pair_id],
+      printer_profile_id: attrs[:printer_profile_id],
+      pair_id: attrs[:pair_id],
+      color_a_hex: attrs[:color_a_hex],
+      color_b_hex: attrs[:color_b_hex],
+      current_judgment: attrs[:judgment],
+      current_capture_id: attrs[:capture_id],
+      current_observed_at: attrs[:observed_at]
+    }
   end
 
   @spec fetch_value(map(), atom()) :: term()
