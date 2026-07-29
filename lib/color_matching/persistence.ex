@@ -9,6 +9,8 @@ defmodule ColorMatching.Persistence do
   alias ColorMatching.PaletteStorage
 
   alias ColorMatching.Persistence.{
+    Capture,
+    CaptureUpload,
     IlluminantMeasurement,
     Palette,
     PaletteColor,
@@ -25,10 +27,16 @@ defmodule ColorMatching.Persistence do
           optional(:colors) => [map()]
         }
   @type measurement_error_map :: %{optional(atom()) => [String.t()]}
+  @type capture_upload_error_map :: %{optional(atom()) => [String.t()]}
   @type invalid_bulk_measurement_row :: %{
           index: non_neg_integer(),
           color_id: term(),
           errors: measurement_error_map()
+        }
+  @type invalid_capture_upload_row :: %{
+          index: non_neg_integer(),
+          identifier: term(),
+          errors: capture_upload_error_map()
         }
   @spec list_palettes() :: [Palette.t()]
   def list_palettes do
@@ -165,6 +173,81 @@ defmodule ColorMatching.Persistence do
     %TestSheet{}
     |> TestSheet.changeset(attrs)
     |> Repo.insert()
+  end
+
+  # ---------------------------------------------------------------------------
+  # Capture sessions
+  # ---------------------------------------------------------------------------
+
+  @spec create_capture(String.t(), map()) :: {:ok, Capture.t()} | {:error, term()}
+  def create_capture(sheet_lookup_code, attrs)
+      when is_binary(sheet_lookup_code) and is_map(attrs) do
+    case Repo.get_by(TestSheet, lookup_code: sheet_lookup_code) do
+      nil ->
+        {:error, :test_sheet_not_found}
+
+      %TestSheet{} = test_sheet ->
+        attrs =
+          attrs
+          |> normalize_capture_attrs()
+          |> Map.put(:test_sheet_id, test_sheet.id)
+
+        %Capture{}
+        |> Capture.changeset(attrs)
+        |> Repo.insert()
+    end
+  end
+
+  @spec get_capture(integer()) :: Capture.t() | nil
+  def get_capture(id) do
+    case Repo.get(Capture, id) do
+      %Capture{} = capture -> Repo.preload(capture, :test_sheet)
+      nil -> nil
+    end
+  end
+
+  @spec list_capture_patch_measurements(integer()) :: [
+          ColorMatching.Persistence.CapturePatchMeasurement.t()
+        ]
+  def list_capture_patch_measurements(capture_id) do
+    ColorMatching.Persistence.CapturePatchMeasurement
+    |> where([measurement], measurement.capture_id == ^capture_id)
+    |> order_by([measurement], asc: measurement.patch_id)
+    |> Repo.all()
+  end
+
+  @spec list_capture_pair_scores(integer()) :: [ColorMatching.Persistence.CapturePairScore.t()]
+  def list_capture_pair_scores(capture_id) do
+    ColorMatching.Persistence.CapturePairScore
+    |> where([pair_score], pair_score.capture_id == ^capture_id)
+    |> order_by([pair_score], asc: pair_score.pair_id, asc: pair_score.algorithm_version)
+    |> Repo.all()
+  end
+
+  @spec upload_capture_measurements(integer(), map()) ::
+          {:ok,
+           %{
+             measurements: [ColorMatching.Persistence.CapturePatchMeasurement.t()],
+             pair_scores: [ColorMatching.Persistence.CapturePairScore.t()]
+           }}
+          | {:error, :capture_not_found}
+          | {:error, {:invalid_request, capture_upload_error_map()}}
+          | {:error,
+             {:invalid_rows,
+              %{
+                measurements: [invalid_capture_upload_row()],
+                pair_scores: [invalid_capture_upload_row()]
+              }}}
+  def upload_capture_measurements(capture_id, attrs)
+      when is_integer(capture_id) and is_map(attrs) do
+    case get_capture(capture_id) do
+      nil ->
+        {:error, :capture_not_found}
+
+      %Capture{test_sheet_id: test_sheet_id} = capture ->
+        valid_pair_ids = valid_pair_ids_for_sheet(test_sheet_id)
+        CaptureUpload.upload(capture, attrs, valid_pair_ids)
+    end
   end
 
   @spec preload_test_sheet_associations(TestSheet.t() | [TestSheet.t()]) ::
@@ -561,6 +644,61 @@ defmodule ColorMatching.Persistence do
     |> normalize_measurement_key(:test_run_id, [:test_run_id, "test_run_id"])
   end
 
+  @spec normalize_capture_attrs(map()) :: map()
+  defp normalize_capture_attrs(attrs) do
+    attrs
+    |> normalize_capture_key(:device_model)
+    |> normalize_capture_key(:lens)
+    |> normalize_capture_key(:exposure_duration)
+    |> normalize_capture_key(:iso)
+    |> normalize_capture_key(:focus_lens_position)
+    |> normalize_capture_key(:image_width)
+    |> normalize_capture_key(:image_height)
+    |> normalize_capture_key(:app_version)
+    |> normalize_capture_key(:timestamp)
+    |> normalize_capture_key(:detected_marker_count)
+    |> normalize_capture_key(:blur_score)
+    |> normalize_capture_json_key(:white_balance_gains)
+    |> normalize_capture_json_key(:rejection_reasons)
+    |> Map.take([
+      :device_model,
+      :lens,
+      :exposure_duration,
+      :iso,
+      :focus_lens_position,
+      :image_width,
+      :image_height,
+      :app_version,
+      :timestamp,
+      :detected_marker_count,
+      :blur_score,
+      :white_balance_gains,
+      :rejection_reasons
+    ])
+  end
+
+  @spec normalize_capture_key(map(), atom()) :: map()
+  defp normalize_capture_key(attrs, key) do
+    case first_present_value(attrs, [key, Atom.to_string(key)]) do
+      nil -> attrs
+      value -> Map.put(attrs, key, value)
+    end
+  end
+
+  @spec normalize_capture_json_key(map(), atom()) :: map()
+  defp normalize_capture_json_key(attrs, key) do
+    case first_present_value(attrs, [key, Atom.to_string(key)]) do
+      nil ->
+        attrs
+
+      value when is_binary(value) ->
+        Map.put(attrs, key, value)
+
+      value ->
+        Map.put(attrs, key, Jason.encode!(value))
+    end
+  end
+
   @spec normalize_measurement_key(map(), atom(), [atom() | String.t()]) :: map()
   defp normalize_measurement_key(attrs, canonical_key, source_keys) do
     case first_present_value(attrs, source_keys) do
@@ -572,6 +710,15 @@ defmodule ColorMatching.Persistence do
         |> Map.drop(source_keys)
         |> Map.put(canonical_key, value)
     end
+  end
+
+  @spec valid_pair_ids_for_sheet(integer()) :: MapSet.t(String.t())
+  defp valid_pair_ids_for_sheet(test_sheet_id) do
+    ColorMatching.Persistence.TestSheetPair
+    |> where([pair], pair.test_sheet_id == ^test_sheet_id)
+    |> select([pair], pair.pair_id)
+    |> Repo.all()
+    |> MapSet.new()
   end
 
   @spec first_present_value(map(), [atom() | String.t()]) :: term() | nil
