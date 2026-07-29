@@ -85,8 +85,8 @@ defmodule ColorMatchingWeb.CaptureController do
   @spec externalize_invalid_row(map(), atom()) :: map()
   defp externalize_invalid_row(invalid_row, identifier_key) do
     %{
-      index: invalid_row.index,
       identifier_key => invalid_row.identifier,
+      index: invalid_row.index,
       errors: invalid_row.errors
     }
   end

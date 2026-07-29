@@ -30,7 +30,8 @@ defmodule ColorMatching.Persistence.CaptureUpload do
   @type invalid_request :: %{optional(atom()) => [String.t()]}
 
   @spec upload(Capture.t(), map(), MapSet.t(String.t())) ::
-          {:ok, %{measurements: [CapturePatchMeasurement.t()], pair_scores: [CapturePairScore.t()]}}
+          {:ok,
+           %{measurements: [CapturePatchMeasurement.t()], pair_scores: [CapturePairScore.t()]}}
           | {:error, {:invalid_request, invalid_request()}}
           | {:error, {:invalid_rows, invalid_rows()}}
   def upload(%Capture{id: capture_id}, attrs, valid_pair_ids) when is_integer(capture_id) do
@@ -66,7 +67,7 @@ defmodule ColorMatching.Persistence.CaptureUpload do
   end
 
   @spec validate_list_field(map(), atom(), term()) :: map()
-  defp validate_list_field(errors, field, nil), do: errors
+  defp validate_list_field(errors, _field, nil), do: errors
 
   defp validate_list_field(errors, field, values) when is_list(values) do
     if Enum.all?(values, &is_map/1) do
@@ -163,10 +164,22 @@ defmodule ColorMatching.Persistence.CaptureUpload do
   end
 
   @spec encode_rgb_payload(term()) :: String.t() | term()
+  defp encode_rgb_payload(value) when is_binary(value) do
+    case Jason.decode(value) do
+      {:ok, decoded} ->
+        case normalize_rgb(decoded) do
+          {:ok, rgb} -> Jason.encode!(rgb)
+          :error -> decoded
+        end
+
+      {:error, _reason} ->
+        value
+    end
+  end
+
   defp encode_rgb_payload(value) do
-    with {:ok, rgb} <- normalize_rgb(value) do
-      Jason.encode!(rgb)
-    else
+    case normalize_rgb(value) do
+      {:ok, rgb} -> Jason.encode!(rgb)
       :error -> value
     end
   end
@@ -187,7 +200,8 @@ defmodule ColorMatching.Persistence.CaptureUpload do
   defp normalize_rgb(_value), do: :error
 
   @spec persist([map()], [map()]) ::
-          {:ok, %{measurements: [CapturePatchMeasurement.t()], pair_scores: [CapturePairScore.t()]}}
+          {:ok,
+           %{measurements: [CapturePatchMeasurement.t()], pair_scores: [CapturePairScore.t()]}}
           | {:error, {:invalid_rows, invalid_rows()}}
   defp persist(prepared_measurements, prepared_pair_scores) do
     invalid_rows = %{
@@ -221,7 +235,8 @@ defmodule ColorMatching.Persistence.CaptureUpload do
   end
 
   @spec do_persist([map()], [map()]) ::
-          {:ok, %{measurements: [CapturePatchMeasurement.t()], pair_scores: [CapturePairScore.t()]}}
+          {:ok,
+           %{measurements: [CapturePatchMeasurement.t()], pair_scores: [CapturePairScore.t()]}}
   defp do_persist(prepared_measurements, prepared_pair_scores) do
     capture_id = capture_id_from_rows(prepared_measurements, prepared_pair_scores)
 

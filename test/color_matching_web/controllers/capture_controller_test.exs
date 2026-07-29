@@ -296,5 +296,98 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
                }
              }
     end
+
+    test "returns validation errors for malformed RGB JSON strings", %{conn: conn} do
+      sheet = create_sheet("CAPA-235A")
+
+      capture_id =
+        conn
+        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> json_response(201)
+        |> Map.fetch!("capture_id")
+
+      conn = recycle(conn)
+
+      patch_id = hd(sheet.pairs).pair_id
+
+      response =
+        conn
+        |> post(~p"/api/v1/captures/#{capture_id}/measurements", %{
+          measurements: [
+            %{
+              patch_id: patch_id,
+              linear_rgb_median: "[0.12, 0.34]",
+              normalized_linear_rgb_median: [0.2, 0.3, 0.4],
+              sample_count: 1200,
+              clipping_fraction: 0.01,
+              mean: "{\"r\":0.13}",
+              standard_deviation: [0.01, 0.02, 0.03]
+            }
+          ]
+        })
+        |> json_response(422)
+
+      assert response == %{
+               "errors" => %{
+                 "measurements" => [
+                   %{
+                     "index" => 0,
+                     "patch_id" => patch_id,
+                     "errors" => %{
+                       "linear_rgb_median" => ["is invalid"],
+                       "mean" => ["is invalid"]
+                     }
+                   }
+                 ],
+                 "pair_scores" => []
+               }
+             }
+    end
+
+    test "accepts RGB JSON strings that normalize to three numeric channels", %{conn: conn} do
+      sheet = create_sheet("CAPA-235B")
+
+      capture_id =
+        conn
+        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> json_response(201)
+        |> Map.fetch!("capture_id")
+
+      conn = recycle(conn)
+
+      [first_pair, second_pair] = sheet.pairs
+
+      response =
+        conn
+        |> post(~p"/api/v1/captures/#{capture_id}/measurements", %{
+          measurements: [
+            %{
+              patch_id: first_pair.pair_id,
+              linear_rgb_median: "[0.12, 0.34, 0.56]",
+              normalized_linear_rgb_median: "{\"r\":0.2,\"g\":0.3,\"b\":0.4}",
+              sample_count: 1200,
+              clipping_fraction: 0.01,
+              mean: "{\"r\":0.13,\"g\":0.35,\"b\":0.57}",
+              standard_deviation: [0.01, 0.02, 0.03]
+            }
+          ],
+          pair_scores: [
+            %{pair_id: second_pair.pair_id, algorithm_version: "ios-score/v1", score: 0.87}
+          ]
+        })
+        |> json_response(200)
+
+      assert response == %{
+               "capture_id" => capture_id,
+               "measurement_count" => 1,
+               "pair_score_count" => 1
+             }
+
+      [measurement] = Persistence.list_capture_patch_measurements(capture_id)
+
+      assert Jason.decode!(measurement.linear_rgb_median) == [0.12, 0.34, 0.56]
+      assert Jason.decode!(measurement.normalized_linear_rgb_median) == [0.2, 0.3, 0.4]
+      assert Jason.decode!(measurement.mean) == [0.13, 0.35, 0.57]
+    end
   end
 end

@@ -206,7 +206,9 @@ defmodule ColorMatching.Persistence do
     end
   end
 
-  @spec list_capture_patch_measurements(integer()) :: [ColorMatching.Persistence.CapturePatchMeasurement.t()]
+  @spec list_capture_patch_measurements(integer()) :: [
+          ColorMatching.Persistence.CapturePatchMeasurement.t()
+        ]
   def list_capture_patch_measurements(capture_id) do
     ColorMatching.Persistence.CapturePatchMeasurement
     |> where([measurement], measurement.capture_id == ^capture_id)
@@ -658,6 +660,21 @@ defmodule ColorMatching.Persistence do
     |> normalize_capture_key(:blur_score)
     |> normalize_capture_json_key(:white_balance_gains)
     |> normalize_capture_json_key(:rejection_reasons)
+    |> Map.take([
+      :device_model,
+      :lens,
+      :exposure_duration,
+      :iso,
+      :focus_lens_position,
+      :image_width,
+      :image_height,
+      :app_version,
+      :timestamp,
+      :detected_marker_count,
+      :blur_score,
+      :white_balance_gains,
+      :rejection_reasons
+    ])
   end
 
   @spec normalize_capture_key(map(), atom()) :: map()
