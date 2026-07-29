@@ -129,11 +129,13 @@ defmodule ColorMatching.CaptureTest do
       assert loaded_capture.lens == "wide"
       assert loaded_capture.image_width == 3024
       assert loaded_capture.image_height == 4032
+
       assert Jason.decode!(loaded_capture.white_balance_gains) == %{
                "b" => 1.9,
                "g" => 1.0,
                "r" => 2.1
              }
+
       assert Jason.decode!(loaded_capture.rejection_reasons) == ["none"]
     end
 
