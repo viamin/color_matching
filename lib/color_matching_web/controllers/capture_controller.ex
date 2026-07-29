@@ -31,6 +31,14 @@ defmodule ColorMatchingWeb.CaptureController do
     end
   end
 
+  @spec upload_judgments(Plug.Conn.t(), map()) :: Plug.Conn.t()
+  def upload_judgments(conn, %{"capture_id" => capture_id} = params) do
+    case Ecto.Type.cast(:integer, capture_id) do
+      {:ok, integer_capture_id} -> handle_judgment_upload(conn, integer_capture_id, params)
+      :error -> render_capture_not_found(conn)
+    end
+  end
+
   @spec handle_measurement_upload(Plug.Conn.t(), integer(), map()) :: Plug.Conn.t()
   defp handle_measurement_upload(conn, capture_id, params) do
     case Persistence.upload_capture_measurements(capture_id, params) do
@@ -55,6 +63,32 @@ defmodule ColorMatchingWeb.CaptureController do
         conn
         |> put_status(:unprocessable_entity)
         |> json(%{errors: externalize_invalid_rows(invalid_rows)})
+    end
+  end
+
+  @spec handle_judgment_upload(Plug.Conn.t(), integer(), map()) :: Plug.Conn.t()
+  defp handle_judgment_upload(conn, capture_id, params) do
+    case Persistence.upload_capture_judgments(capture_id, params) do
+      {:ok, observations} ->
+        conn
+        |> put_status(:ok)
+        |> json(%{
+          capture_id: capture_id,
+          judgment_count: length(observations)
+        })
+
+      {:error, :capture_not_found} ->
+        render_capture_not_found(conn)
+
+      {:error, {:invalid_request, errors}} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{errors: errors})
+
+      {:error, {:invalid_rows, invalid_rows}} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{errors: %{judgments: Enum.map(invalid_rows, &externalize_invalid_row(&1, :pair_id))}})
     end
   end
 

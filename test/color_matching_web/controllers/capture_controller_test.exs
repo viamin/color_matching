@@ -112,6 +112,19 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
     }
   end
 
+  defp judgment_payload(sheet, judgment \\ "near_match") do
+    [first_pair | _rest] = sheet.pairs
+
+    %{
+      judgments: [
+        %{
+          pair_id: first_pair.pair_id,
+          judgment: judgment
+        }
+      ]
+    }
+  end
+
   describe "POST /api/v1/test_sheets/:sheet_id/captures" do
     test "creates a capture session for a known sheet", %{conn: conn} do
       sheet = create_sheet("CAPA-2345")
@@ -388,6 +401,161 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
       assert Jason.decode!(measurement.linear_rgb_median) == [0.12, 0.34, 0.56]
       assert Jason.decode!(measurement.normalized_linear_rgb_median) == [0.2, 0.3, 0.4]
       assert Jason.decode!(measurement.mean) == [0.13, 0.35, 0.57]
+    end
+  end
+
+  describe "POST /api/v1/captures/:capture_id/judgments" do
+    test "appends the first observation and returns a derived current finding", %{conn: conn} do
+      sheet = create_sheet("CAPA-235C")
+
+      capture_id =
+        conn
+        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> json_response(201)
+        |> Map.fetch!("capture_id")
+
+      conn = recycle(conn)
+
+      response =
+        conn
+        |> post(~p"/api/v1/captures/#{capture_id}/judgments", judgment_payload(sheet))
+        |> json_response(200)
+
+      pair_id = hd(sheet.pairs).pair_id
+      pair_finding = Persistence.get_pair_finding_by_pair_id(pair_id)
+      [observation] = Persistence.list_pair_finding_observations(pair_id)
+
+      assert response == %{
+               "capture_id" => capture_id,
+               "judgment_count" => 1
+             }
+
+      assert observation.capture_id == capture_id
+      assert observation.judgment == "near_match"
+      assert pair_finding.current_capture_id == capture_id
+      assert pair_finding.current_judgment == "near_match"
+    end
+
+    test "preserves history and updates the current finding on later observations", %{conn: conn} do
+      sheet = create_sheet("CAPA-235D")
+
+      first_capture_id =
+        conn
+        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> json_response(201)
+        |> Map.fetch!("capture_id")
+
+      conn = recycle(conn)
+
+      conn
+      |> post(~p"/api/v1/captures/#{first_capture_id}/judgments", judgment_payload(sheet))
+      |> json_response(200)
+
+      conn = recycle(conn)
+
+      second_capture_id =
+        conn
+        |> post(
+          ~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures",
+          Map.put(capture_payload(), :timestamp, "2026-07-28T12:35:56.123456Z")
+        )
+        |> json_response(201)
+        |> Map.fetch!("capture_id")
+
+      conn = recycle(conn)
+
+      response =
+        conn
+        |> post(
+          ~p"/api/v1/captures/#{second_capture_id}/judgments",
+          judgment_payload(sheet, "match")
+        )
+        |> json_response(200)
+
+      pair_id = hd(sheet.pairs).pair_id
+      observations = Persistence.list_pair_finding_observations(pair_id)
+      pair_finding = Persistence.get_pair_finding_by_pair_id(pair_id)
+
+      assert response == %{
+               "capture_id" => second_capture_id,
+               "judgment_count" => 1
+             }
+
+      assert Enum.map(observations, & &1.judgment) == ["near_match", "match"]
+      assert pair_finding.current_capture_id == second_capture_id
+      assert pair_finding.current_judgment == "match"
+    end
+
+    test "returns structured 404 JSON for an unknown capture", %{conn: conn} do
+      response =
+        conn
+        |> post(~p"/api/v1/captures/999999/judgments", %{judgments: [%{pair_id: "pair-1", judgment: "match"}]})
+        |> json_response(404)
+
+      assert response == %{"errors" => %{"detail" => "Capture not found"}}
+    end
+
+    test "returns row-level errors for an invalid pair id", %{conn: conn} do
+      sheet = create_sheet("CAPA-235E")
+
+      capture_id =
+        conn
+        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> json_response(201)
+        |> Map.fetch!("capture_id")
+
+      conn = recycle(conn)
+
+      response =
+        conn
+        |> post(~p"/api/v1/captures/#{capture_id}/judgments", %{
+          judgments: [%{pair_id: "pair-missing", judgment: "near_match"}]
+        })
+        |> json_response(422)
+
+      assert response == %{
+               "errors" => %{
+                 "judgments" => [
+                   %{
+                     "index" => 0,
+                     "pair_id" => "pair-missing",
+                     "errors" => %{"pair_id" => ["is not present on the capture sheet"]}
+                   }
+                 ]
+               }
+             }
+    end
+
+    test "returns row-level errors for an unsupported judgment value", %{conn: conn} do
+      sheet = create_sheet("CAPA-235F")
+
+      capture_id =
+        conn
+        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> json_response(201)
+        |> Map.fetch!("capture_id")
+
+      conn = recycle(conn)
+      pair_id = hd(sheet.pairs).pair_id
+
+      response =
+        conn
+        |> post(~p"/api/v1/captures/#{capture_id}/judgments", %{
+          judgments: [%{pair_id: pair_id, judgment: "close_enough"}]
+        })
+        |> json_response(422)
+
+      assert response == %{
+               "errors" => %{
+                 "judgments" => [
+                   %{
+                     "index" => 0,
+                     "pair_id" => pair_id,
+                     "errors" => %{"judgment" => ["is invalid"]}
+                   }
+                 ]
+               }
+             }
     end
   end
 end

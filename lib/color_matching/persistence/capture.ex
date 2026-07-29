@@ -7,6 +7,7 @@ defmodule ColorMatching.Persistence.Capture do
   import Ecto.Changeset
 
   alias ColorMatching.Persistence.{
+    PairFindingObservation,
     CapturePairScore,
     CapturePatchMeasurement,
     TestSheet
@@ -31,6 +32,8 @@ defmodule ColorMatching.Persistence.Capture do
           rejection_reasons: String.t() | nil,
           patch_measurements: [CapturePatchMeasurement.t()] | Ecto.Association.NotLoaded.t(),
           pair_scores: [CapturePairScore.t()] | Ecto.Association.NotLoaded.t(),
+          pair_finding_observations:
+            [PairFindingObservation.t()] | Ecto.Association.NotLoaded.t(),
           inserted_at: DateTime.t() | nil,
           updated_at: DateTime.t() | nil
         }
@@ -58,6 +61,11 @@ defmodule ColorMatching.Persistence.Capture do
     )
 
     has_many(:pair_scores, CapturePairScore,
+      foreign_key: :capture_id,
+      on_replace: :delete
+    )
+
+    has_many(:pair_finding_observations, PairFindingObservation,
       foreign_key: :capture_id,
       on_replace: :delete
     )

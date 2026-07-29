@@ -10,10 +10,13 @@ defmodule ColorMatching.Persistence do
 
   alias ColorMatching.Persistence.{
     Capture,
+    CaptureJudgmentUpload,
     CaptureUpload,
     IlluminantMeasurement,
     Palette,
     PaletteColor,
+    PairFinding,
+    PairFindingObservation,
     PrinterProfile,
     TestSheet
   }
@@ -28,6 +31,7 @@ defmodule ColorMatching.Persistence do
         }
   @type measurement_error_map :: %{optional(atom()) => [String.t()]}
   @type capture_upload_error_map :: %{optional(atom()) => [String.t()]}
+  @type judgment_error_map :: %{optional(atom()) => [String.t()]}
   @type invalid_bulk_measurement_row :: %{
           index: non_neg_integer(),
           color_id: term(),
@@ -37,6 +41,11 @@ defmodule ColorMatching.Persistence do
           index: non_neg_integer(),
           identifier: term(),
           errors: capture_upload_error_map()
+        }
+  @type invalid_judgment_row :: %{
+          index: non_neg_integer(),
+          identifier: term(),
+          errors: judgment_error_map()
         }
   @spec list_palettes() :: [Palette.t()]
   def list_palettes do
@@ -224,6 +233,26 @@ defmodule ColorMatching.Persistence do
     |> Repo.all()
   end
 
+  @spec list_pair_findings() :: [PairFinding.t()]
+  def list_pair_findings do
+    PairFinding
+    |> order_by([pair_finding], asc: pair_finding.pair_id)
+    |> Repo.all()
+  end
+
+  @spec get_pair_finding_by_pair_id(String.t()) :: PairFinding.t() | nil
+  def get_pair_finding_by_pair_id(pair_id) when is_binary(pair_id) do
+    Repo.get_by(PairFinding, pair_id: pair_id)
+  end
+
+  @spec list_pair_finding_observations(String.t()) :: [PairFindingObservation.t()]
+  def list_pair_finding_observations(pair_id) when is_binary(pair_id) do
+    PairFindingObservation
+    |> where([observation], observation.pair_id == ^pair_id)
+    |> order_by([observation], asc: observation.observed_at, asc: observation.id)
+    |> Repo.all()
+  end
+
   @spec upload_capture_measurements(integer(), map()) ::
           {:ok,
            %{
@@ -247,6 +276,19 @@ defmodule ColorMatching.Persistence do
       %Capture{test_sheet_id: test_sheet_id} = capture ->
         valid_pair_ids = valid_pair_ids_for_sheet(test_sheet_id)
         CaptureUpload.upload(capture, attrs, valid_pair_ids)
+    end
+  end
+
+  @spec upload_capture_judgments(integer(), map()) ::
+          {:ok, [PairFindingObservation.t()]}
+          | {:error, :capture_not_found}
+          | {:error, {:invalid_request, judgment_error_map()}}
+          | {:error, {:invalid_rows, [invalid_judgment_row()]}}
+  def upload_capture_judgments(capture_id, attrs)
+      when is_integer(capture_id) and is_map(attrs) do
+    case get_capture(capture_id) do
+      nil -> {:error, :capture_not_found}
+      %Capture{} = capture -> CaptureJudgmentUpload.upload(capture, attrs)
     end
   end
 

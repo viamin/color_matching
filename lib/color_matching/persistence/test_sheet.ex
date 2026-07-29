@@ -27,7 +27,12 @@ defmodule ColorMatching.Persistence.TestSheet do
   use Ecto.Schema
   import Ecto.Changeset
 
-  alias ColorMatching.Persistence.{Palette, PrinterProfile, TestSheetPair}
+  alias ColorMatching.Persistence.{
+    PairFindingObservation,
+    Palette,
+    PrinterProfile,
+    TestSheetPair
+  }
 
   @type t :: %__MODULE__{
           id: integer() | nil,
@@ -44,6 +49,8 @@ defmodule ColorMatching.Persistence.TestSheet do
           patch_layout: String.t() | nil,
           safe_inset_mm: float() | nil,
           pairs: [TestSheetPair.t()] | Ecto.Association.NotLoaded.t(),
+          pair_finding_observations:
+            [PairFindingObservation.t()] | Ecto.Association.NotLoaded.t(),
           inserted_at: DateTime.t() | NaiveDateTime.t() | nil,
           updated_at: DateTime.t() | NaiveDateTime.t() | nil
         }
@@ -65,6 +72,10 @@ defmodule ColorMatching.Persistence.TestSheet do
       foreign_key: :test_sheet_id,
       on_replace: :delete,
       preload_order: [asc: :row, asc: :col, asc: :id]
+    )
+
+    has_many(:pair_finding_observations, PairFindingObservation,
+      foreign_key: :test_sheet_id
     )
 
     timestamps()
