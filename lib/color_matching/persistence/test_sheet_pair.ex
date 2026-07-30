@@ -45,7 +45,6 @@ defmodule ColorMatching.Persistence.TestSheetPair do
           updated_at: DateTime.t() | nil
         }
 
-
   schema "test_sheet_pairs" do
     field(:pair_id, :string)
     field(:row, :integer)

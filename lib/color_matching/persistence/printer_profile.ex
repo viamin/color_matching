@@ -31,7 +31,6 @@ defmodule ColorMatching.Persistence.PrinterProfile do
           updated_at: DateTime.t() | nil
         }
 
-
   schema "printer_profiles" do
     field(:printer_make_model, :string)
     field(:paper_type, :string)
