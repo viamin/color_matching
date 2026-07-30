@@ -117,11 +117,7 @@ defmodule ColorMatching.PrintedPairBrowser do
       classification:
         normalize_string(Map.get(filters, "classification") || Map.get(filters, :classification)),
       profile_id:
-        normalize_integer(
-          Map.get(filters, "profile_id") || Map.get(filters, :profile_id) ||
-            Map.get(filters, "reproduction_profile_id") ||
-            Map.get(filters, :reproduction_profile_id)
-        ),
+        normalize_integer(Map.get(filters, "profile_id") || Map.get(filters, :profile_id)),
       palette_id:
         normalize_integer(Map.get(filters, "palette_id") || Map.get(filters, :palette_id)),
       test_sheet_id:
@@ -245,15 +241,22 @@ defmodule ColorMatching.PrintedPairBrowser do
   # provide a stable secondary ordering. The primary sort happens in Elixir
   # once the result rows are materialized.
   defp order_by_query(query, "delta_e") do
-    order_by(query, [_classification, pair, _sheet],
-      asc: pair.pair_id,
+    stable_secondary_order_by(query)
+  end
+
+  defp order_by_query(query, _sort) do
+    order_by(query, [_classification, _pair, _sheet],
       desc: classification.updated_at,
       desc: classification.id
     )
   end
 
-  defp order_by_query(query, _sort) do
-    order_by(query, [_classification, _pair, _sheet],
+  # SQL cannot compute delta_e itself, so the query layer only orders rows
+  # well enough that the post-query Elixir sort produces deterministic
+  # results. `sort_entries/2` then applies the real metric ordering.
+  defp stable_secondary_order_by(query) do
+    order_by(query, [_classification, pair, _sheet],
+      asc: pair.pair_id,
       desc: classification.updated_at,
       desc: classification.id
     )
@@ -318,7 +321,6 @@ defmodule ColorMatching.PrintedPairBrowser do
     |> Enum.map(fn {id, make_model, paper_type} ->
       {profile_name(make_model, paper_type), id}
     end)
-    |> Enum.uniq()
     |> Enum.sort()
   end
 

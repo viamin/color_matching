@@ -151,6 +151,42 @@ defmodule ColorMatching.PrintedPairBrowserTest do
     end
   end
 
+  describe "normalize_filters/1" do
+    test "accepts the string-keyed form used by LiveView change_filters payloads" do
+      normalized =
+        PrintedPairBrowser.normalize_filters(%{
+          "illuminant" => " lps ",
+          "classification" => "strong_metamer",
+          "profile_id" => "42",
+          "palette_id" => "9",
+          "test_sheet_id" => "3",
+          "sort" => "pair_id"
+        })
+
+      assert normalized.illuminant == "lps"
+      assert normalized.classification == "strong_metamer"
+      assert normalized.profile_id == 42
+      assert normalized.palette_id == 9
+      assert normalized.test_sheet_id == 3
+      assert normalized.sort == "pair_id"
+    end
+
+    test "falls back to the default sort when an unknown sort is supplied" do
+      assert PrintedPairBrowser.normalize_filters(%{"sort" => "made-up"}).sort == "recent"
+      assert PrintedPairBrowser.normalize_filters(%{sort: "made-up"}).sort == "recent"
+    end
+
+    test "does not look up profile_id from reproduction_profile_id" do
+      normalized =
+        PrintedPairBrowser.normalize_filters(%{
+          "reproduction_profile_id" => "99",
+          "unrelated" => "value"
+        })
+
+      assert normalized.profile_id == nil
+    end
+  end
+
   defp printed_pair_browser_fixture do
     assert {:ok, primary_palette} =
              Persistence.create_palette(%{
