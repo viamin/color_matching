@@ -46,6 +46,7 @@ defmodule ColorMatching.Persistence.PrinterProfile do
     has_many(:illuminant_measurements, IlluminantMeasurement)
     has_many(:pair_findings, PairFinding)
     has_many(:pair_finding_observations, PairFindingObservation)
+
     has_many(:printed_pair_classifications, PrintedPairClassification,
       foreign_key: :reproduction_profile_id
     )

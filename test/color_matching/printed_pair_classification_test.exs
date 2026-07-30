@@ -1,5 +1,7 @@
 defmodule ColorMatching.Persistence.PrintedPairClassificationTest do
-  use ColorMatching.DataCase, async: true
+  use ExUnit.Case, async: true
+
+  import ColorMatching.DataCase, only: [errors_on: 1]
 
   alias ColorMatching.Persistence.PrintedPairClassification
 
