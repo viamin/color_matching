@@ -236,6 +236,107 @@ defmodule ColorMatchingWeb.ColorPairLiveTest do
       assert persisted.classification == "contrasting"
       assert persisted.notes == "Second pair only"
     end
+
+    test "ignores reproduction_profile_id in the query string and uses the sheet's own profile",
+         %{conn: conn} do
+      %{
+        pair: pair,
+        printer_profile: sheet_profile,
+        other_profile,
+        sheet: sheet
+      } = mismatched_profile_fixture()
+
+      {:ok, view, _html} =
+        live(
+          conn,
+          ~p"/pair?#{[
+            a: pair.color_a_hex,
+            b: pair.color_b_hex,
+            sheet_id: sheet.lookup_code,
+            pair_id: pair.pair_id,
+            reproduction_profile_id: other_profile.id
+          ]}"
+        )
+
+      html =
+        render_submit(view, "save_classification", %{
+          "classification" => %{
+            "illuminant" => "lps",
+            "classification" => "strong_metamer",
+            "notes" => "Bound to the sheet's profile"
+          }
+        })
+
+      assert html =~ "Saved LPS classification"
+
+      assert Persistence.get_active_printed_pair_classification(
+               pair.id,
+               sheet_profile.id,
+               "lps"
+             ).classification == "strong_metamer"
+
+      assert Persistence.get_active_printed_pair_classification(
+               pair.id,
+               other_profile.id,
+               "lps"
+             ) == nil
+    end
+
+    test "ignores printer_profile_id in the query string and uses the sheet's own profile",
+         %{conn: conn} do
+      %{
+        pair: pair,
+        printer_profile: sheet_profile,
+        other_profile,
+        sheet: sheet
+      } = mismatched_profile_fixture()
+
+      assert {:ok, _classification} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: sheet_profile.id,
+                 illuminant: "red",
+                 classification: "weak_metamer",
+                 notes: "Sheet's own profile"
+               })
+
+      assert {:ok, _other_classification} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: other_profile.id,
+                 illuminant: "red",
+                 classification: "contrasting",
+                 notes: "Unrelated profile"
+               })
+
+      {:ok, view, _html} =
+        live(
+          conn,
+          ~p"/pair?#{[
+            a: pair.color_a_hex,
+            b: pair.color_b_hex,
+            sheet_id: sheet.lookup_code,
+            pair_id: pair.pair_id,
+            printer_profile_id: other_profile.id
+          ]}"
+        )
+
+      html = render_click(view, "clear_classification", %{"illuminant" => "red"})
+
+      assert html =~ "Cleared Red classification"
+
+      assert Persistence.get_active_printed_pair_classification(
+               pair.id,
+               sheet_profile.id,
+               "red"
+             ) == nil
+
+      assert Persistence.get_active_printed_pair_classification(
+               pair.id,
+               other_profile.id,
+               "red"
+             ).classification == "contrasting"
+    end
   end
 
   defp pair_path(pair, sheet, printer_profile) do
@@ -312,6 +413,51 @@ defmodule ColorMatchingWeb.ColorPairLiveTest do
       first_pair: first_pair,
       second_pair: second_pair,
       printer_profile: printer_profile,
+      sheet: sheet
+    }
+  end
+
+  defp mismatched_profile_fixture do
+    assert {:ok, palette} =
+             Persistence.create_palette(%{
+               name: "Mismatched Profile Fixture",
+               colors: [
+                 %{hex_color: "#112233", sort_order: 0, display_label: "Patch 1"},
+                 %{hex_color: "#445566", sort_order: 1, display_label: "Patch 2"}
+               ]
+             })
+
+    assert {:ok, sheet_profile} =
+             Persistence.create_printer_profile(%{
+               printer_make_model: "Epson SureColor P900",
+               paper_type: "Ultra Premium Luster",
+               ink_type: "OEM UltraChrome PRO10"
+             })
+
+    assert {:ok, other_profile} =
+             Persistence.create_printer_profile(%{
+               printer_make_model: "Canon imagePROGRAF PRO-1100",
+               paper_type: "Luster",
+               ink_type: "OEM Lucia PRO II"
+             })
+
+    assert {:ok, sheet} =
+             Persistence.create_test_sheet(%{
+               lookup_code: "PROF-MISM",
+               palette_id: palette.id,
+               printer_profile_id: sheet_profile.id,
+               sheet_version: "2026-07-30",
+               pairs: [
+                 %{row: 0, col: 0, color_a_hex: "#112233", color_b_hex: "#445566"}
+               ]
+             })
+
+    [pair] = sheet.pairs
+
+    %{
+      pair: pair,
+      printer_profile: sheet_profile,
+      other_profile: other_profile,
       sheet: sheet
     }
   end

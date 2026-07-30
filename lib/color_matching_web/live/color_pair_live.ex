@@ -151,33 +151,12 @@ defmodule ColorMatchingWeb.ColorPairLive do
 
   defp persisted_pair(_params, _sheet), do: nil
 
-  defp persisted_reproduction_profile(params, sheet) do
-    case first_integer_param(params, ["reproduction_profile_id", "printer_profile_id"]) do
-      {:ok, id} -> Persistence.get_printer_profile(id)
-      :error -> sheet && sheet.printer_profile
-    end
-  end
-
-  defp first_integer_param(params, keys) do
-    Enum.reduce_while(keys, :error, fn key, _acc ->
-      params
-      |> Map.get(key)
-      |> parse_integer_param()
-      |> case do
-        {:ok, id} -> {:halt, {:ok, id}}
-        :error -> {:cont, :error}
-      end
-    end)
-  end
-
-  defp parse_integer_param(value) when is_binary(value) and value != "" do
-    case Integer.parse(value) do
-      {id, ""} -> {:ok, id}
-      _other -> :error
-    end
-  end
-
-  defp parse_integer_param(_value), do: :error
+  # Manual classifications are bound to the persisted sheet's own reproduction
+  # profile; honoring an arbitrary `reproduction_profile_id` / `printer_profile_id`
+  # from the query string would let a valid `sheet_id` + `pair_id` URL retarget
+  # writes and clears to an unrelated profile, breaking the
+  # `pair + physical reproduction profile` invariant.
+  defp persisted_reproduction_profile(_params, sheet), do: sheet && sheet.printer_profile
 
   defp pair_colors_match?(pair, color_a_hex, color_b_hex) do
     pair.color_a_hex == color_a_hex and pair.color_b_hex == color_b_hex
