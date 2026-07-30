@@ -12,7 +12,7 @@ defmodule ColorMatchingWeb.PrintedPairBrowserLive do
   def handle_params(params, _uri, socket) do
     filters = PrintedPairBrowser.normalize_filters(params)
     entries = PrintedPairBrowser.list_entries(filters)
-    has_entries? = PrintedPairBrowser.list_entries() != []
+    has_entries? = PrintedPairBrowser.any_active?()
 
     {:noreply,
      socket

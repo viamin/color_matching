@@ -7,7 +7,14 @@ defmodule ColorMatching.PrintedPairBrowser do
   import Ecto.Query
 
   alias ColorMatching.ColorSpace
-  alias ColorMatching.Persistence.{PrintedPairClassification, PrinterProfile}
+  alias ColorMatching.Persistence.{
+    Palette,
+    PrintedPairClassification,
+    PrinterProfile,
+    TestSheet,
+    TestSheetPair
+  }
+
   alias ColorMatching.Repo
 
   @default_sort "recent"
@@ -57,23 +64,30 @@ defmodule ColorMatching.PrintedPairBrowser do
           delta_e_label: String.t()
         }
 
+  @spec any_active?() :: boolean()
+  def any_active? do
+    PrintedPairClassification
+    |> where([classification], classification.active == true)
+    |> select([classification], classification.id)
+    |> limit(1)
+    |> Repo.exists?()
+  end
+
   @spec list_entries(keyword() | map()) :: [entry()]
   def list_entries(filters \\ %{}) do
     filters = normalize_filters(filters)
 
-    PrintedPairClassification
-    |> where([classification], classification.active == true)
+    filters
+    |> base_query()
+    |> order_by_query(filters.sort)
+    |> preload([:reproduction_profile, test_sheet_pair: [test_sheet: :palette]])
     |> Repo.all()
-    |> Repo.preload([:reproduction_profile, test_sheet_pair: [test_sheet: :palette]])
     |> Enum.map(&to_entry/1)
-    |> Enum.filter(&matches_filters?(&1, filters))
     |> sort_entries(filters.sort)
   end
 
   @spec filter_options() :: map()
   def filter_options do
-    entries = list_entries()
-
     %{
       illuminants:
         Enum.map(PrintedPairClassification.illuminants(), fn illuminant ->
@@ -83,21 +97,9 @@ defmodule ColorMatching.PrintedPairBrowser do
         Enum.map(PrintedPairClassification.classifications(), fn classification ->
           {classification_label(classification), classification}
         end),
-      profiles:
-        entries
-        |> Enum.map(&{&1.profile_name, &1.profile_id})
-        |> Enum.uniq()
-        |> Enum.sort(),
-      palettes:
-        entries
-        |> Enum.map(&{&1.palette_name, &1.palette_id})
-        |> Enum.uniq()
-        |> Enum.sort(),
-      test_sheets:
-        entries
-        |> Enum.map(&{"#{&1.test_sheet_lookup_code} · #{&1.palette_name}", &1.test_sheet_id})
-        |> Enum.uniq()
-        |> Enum.sort()
+      profiles: profile_options(),
+      palettes: palette_options(),
+      test_sheets: test_sheet_options()
     }
   end
 
@@ -155,6 +157,108 @@ defmodule ColorMatching.PrintedPairBrowser do
     Map.get(@classification_labels, classification, classification)
   end
 
+  # Filtering is pushed into SQL so the query only loads the rows the
+  # browser actually needs. Filter context lives on joined tables
+  # (test_sheet_pairs, test_sheets), so the same `base_query` covers every
+  # filter the UI exposes without scanning the full classification history.
+  defp base_query(filters) do
+    base = from(c in PrintedPairClassification, where: c.active == true)
+
+    base
+    |> join(:inner, [classification], pair in TestSheetPair,
+      on: pair.id == classification.test_sheet_pair_id
+    )
+    |> join(:inner, [_classification, pair], sheet in TestSheet,
+      on: sheet.id == pair.test_sheet_id
+    )
+    |> maybe_filter(filters.illuminant, &illuminant_filter/2)
+    |> maybe_filter(filters.classification, &classification_filter/2)
+    |> maybe_filter(filters.profile_id, &profile_filter/2)
+    |> maybe_filter(filters.palette_id, &palette_filter/2)
+    |> maybe_filter(filters.test_sheet_id, &test_sheet_filter/2)
+  end
+
+  defp illuminant_filter(query, illuminant) do
+    where(query, [classification, _pair, _sheet], classification.illuminant == ^illuminant)
+  end
+
+  defp classification_filter(query, classification) do
+    where(query, [classification, _pair, _sheet],
+      classification.classification == ^classification
+    )
+  end
+
+  defp profile_filter(query, profile_id) do
+    where(query, [classification, _pair, _sheet],
+      classification.reproduction_profile_id == ^profile_id
+    )
+  end
+
+  defp palette_filter(query, palette_id) do
+    where(query, [_classification, _pair, sheet], sheet.palette_id == ^palette_id)
+  end
+
+  defp test_sheet_filter(query, test_sheet_id) do
+    where(query, [_classification, _pair, sheet], sheet.id == ^test_sheet_id)
+  end
+
+  defp maybe_filter(query, nil, _fun), do: query
+  defp maybe_filter(query, value, fun), do: fun.(query, value)
+
+  # Secondary sort always falls back to recent activity and id so identical
+  # primary keys keep a stable order across requests.
+  defp order_by_query(query, "illuminant") do
+    order_by(query, [classification, pair, _sheet],
+      asc: classification.illuminant,
+      asc: pair.pair_id,
+      desc: classification.updated_at,
+      desc: classification.id
+    )
+  end
+
+  defp order_by_query(query, "pair_id") do
+    order_by(query, [_classification, pair, _sheet],
+      asc: pair.pair_id,
+      desc: classification.updated_at,
+      desc: classification.id
+    )
+  end
+
+  # Profile sort needs the printer profile columns; join once and reuse the
+  # binding for the ORDER BY.
+  defp order_by_query(query, "profile") do
+    joined =
+      join(query, :inner, [classification, _pair, _sheet], profile in PrinterProfile,
+        on: profile.id == classification.reproduction_profile_id
+      )
+
+    order_by(joined, [_classification, _pair, _sheet, profile],
+      asc: profile.printer_make_model,
+      asc: profile.paper_type,
+      asc: classification.illuminant,
+      desc: classification.updated_at,
+      desc: classification.id
+    )
+  end
+
+  # Delta E is computed per row from the pair's hex colors, so SQL can only
+  # provide a stable secondary ordering. The primary sort happens in Elixir
+  # once the result rows are materialized.
+  defp order_by_query(query, "delta_e") do
+    order_by(query, [_classification, pair, _sheet],
+      asc: pair.pair_id,
+      desc: classification.updated_at,
+      desc: classification.id
+    )
+  end
+
+  defp order_by_query(query, _sort) do
+    order_by(query, [_classification, _pair, _sheet],
+      desc: classification.updated_at,
+      desc: classification.id
+    )
+  end
+
   defp to_entry(classification) do
     pair = classification.test_sheet_pair
     sheet = pair.test_sheet
@@ -177,7 +281,7 @@ defmodule ColorMatching.PrintedPairBrowser do
       classification: classification.classification,
       classification_label: classification_label(classification.classification),
       profile_id: profile.id,
-      profile_name: profile_name(profile),
+      profile_name: profile_name(profile.printer_make_model, profile.paper_type),
       palette_id: palette.id,
       palette_name: palette.name,
       test_sheet_id: sheet.id,
@@ -192,44 +296,76 @@ defmodule ColorMatching.PrintedPairBrowser do
     }
   end
 
-  defp matches_filters?(entry, filters) do
-    matches_filter?(entry.illuminant, filters.illuminant) and
-      matches_filter?(entry.classification, filters.classification) and
-      matches_filter?(entry.profile_id, filters.profile_id) and
-      matches_filter?(entry.palette_id, filters.palette_id) and
-      matches_filter?(entry.test_sheet_id, filters.test_sheet_id)
-  end
-
-  defp matches_filter?(_value, nil), do: true
-  defp matches_filter?(value, expected), do: value == expected
-
-  defp sort_entries(entries, "illuminant") do
-    Enum.sort_by(entries, &{&1.illuminant_label, &1.profile_name, &1.pair_id, recent_key(&1)})
-  end
-
-  defp sort_entries(entries, "profile") do
-    Enum.sort_by(entries, &{&1.profile_name, &1.illuminant_label, &1.pair_id, recent_key(&1)})
-  end
-
-  defp sort_entries(entries, "pair_id") do
-    Enum.sort_by(entries, &{&1.pair_id, &1.illuminant_label, &1.profile_name, recent_key(&1)})
-  end
-
+  # Delta E sort must run in Elixir because the metric depends on the pair's
+  # two hex colors. Other sorts are already enforced by SQL, so this is a
+  # no-op for everything except `:delta_e`.
   defp sort_entries(entries, "delta_e") do
-    Enum.sort_by(entries, &{&1.delta_e || 9_999.0, &1.pair_id, recent_key(&1)})
+    Enum.sort_by(entries, &{&1.delta_e || 9_999.0, &1.pair_id})
   end
 
-  defp sort_entries(entries, _sort) do
-    Enum.sort_by(entries, &{recent_key(&1), &1.pair_id}, :desc)
+  defp sort_entries(entries, _sort), do: entries
+
+  defp profile_options do
+    PrinterProfile
+    |> join(:inner, [profile], classification in PrintedPairClassification,
+      on:
+        classification.reproduction_profile_id == profile.id and
+          classification.active == true
+    )
+    |> select([profile], {profile.id, profile.printer_make_model, profile.paper_type})
+    |> distinct(true)
+    |> Repo.all()
+    |> Enum.map(fn {id, make_model, paper_type} ->
+      {profile_name(make_model, paper_type), id}
+    end)
+    |> Enum.uniq()
+    |> Enum.sort()
   end
 
-  defp recent_key(entry), do: datetime_sort_key(entry.updated_at, entry.id)
-
-  defp profile_name(%PrinterProfile{} = profile) do
-    [profile.printer_make_model, profile.paper_type]
-    |> Enum.reject(&is_nil/1)
-    |> Enum.join(" on ")
+  defp palette_options do
+    Palette
+    |> join(:inner, [palette], sheet in TestSheet,
+      on: sheet.palette_id == palette.id
+    )
+    |> join(:inner, [_palette, sheet], pair in TestSheetPair,
+      on: pair.test_sheet_id == sheet.id
+    )
+    |> join(:inner, [_palette, _sheet, pair], classification in PrintedPairClassification,
+      on:
+        classification.test_sheet_pair_id == pair.id and
+          classification.active == true
+    )
+    |> select([palette], {palette.id, palette.name})
+    |> distinct(true)
+    |> Repo.all()
+    |> Enum.sort()
   end
+
+  defp test_sheet_options do
+    TestSheet
+    |> join(:inner, [sheet], palette in Palette,
+      on: palette.id == sheet.palette_id
+    )
+    |> join(:inner, [sheet, _palette], pair in TestSheetPair,
+      on: pair.test_sheet_id == sheet.id
+    )
+    |> join(:inner, [_sheet, _palette, pair], classification in PrintedPairClassification,
+      on:
+        classification.test_sheet_pair_id == pair.id and
+          classification.active == true
+    )
+    |> select([sheet, palette], {sheet.id, sheet.lookup_code, palette.name})
+    |> distinct(true)
+    |> Repo.all()
+    |> Enum.map(fn {id, lookup_code, palette_name} ->
+      {"#{lookup_code} · #{palette_name}", id}
+    end)
+    |> Enum.sort()
+  end
+
+  defp profile_name(nil, paper_type), do: paper_type || ""
+  defp profile_name(make_model, nil), do: make_model || ""
+  defp profile_name(make_model, paper_type), do: "#{make_model} on #{paper_type}"
 
   defp format_delta_e(nil), do: "N/A"
   defp format_delta_e(delta_e), do: :erlang.float_to_binary(delta_e, decimals: 3)
@@ -264,13 +400,4 @@ defmodule ColorMatching.PrintedPairBrowser do
 
   defp normalize_sort(sort) when sort in @sorts, do: sort
   defp normalize_sort(_sort), do: @default_sort
-
-  defp datetime_sort_key(%DateTime{} = datetime, _fallback),
-    do: DateTime.to_unix(datetime, :microsecond)
-
-  defp datetime_sort_key(%NaiveDateTime{} = datetime, _fallback) do
-    datetime |> DateTime.from_naive!("Etc/UTC") |> DateTime.to_unix(:microsecond)
-  end
-
-  defp datetime_sort_key(_datetime, fallback), do: fallback
 end
