@@ -2,7 +2,7 @@ defmodule ColorMatching.PersistenceTest do
   use ColorMatching.DataCase, async: false
 
   alias ColorMatching.{Palette, Persistence}
-  alias ColorMatching.Persistence.{PaletteColor, PrinterProfile}
+  alias ColorMatching.Persistence.{PaletteColor, PrintedPairClassification, PrinterProfile}
 
   describe "palettes" do
     test "creates and reads a palette with persisted colors" do
@@ -613,6 +613,168 @@ defmodule ColorMatching.PersistenceTest do
     end
   end
 
+  describe "printed pair classifications" do
+    test "stores notes and fetches the active classification by pair, profile, and illuminant" do
+      %{pair: pair, printer_profile: printer_profile} = printed_pair_classification_fixture()
+
+      assert {:ok, classification} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer",
+                 notes: "Visible match under sodium vapor"
+               })
+
+      assert classification.active == true
+      assert classification.notes == "Visible match under sodium vapor"
+
+      persisted =
+        Persistence.get_active_printed_pair_classification(pair.id, printer_profile.id, "lps")
+
+      assert persisted.id == classification.id
+      assert persisted.classification == "strong_metamer"
+      assert persisted.notes == "Visible match under sodium vapor"
+      assert persisted.test_sheet_pair.pair_id == pair.pair_id
+      assert persisted.reproduction_profile.id == printer_profile.id
+    end
+
+    test "updates the current classification by appending history and keeping only one active row" do
+      %{pair: pair, printer_profile: printer_profile} = printed_pair_classification_fixture()
+
+      assert {:ok, first} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "red",
+                 classification: "weak_metamer",
+                 notes: "First pass"
+               })
+
+      assert {:ok, second} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "red",
+                 classification: "contrasting",
+                 notes: "Reclassified after review"
+               })
+
+      active =
+        Persistence.get_active_printed_pair_classification(pair.id, printer_profile.id, "red")
+
+      history =
+        Persistence.list_printed_pair_classification_history(pair.id, printer_profile.id, "red")
+
+      assert active.id == second.id
+      assert active.classification == "contrasting"
+      assert Enum.map(history, & &1.id) == [second.id, first.id]
+      assert Enum.map(history, & &1.active) == [true, false]
+
+      assert Repo.aggregate(
+               from(
+                 classification in PrintedPairClassification,
+                 where:
+                   classification.test_sheet_pair_id == ^pair.id and
+                     classification.reproduction_profile_id == ^printer_profile.id and
+                     classification.illuminant == "red" and
+                     classification.active == true
+               ),
+               :count,
+               :id
+             ) == 1
+    end
+
+    test "clears the current classification without deleting history" do
+      %{pair: pair, printer_profile: printer_profile} = printed_pair_classification_fixture()
+
+      assert {:ok, classification} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "blue",
+                 classification: "strong_metamer"
+               })
+
+      assert {1, nil} =
+               Persistence.clear_printed_pair_classification(pair.id, printer_profile.id, "blue")
+
+      assert Persistence.get_active_printed_pair_classification(
+               pair.id,
+               printer_profile.id,
+               "blue"
+             ) ==
+               nil
+
+      [persisted] =
+        Persistence.list_printed_pair_classification_history(pair.id, printer_profile.id, "blue")
+
+      assert persisted.id == classification.id
+      assert persisted.active == false
+    end
+
+    test "lists active classifications with pair, profile, and illuminant filters" do
+      %{
+        pair: pair,
+        second_pair: second_pair,
+        printer_profile: printer_profile,
+        second_printer_profile: second_printer_profile
+      } = printed_pair_classification_fixture()
+
+      assert {:ok, matching} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer",
+                 notes: "Target scope"
+               })
+
+      assert {:ok, _other_illuminant} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "green",
+                 classification: "weak_metamer"
+               })
+
+      assert {:ok, _other_profile} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: second_printer_profile.id,
+                 illuminant: "lps",
+                 classification: "contrasting"
+               })
+
+      assert {:ok, _other_pair} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: second_pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "weak_metamer"
+               })
+
+      filtered =
+        Persistence.list_printed_pair_classifications(%{
+          pair_id: pair.pair_id,
+          reproduction_profile_id: printer_profile.id,
+          illuminant: "lps"
+        })
+
+      assert Enum.map(filtered, & &1.id) == [matching.id]
+      assert hd(filtered).notes == "Target scope"
+      assert hd(filtered).test_sheet_pair.id == pair.id
+      assert hd(filtered).reproduction_profile.id == printer_profile.id
+
+      assert Persistence.list_printed_pair_classifications(%{
+               classification: "strong_metamer",
+               active: true
+             })
+             |> Enum.map(& &1.id)
+             |> Enum.sort() == Enum.sort([matching.id])
+    end
+  end
+
   defp persisted_measurement_fixture do
     assert {:ok, palette} =
              Persistence.create_palette(%{
@@ -632,5 +794,52 @@ defmodule ColorMatching.PersistenceTest do
     color = Persistence.get_palette!(palette.id).colors |> List.first()
 
     %{color: color, printer_profile: printer_profile}
+  end
+
+  defp printed_pair_classification_fixture do
+    assert {:ok, palette} =
+             Persistence.create_palette(%{
+               name: "Printed Pair Palette",
+               colors: [
+                 %{hex_color: "#112233", sort_order: 0, display_label: "Patch 1"},
+                 %{hex_color: "#445566", sort_order: 1, display_label: "Patch 2"},
+                 %{hex_color: "#778899", sort_order: 2, display_label: "Patch 3"}
+               ]
+             })
+
+    assert {:ok, printer_profile} =
+             Persistence.create_printer_profile(%{
+               printer_make_model: "Epson SureColor P900",
+               paper_type: "Ultra Premium Luster",
+               ink_type: "OEM UltraChrome PRO10"
+             })
+
+    assert {:ok, second_printer_profile} =
+             Persistence.create_printer_profile(%{
+               printer_make_model: "Canon imagePROGRAF PRO-1100",
+               paper_type: "Pro Luster",
+               ink_type: "OEM Lucia Pro II"
+             })
+
+    assert {:ok, sheet} =
+             Persistence.create_test_sheet(%{
+               lookup_code: "PARK-TEST",
+               palette_id: palette.id,
+               printer_profile_id: printer_profile.id,
+               sheet_version: "2026-07-30",
+               pairs: [
+                 %{row: 0, col: 0, color_a_hex: "#112233", color_b_hex: "#445566"},
+                 %{row: 0, col: 1, color_a_hex: "#112233", color_b_hex: "#778899"}
+               ]
+             })
+
+    [pair, second_pair] = sheet.pairs
+
+    %{
+      pair: pair,
+      second_pair: second_pair,
+      printer_profile: printer_profile,
+      second_printer_profile: second_printer_profile
+    }
   end
 end
