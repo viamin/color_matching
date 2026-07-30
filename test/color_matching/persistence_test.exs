@@ -482,7 +482,66 @@ defmodule ColorMatching.PersistenceTest do
     end
   end
 
-  describe "preset palette import" do
+  describe "illuminant responses" do
+    test "creates, updates, clears, and fetches a score per color, profile, and illuminant" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      attrs = %{
+        color_id: color.id,
+        printer_profile_id: printer_profile.id,
+        illuminant: "red",
+        apparent_brightness: 7,
+        notes: "Compared with printed reference scale"
+      }
+
+      assert {:ok, response} = Persistence.set_illuminant_response(attrs)
+      assert response.apparent_brightness == 7
+      assert Persistence.get_illuminant_response(color.id, printer_profile.id, "red").id == response.id
+      assert Persistence.list_illuminant_responses(color.id, printer_profile.id)["red"].id == response.id
+
+      assert {:ok, updated} = Persistence.update_illuminant_response(%{attrs | apparent_brightness: 4})
+      assert updated.id == response.id
+      assert updated.apparent_brightness == 4
+
+      assert {1, nil} = Persistence.clear_illuminant_response(color.id, printer_profile.id, "red")
+      assert Persistence.get_illuminant_response(color.id, printer_profile.id, "red") == nil
+    end
+
+    test "validates the subjective 0 to 10 score and separates profiles and illuminants" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      for score <- [-1, 11] do
+        assert {:error, changeset} =
+                 Persistence.set_illuminant_response(%{
+                   palette_color_id: color.id,
+                   printer_profile_id: printer_profile.id,
+                   illuminant: "white",
+                   apparent_brightness: score
+                 })
+
+        assert %{apparent_brightness: [_]} = errors_on(changeset)
+      end
+
+      assert {:ok, _} = Persistence.set_illuminant_response(%{
+               palette_color_id: color.id,
+               printer_profile_id: printer_profile.id,
+               illuminant: "white",
+               apparent_brightness: 5
+             })
+
+      assert {:ok, _} = Persistence.set_illuminant_response(%{
+               palette_color_id: color.id,
+               printer_profile_id: printer_profile.id,
+               illuminant: "blue",
+               apparent_brightness: 6
+             })
+
+      assert Map.keys(Persistence.list_illuminant_responses(color.id, printer_profile.id)) == ["blue", "white"]
+      assert Persistence.list_illuminant_responses(color.id, printer_profile.id)["white"].apparent_brightness == 5
+      assert Persistence.list_illuminant_responses(color.id, printer_profile.id)["blue"].apparent_brightness == 6
+    end
+  end
+
     test "imports preset palettes for persisted workflows" do
       assert {:ok, palettes} = Persistence.import_preset_palettes()
 

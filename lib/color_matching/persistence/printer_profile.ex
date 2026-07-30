@@ -4,6 +4,7 @@ defmodule ColorMatching.Persistence.PrinterProfile do
 
   alias ColorMatching.Persistence.{
     IlluminantMeasurement,
+    IlluminantResponse,
     PairFinding,
     PairFindingObservation,
     PrintedPairClassification
@@ -21,7 +22,9 @@ defmodule ColorMatching.Persistence.PrinterProfile do
           calibration_date: Date.t() | nil,
           calibration_version: String.t() | nil,
           notes: String.t() | nil,
-          illuminant_measurements: [IlluminantMeasurement.t()] | Ecto.Association.NotLoaded.t(),
+           illuminant_measurements: [IlluminantMeasurement.t()] | Ecto.Association.NotLoaded.t(),
+           illuminant_responses: [IlluminantResponse.t()] | Ecto.Association.NotLoaded.t(),
+
           pair_findings: [PairFinding.t()] | Ecto.Association.NotLoaded.t(),
           pair_finding_observations:
             [PairFindingObservation.t()] | Ecto.Association.NotLoaded.t(),
@@ -43,7 +46,9 @@ defmodule ColorMatching.Persistence.PrinterProfile do
     field(:calibration_version, :string)
     field(:notes, :string)
 
-    has_many(:illuminant_measurements, IlluminantMeasurement)
+     has_many(:illuminant_measurements, IlluminantMeasurement)
+     has_many(:illuminant_responses, IlluminantResponse)
+
     has_many(:pair_findings, PairFinding)
     has_many(:pair_finding_observations, PairFindingObservation)
 

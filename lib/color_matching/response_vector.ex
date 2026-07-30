@@ -14,7 +14,7 @@ defmodule ColorMatching.ResponseVector do
   values according to their own policy (see `ColorMatching.IlluminantScoring`).
   """
 
-  alias ColorMatching.Persistence.IlluminantMeasurement
+  alias ColorMatching.Persistence.{IlluminantMeasurement, IlluminantResponse}
 
   @light_sources ~w(white red green blue lps)a
 
@@ -103,32 +103,28 @@ defmodule ColorMatching.ResponseVector do
     Map.take(vector, @light_sources)
   end
 
+  @spec brightness_for_source(IlluminantResponse.t() | IlluminantMeasurement.t()) :: float()
+  defp brightness_for_source(%IlluminantResponse{apparent_brightness: score}), do: score / 10
+  defp brightness_for_source(%IlluminantMeasurement{normalized_brightness: brightness}), do: brightness
+
   defp brightness_for(source, latest_measurements_by_light_source) do
     case Map.get(latest_measurements_by_light_source, Atom.to_string(source)) do
-      %IlluminantMeasurement{normalized_brightness: brightness} when is_float(brightness) ->
-        brightness
-
-      _other ->
-        :missing
+      %IlluminantMeasurement{} = measurement -> brightness_for_source(measurement)
+      %IlluminantResponse{} = response -> brightness_for_source(response)
+      _other -> :missing
     end
   end
 
   defp timestamps_for(latest_measurements_by_light_source) do
     known_keys = Enum.map(@light_sources, &Atom.to_string/1)
-    measurements = Map.take(latest_measurements_by_light_source, known_keys) |> Map.values()
-
-    measured_at =
-      measurements
-      |> Enum.map(& &1.measured_at)
-      |> Enum.reject(&is_nil/1)
-      |> Enum.max_by(&DateTime.to_unix(&1, :microsecond), fn -> nil end)
+    records = Map.take(latest_measurements_by_light_source, known_keys) |> Map.values()
 
     inserted_at =
-      measurements
+      records
       |> Enum.map(& &1.inserted_at)
       |> Enum.reject(&is_nil/1)
       |> Enum.max_by(&DateTime.to_unix(&1, :microsecond), fn -> nil end)
 
-    %{measured_at: measured_at, inserted_at: inserted_at}
+    %{measured_at: nil, inserted_at: inserted_at}
   end
 end

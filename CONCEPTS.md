@@ -28,7 +28,7 @@ The printer/material/settings context that produced a set of printed swatches, u
 A named lighting condition used to observe or measure printed colors, such as white, red, green, blue, or low-pressure sodium light.
 
 ### Illuminant Response
-The apparent brightness behavior of a printed palette color under one illuminant for one printer profile.
+A persisted human-entered apparent brightness score for one printed palette color under one illuminant and one printer profile. Scores use a subjective 0-10 printed black-to-white reference scale, where 0 is black and 10 is white. This per-color response is distinct from pair classifications and does not claim neutral gray appearance under a single-color illuminant.
 
 ### Response Vector
 The collection of illuminant responses for a palette color, used to compare that color against target brightness values from source images.

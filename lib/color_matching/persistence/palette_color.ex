@@ -2,7 +2,7 @@ defmodule ColorMatching.Persistence.PaletteColor do
   use Ecto.Schema
   import Ecto.Changeset
 
-  alias ColorMatching.Persistence.{IlluminantMeasurement, Palette}
+  alias ColorMatching.Persistence.{IlluminantMeasurement, IlluminantResponse, Palette}
 
   @type t :: %__MODULE__{
           id: integer() | nil,
@@ -11,7 +11,9 @@ defmodule ColorMatching.Persistence.PaletteColor do
           sort_order: integer() | nil,
           palette_id: integer() | nil,
           palette: Palette.t() | Ecto.Association.NotLoaded.t(),
-          illuminant_measurements: [IlluminantMeasurement.t()] | Ecto.Association.NotLoaded.t(),
+           illuminant_measurements: [IlluminantMeasurement.t()] | Ecto.Association.NotLoaded.t(),
+           illuminant_responses: [IlluminantResponse.t()] | Ecto.Association.NotLoaded.t(),
+
           inserted_at: DateTime.t() | nil,
           updated_at: DateTime.t() | nil
         }
@@ -22,7 +24,9 @@ defmodule ColorMatching.Persistence.PaletteColor do
     field(:sort_order, :integer)
 
     belongs_to(:palette, Palette)
-    has_many(:illuminant_measurements, IlluminantMeasurement)
+     has_many(:illuminant_measurements, IlluminantMeasurement)
+     has_many(:illuminant_responses, IlluminantResponse)
+
 
     timestamps()
   end
