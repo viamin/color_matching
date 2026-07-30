@@ -39,10 +39,7 @@ defmodule ColorMatching.Persistence.PrintedPairClassification do
     field(:notes, :string)
 
     belongs_to(:test_sheet_pair, TestSheetPair)
-
-    belongs_to(:reproduction_profile, PrinterProfile,
-      foreign_key: :reproduction_profile_id
-    )
+    belongs_to(:reproduction_profile, PrinterProfile, foreign_key: :reproduction_profile_id)
 
     timestamps(type: :utc_datetime_usec)
   end
