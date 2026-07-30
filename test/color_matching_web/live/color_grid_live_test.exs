@@ -129,6 +129,7 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
 
       [default_profile | _] = ColorMatching.PrinterProfile.default_profiles()
       assert html =~ ~s(href="/pair?a=%23FF6B6B&amp;b=%23009494&amp;sheet_id=sheet-)
+      assert html =~ ~s(&amp;pair_id=pair-)
       assert html =~ ~s(&amp;profile_id=#{default_profile.id})
 
       assert html =~

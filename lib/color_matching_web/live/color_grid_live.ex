@@ -1,6 +1,7 @@
 defmodule ColorMatchingWeb.ColorGridLive do
   use ColorMatchingWeb, :live_view
   alias ColorMatching.{ColorFormat, ColorUtils, GeneratedSheet, Grid, PrinterProfile}
+  alias ColorMatching.Persistence.TestSheet
 
   @default_colors ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#FD79A8"]
   # Lower bound for grid_size; matches the `min` attribute on the grid-size
@@ -315,7 +316,8 @@ defmodule ColorMatchingWeb.ColorGridLive do
     [
       a: cell.top_left_color,
       b: pair_second_color(cell),
-      sheet_id: generated_sheet.id
+      sheet_id: generated_sheet.id,
+      pair_id: TestSheet.pair_id(generated_sheet.id, cell.row, cell.col)
     ] ++ PrinterProfile.to_query_params(generated_sheet.printer_profile)
   end
 

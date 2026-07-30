@@ -74,7 +74,7 @@ defmodule ColorMatchingWeb.ColorPairLiveTest do
       {:ok, _view, html} =
         live(
           conn,
-          ~p"/pair?#{[a: pair.color_a_hex, b: pair.color_b_hex, sheet_id: sheet.lookup_code, reproduction_profile_id: printer_profile.id]}"
+          pair_path(pair, sheet, printer_profile)
         )
 
       assert html =~ "Manual Illuminant Classification"
@@ -96,7 +96,7 @@ defmodule ColorMatchingWeb.ColorPairLiveTest do
       {:ok, view, _html} =
         live(
           conn,
-          ~p"/pair?#{[a: pair.color_a_hex, b: pair.color_b_hex, sheet_id: sheet.lookup_code, reproduction_profile_id: printer_profile.id]}"
+          pair_path(pair, sheet, printer_profile)
         )
 
       html =
@@ -133,7 +133,7 @@ defmodule ColorMatchingWeb.ColorPairLiveTest do
       {:ok, view, _html} =
         live(
           conn,
-          ~p"/pair?#{[a: pair.color_a_hex, b: pair.color_b_hex, sheet_id: sheet.lookup_code, reproduction_profile_id: printer_profile.id]}"
+          pair_path(pair, sheet, printer_profile)
         )
 
       html =
@@ -175,7 +175,7 @@ defmodule ColorMatchingWeb.ColorPairLiveTest do
       {:ok, view, _html} =
         live(
           conn,
-          ~p"/pair?#{[a: pair.color_a_hex, b: pair.color_b_hex, sheet_id: sheet.lookup_code, reproduction_profile_id: printer_profile.id]}"
+          pair_path(pair, sheet, printer_profile)
         )
 
       html = render_click(view, "clear_classification", %{"illuminant" => "blue"})
@@ -195,6 +195,51 @@ defmodule ColorMatchingWeb.ColorPairLiveTest do
       assert persisted.notes == "Before clearing"
       refute persisted.active
     end
+
+    test "uses pair_id to target the correct persisted pair when sheet colors repeat", %{
+      conn: conn
+    } do
+      %{
+        first_pair: first_pair,
+        second_pair: second_pair,
+        printer_profile: printer_profile,
+        sheet: sheet
+      } = duplicate_color_pair_fixture()
+
+      {:ok, view, _html} = live(conn, pair_path(second_pair, sheet, printer_profile))
+
+      html =
+        render_submit(view, "save_classification", %{
+          "classification" => %{
+            "illuminant" => "green",
+            "classification" => "contrasting",
+            "notes" => "Second pair only"
+          }
+        })
+
+      assert html =~ "Saved Green classification"
+      assert html =~ "Contrasting"
+
+      assert Persistence.get_active_printed_pair_classification(
+               first_pair.id,
+               printer_profile.id,
+               "green"
+             ) == nil
+
+      persisted =
+        Persistence.get_active_printed_pair_classification(
+          second_pair.id,
+          printer_profile.id,
+          "green"
+        )
+
+      assert persisted.classification == "contrasting"
+      assert persisted.notes == "Second pair only"
+    end
+  end
+
+  defp pair_path(pair, sheet, printer_profile) do
+    ~p"/pair?#{[a: pair.color_a_hex, b: pair.color_b_hex, sheet_id: sheet.lookup_code, pair_id: pair.pair_id, reproduction_profile_id: printer_profile.id]}"
   end
 
   defp printed_pair_fixture do
@@ -230,5 +275,44 @@ defmodule ColorMatchingWeb.ColorPairLiveTest do
     [_, pair] = sheet.pairs
 
     %{pair: pair, printer_profile: printer_profile, sheet: sheet}
+  end
+
+  defp duplicate_color_pair_fixture do
+    assert {:ok, palette} =
+             Persistence.create_palette(%{
+               name: "Duplicate Pair Fixture",
+               colors: [
+                 %{hex_color: "#112233", sort_order: 0, display_label: "Patch 1"},
+                 %{hex_color: "#445566", sort_order: 1, display_label: "Patch 2"}
+               ]
+             })
+
+    assert {:ok, printer_profile} =
+             Persistence.create_printer_profile(%{
+               printer_make_model: "Canon imagePROGRAF PRO-1100",
+               paper_type: "Luster",
+               ink_type: "OEM Lucia PRO II"
+             })
+
+    assert {:ok, sheet} =
+             Persistence.create_test_sheet(%{
+               lookup_code: "DUPL-PA2R",
+               palette_id: palette.id,
+               printer_profile_id: printer_profile.id,
+               sheet_version: "2026-07-30",
+               pairs: [
+                 %{row: 0, col: 0, color_a_hex: "#112233", color_b_hex: "#445566"},
+                 %{row: 0, col: 1, color_a_hex: "#112233", color_b_hex: "#445566"}
+               ]
+             })
+
+    [first_pair, second_pair] = sheet.pairs
+
+    %{
+      first_pair: first_pair,
+      second_pair: second_pair,
+      printer_profile: printer_profile,
+      sheet: sheet
+    }
   end
 end

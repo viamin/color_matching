@@ -1,7 +1,7 @@
 defmodule ColorMatchingWeb.ColorPairLive do
   use ColorMatchingWeb, :live_view
 
-  alias ColorMatching.{ColorFormat, ColorUtils, MeasuredColorPair, Persistence, PrinterProfile}
+  alias ColorMatching.{ColorFormat, MeasuredColorPair, Persistence, PrinterProfile}
   alias ColorMatching.Persistence.PrintedPairClassification
 
   @illuminant_labels %{
@@ -130,10 +130,10 @@ defmodule ColorMatchingWeb.ColorPairLive do
 
   defp build_classification_context(params, color_a_hex, color_b_hex) do
     sheet = persisted_sheet(params)
-    pair = sheet && find_sheet_pair(sheet, color_a_hex, color_b_hex)
+    pair = persisted_pair(params, sheet)
     reproduction_profile = persisted_reproduction_profile(params, sheet)
 
-    if pair && reproduction_profile do
+    if pair && reproduction_profile && pair_colors_match?(pair, color_a_hex, color_b_hex) do
       %{pair: pair, reproduction_profile: reproduction_profile}
     end
   end
@@ -143,6 +143,13 @@ defmodule ColorMatchingWeb.ColorPairLive do
   end
 
   defp persisted_sheet(_params), do: nil
+
+  defp persisted_pair(%{"pair_id" => pair_id}, sheet)
+       when is_binary(pair_id) and pair_id != "" and not is_nil(sheet) do
+    Enum.find(sheet.pairs, &(&1.pair_id == pair_id))
+  end
+
+  defp persisted_pair(_params, _sheet), do: nil
 
   defp persisted_reproduction_profile(params, sheet) do
     case first_integer_param(params, ["reproduction_profile_id", "printer_profile_id"]) do
@@ -172,15 +179,8 @@ defmodule ColorMatchingWeb.ColorPairLive do
 
   defp parse_integer_param(_value), do: :error
 
-  defp find_sheet_pair(sheet, color_a_hex, color_b_hex) do
-    Enum.find(sheet.pairs, fn pair ->
-      pair.color_a_hex == color_a_hex and
-        pair_matches_second_color?(pair, color_b_hex)
-    end)
-  end
-
-  defp pair_matches_second_color?(pair, color_b_hex) do
-    pair.color_b_hex == color_b_hex or ColorUtils.invert_color(pair.color_b_hex) == color_b_hex
+  defp pair_colors_match?(pair, color_a_hex, color_b_hex) do
+    pair.color_a_hex == color_a_hex and pair.color_b_hex == color_b_hex
   end
 
   defp assign_classification_state(socket) do
