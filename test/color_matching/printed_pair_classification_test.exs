@@ -16,7 +16,7 @@ defmodule ColorMatching.Persistence.PrintedPairClassificationTest do
     changeset =
       PrintedPairClassification.changeset(%PrintedPairClassification{}, %{
         test_sheet_pair_id: 1,
-        printer_profile_id: 1,
+        reproduction_profile_id: 1,
         illuminant: "white",
         classification: "match",
         active: true

@@ -22,8 +22,8 @@ defmodule ColorMatching.Persistence.PrintedPairClassification do
           id: integer() | nil,
           test_sheet_pair_id: integer() | nil,
           test_sheet_pair: TestSheetPair.t() | Ecto.Association.NotLoaded.t(),
-          printer_profile_id: integer() | nil,
-          printer_profile: PrinterProfile.t() | Ecto.Association.NotLoaded.t(),
+          reproduction_profile_id: integer() | nil,
+          reproduction_profile: PrinterProfile.t() | Ecto.Association.NotLoaded.t(),
           illuminant: illuminant() | nil,
           classification: classification() | nil,
           active: boolean(),
@@ -39,7 +39,10 @@ defmodule ColorMatching.Persistence.PrintedPairClassification do
     field(:notes, :string)
 
     belongs_to(:test_sheet_pair, TestSheetPair)
-    belongs_to(:printer_profile, PrinterProfile)
+
+    belongs_to(:reproduction_profile, PrinterProfile,
+      foreign_key: :reproduction_profile_id
+    )
 
     timestamps(type: :utc_datetime_usec)
   end
@@ -55,18 +58,24 @@ defmodule ColorMatching.Persistence.PrintedPairClassification do
     classification
     |> cast(attrs, [
       :test_sheet_pair_id,
-      :printer_profile_id,
+      :reproduction_profile_id,
       :illuminant,
       :classification,
       :active,
       :notes
     ])
-    |> validate_required([:test_sheet_pair_id, :printer_profile_id, :illuminant, :classification, :active])
+    |> validate_required([
+      :test_sheet_pair_id,
+      :reproduction_profile_id,
+      :illuminant,
+      :classification,
+      :active
+    ])
     |> validate_inclusion(:illuminant, @illuminants)
     |> validate_inclusion(:classification, @classifications)
     |> foreign_key_constraint(:test_sheet_pair_id)
-    |> foreign_key_constraint(:printer_profile_id)
-    |> unique_constraint([:test_sheet_pair_id, :printer_profile_id, :illuminant],
+    |> foreign_key_constraint(:reproduction_profile_id)
+    |> unique_constraint([:test_sheet_pair_id, :reproduction_profile_id, :illuminant],
       name: :printed_pair_classifications_active_key
     )
   end
