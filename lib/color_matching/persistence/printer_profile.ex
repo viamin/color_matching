@@ -2,7 +2,12 @@ defmodule ColorMatching.Persistence.PrinterProfile do
   use Ecto.Schema
   import Ecto.Changeset
 
-  alias ColorMatching.Persistence.{IlluminantMeasurement, PairFinding, PairFindingObservation}
+  alias ColorMatching.Persistence.{
+    IlluminantMeasurement,
+    PairFinding,
+    PairFindingObservation,
+    PrintedPairClassification
+  }
 
   @type t :: %__MODULE__{
           id: integer() | nil,
@@ -20,6 +25,8 @@ defmodule ColorMatching.Persistence.PrinterProfile do
           pair_findings: [PairFinding.t()] | Ecto.Association.NotLoaded.t(),
           pair_finding_observations:
             [PairFindingObservation.t()] | Ecto.Association.NotLoaded.t(),
+          printed_pair_classifications:
+            [PrintedPairClassification.t()] | Ecto.Association.NotLoaded.t(),
           inserted_at: DateTime.t() | nil,
           updated_at: DateTime.t() | nil
         }
@@ -39,6 +46,10 @@ defmodule ColorMatching.Persistence.PrinterProfile do
     has_many(:illuminant_measurements, IlluminantMeasurement)
     has_many(:pair_findings, PairFinding)
     has_many(:pair_finding_observations, PairFindingObservation)
+
+    has_many(:printed_pair_classifications, PrintedPairClassification,
+      foreign_key: :reproduction_profile_id
+    )
 
     timestamps()
   end
