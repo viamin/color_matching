@@ -17,8 +17,10 @@ defmodule ColorMatching.Persistence do
     PairFindingObservation,
     Palette,
     PaletteColor,
+    PrintedPairClassification,
     PrinterProfile,
-    TestSheet
+    TestSheet,
+    TestSheetPair
   }
 
   alias ColorMatching.Repo
@@ -290,6 +292,106 @@ defmodule ColorMatching.Persistence do
       nil -> {:error, :capture_not_found}
       %Capture{} = capture -> CaptureJudgmentUpload.upload(capture, attrs)
     end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Printed pair classifications
+  # ---------------------------------------------------------------------------
+
+  @spec list_printed_pair_classifications(keyword() | map()) :: [PrintedPairClassification.t()]
+  def list_printed_pair_classifications(filters \\ %{}) do
+    filters = normalize_printed_pair_classification_filters(filters)
+
+    PrintedPairClassification
+    |> join(:inner, [classification], pair in TestSheetPair,
+      on: pair.id == classification.test_sheet_pair_id
+    )
+    |> maybe_filter_printed_pair_classification(:test_sheet_pair_id, filters[:test_sheet_pair_id])
+    |> maybe_filter_printed_pair_classification(
+      :reproduction_profile_id,
+      filters[:reproduction_profile_id]
+    )
+    |> maybe_filter_printed_pair_classification(:illuminant, filters[:illuminant])
+    |> maybe_filter_printed_pair_classification(:classification, filters[:classification])
+    |> maybe_filter_printed_pair_classification(:active, filters[:active])
+    |> maybe_filter_printed_pair_id(filters[:pair_id])
+    |> order_by([classification, pair],
+      asc: pair.pair_id,
+      asc: classification.illuminant,
+      desc: classification.active,
+      desc: classification.inserted_at,
+      desc: classification.id
+    )
+    |> select([classification, _pair], classification)
+    |> Repo.all()
+    |> Repo.preload([:reproduction_profile, :test_sheet_pair])
+  end
+
+  @spec list_printed_pair_classification_history(integer(), integer(), String.t()) ::
+          [PrintedPairClassification.t()]
+  def list_printed_pair_classification_history(
+        test_sheet_pair_id,
+        reproduction_profile_id,
+        illuminant
+      )
+      when is_integer(test_sheet_pair_id) and is_integer(reproduction_profile_id) and
+             is_binary(illuminant) do
+    list_printed_pair_classifications(%{
+      test_sheet_pair_id: test_sheet_pair_id,
+      reproduction_profile_id: reproduction_profile_id,
+      illuminant: illuminant,
+      active: nil
+    })
+  end
+
+  @spec get_active_printed_pair_classification(integer(), integer(), String.t()) ::
+          PrintedPairClassification.t() | nil
+  def get_active_printed_pair_classification(
+        test_sheet_pair_id,
+        reproduction_profile_id,
+        illuminant
+      )
+      when is_integer(test_sheet_pair_id) and is_integer(reproduction_profile_id) and
+             is_binary(illuminant) do
+    list_printed_pair_classifications(%{
+      test_sheet_pair_id: test_sheet_pair_id,
+      reproduction_profile_id: reproduction_profile_id,
+      illuminant: illuminant,
+      active: true
+    })
+    |> List.first()
+  end
+
+  @spec set_printed_pair_classification(map()) ::
+          {:ok, PrintedPairClassification.t()} | {:error, Ecto.Changeset.t()}
+  def set_printed_pair_classification(attrs) when is_map(attrs) do
+    attrs =
+      attrs
+      |> normalize_printed_pair_classification_attrs()
+      |> Map.put(:active, true)
+
+    changeset =
+      %PrintedPairClassification{}
+      |> PrintedPairClassification.changeset(attrs)
+      |> validate_printed_pair_classification_references(attrs)
+
+    if changeset.valid? do
+      persist_printed_pair_classification(changeset, attrs)
+    else
+      {:error, changeset}
+    end
+  end
+
+  @spec clear_printed_pair_classification(integer(), integer(), String.t()) ::
+          {non_neg_integer(), nil}
+  def clear_printed_pair_classification(test_sheet_pair_id, reproduction_profile_id, illuminant)
+      when is_integer(test_sheet_pair_id) and is_integer(reproduction_profile_id) and
+             is_binary(illuminant) do
+    deactivate_printed_pair_classification_scope(%{
+      test_sheet_pair_id: test_sheet_pair_id,
+      reproduction_profile_id: reproduction_profile_id,
+      illuminant: illuminant
+    })
   end
 
   @spec preload_test_sheet_associations(TestSheet.t() | [TestSheet.t()]) ::
@@ -686,6 +788,22 @@ defmodule ColorMatching.Persistence do
     |> normalize_measurement_key(:test_run_id, [:test_run_id, "test_run_id"])
   end
 
+  @spec normalize_printed_pair_classification_attrs(map()) :: map()
+  defp normalize_printed_pair_classification_attrs(attrs) do
+    attrs
+    |> normalize_measurement_key(:test_sheet_pair_id, [:test_sheet_pair_id, "test_sheet_pair_id"])
+    |> normalize_measurement_key(:reproduction_profile_id, [
+      :reproduction_profile_id,
+      "reproduction_profile_id",
+      :printer_profile_id,
+      "printer_profile_id"
+    ])
+    |> normalize_measurement_key(:illuminant, [:illuminant, "illuminant"])
+    |> normalize_measurement_key(:classification, [:classification, "classification"])
+    |> normalize_measurement_key(:active, [:active, "active"])
+    |> normalize_measurement_key(:notes, [:notes, "notes"])
+  end
+
   @spec normalize_capture_attrs(map()) :: map()
   defp normalize_capture_attrs(attrs) do
     attrs
@@ -763,6 +881,40 @@ defmodule ColorMatching.Persistence do
     |> MapSet.new()
   end
 
+  @spec normalize_printed_pair_classification_filters(keyword() | map()) :: map()
+  defp normalize_printed_pair_classification_filters(filters) when is_list(filters) do
+    filters |> Enum.into(%{}) |> normalize_printed_pair_classification_filters()
+  end
+
+  defp normalize_printed_pair_classification_filters(filters) when is_map(filters) do
+    filters
+    |> normalize_measurement_key(:test_sheet_pair_id, [:test_sheet_pair_id, "test_sheet_pair_id"])
+    |> normalize_measurement_key(:pair_id, [:pair_id, "pair_id"])
+    |> normalize_measurement_key(:reproduction_profile_id, [
+      :reproduction_profile_id,
+      "reproduction_profile_id",
+      :printer_profile_id,
+      "printer_profile_id"
+    ])
+    |> normalize_measurement_key(:illuminant, [:illuminant, "illuminant"])
+    |> normalize_measurement_key(:classification, [:classification, "classification"])
+    |> normalize_measurement_key(:active, [:active, "active"])
+  end
+
+  @spec maybe_filter_printed_pair_classification(Ecto.Query.t(), atom(), term()) :: Ecto.Query.t()
+  defp maybe_filter_printed_pair_classification(query, _field, nil), do: query
+
+  defp maybe_filter_printed_pair_classification(query, field, value) do
+    where(query, [classification, _pair], field(classification, ^field) == ^value)
+  end
+
+  @spec maybe_filter_printed_pair_id(Ecto.Query.t(), String.t() | nil) :: Ecto.Query.t()
+  defp maybe_filter_printed_pair_id(query, nil), do: query
+
+  defp maybe_filter_printed_pair_id(query, pair_id) do
+    where(query, [_classification, pair], pair.pair_id == ^pair_id)
+  end
+
   @spec first_present_value(map(), [atom() | String.t()]) :: term() | nil
   defp first_present_value(attrs, keys) do
     Enum.reduce_while(keys, nil, fn key, _acc ->
@@ -811,6 +963,70 @@ defmodule ColorMatching.Persistence do
       Ecto.Changeset.get_field(changeset, :printer_profile_id),
       existing_printer_profile_ids
     )
+  end
+
+  @spec validate_printed_pair_classification_references(Ecto.Changeset.t(), map()) ::
+          Ecto.Changeset.t()
+  defp validate_printed_pair_classification_references(changeset, attrs) do
+    test_sheet_pair_ids =
+      attrs
+      |> Map.get(:test_sheet_pair_id)
+      |> List.wrap()
+      |> existing_ids(TestSheetPair)
+
+    reproduction_profile_ids =
+      attrs
+      |> Map.get(:reproduction_profile_id)
+      |> List.wrap()
+      |> existing_ids(PrinterProfile)
+
+    changeset
+    |> maybe_add_missing_reference_error(
+      :test_sheet_pair_id,
+      Ecto.Changeset.get_field(changeset, :test_sheet_pair_id),
+      test_sheet_pair_ids
+    )
+    |> maybe_add_missing_reference_error(
+      :reproduction_profile_id,
+      Ecto.Changeset.get_field(changeset, :reproduction_profile_id),
+      reproduction_profile_ids
+    )
+  end
+
+  @spec persist_printed_pair_classification(Ecto.Changeset.t(), map()) ::
+          {:ok, PrintedPairClassification.t()} | {:error, Ecto.Changeset.t()}
+  defp persist_printed_pair_classification(changeset, attrs) do
+    case Repo.transaction(fn ->
+           deactivate_printed_pair_classification_scope(attrs)
+           insert_printed_pair_classification(changeset)
+         end) do
+      {:ok, classification} -> {:ok, classification}
+      {:error, %Ecto.Changeset{} = changeset} -> {:error, changeset}
+    end
+  end
+
+  @spec insert_printed_pair_classification(Ecto.Changeset.t()) :: PrintedPairClassification.t()
+  defp insert_printed_pair_classification(changeset) do
+    case Repo.insert(changeset) do
+      {:ok, classification} ->
+        Repo.preload(classification, [:reproduction_profile, :test_sheet_pair])
+
+      {:error, changeset} ->
+        Repo.rollback(changeset)
+    end
+  end
+
+  @spec deactivate_printed_pair_classification_scope(map()) :: {non_neg_integer(), nil}
+  defp deactivate_printed_pair_classification_scope(attrs) do
+    PrintedPairClassification
+    |> where(
+      [classification],
+      classification.test_sheet_pair_id == ^attrs[:test_sheet_pair_id] and
+        classification.reproduction_profile_id == ^attrs[:reproduction_profile_id] and
+        classification.illuminant == ^attrs[:illuminant] and
+        classification.active == true
+    )
+    |> Repo.update_all(set: [active: false])
   end
 
   @spec maybe_add_missing_reference_error(
