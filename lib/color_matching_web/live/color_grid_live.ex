@@ -403,12 +403,20 @@ defmodule ColorMatchingWeb.ColorGridLive do
               <% end %>
             </p>
           </div>
-          <.link
-            navigate={~p"/palettes"}
-            class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-white"
-          >
-            Manage Palettes
-          </.link>
+          <div class="flex items-center gap-2">
+            <.link
+              navigate={~p"/printed-pairs"}
+              class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-white"
+            >
+              Browse Printed Pairs
+            </.link>
+            <.link
+              navigate={~p"/palettes"}
+              class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-white"
+            >
+              Manage Palettes
+            </.link>
+          </div>
         </div>
 
         <p class="text-sm text-gray-600 mb-3">
