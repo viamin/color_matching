@@ -443,7 +443,7 @@ defmodule ColorMatchingWeb.ColorPairLiveTest do
 
     assert {:ok, sheet} =
              Persistence.create_test_sheet(%{
-               lookup_code: "PROF-MISM",
+               lookup_code: "PRHF-G6SH",
                palette_id: palette.id,
                printer_profile_id: sheet_profile.id,
                sheet_version: "2026-07-30",
