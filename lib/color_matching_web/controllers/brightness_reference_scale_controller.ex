@@ -11,6 +11,9 @@ defmodule ColorMatchingWeb.BrightnessReferenceScaleController do
 
   alias ColorMatching.BrightnessReferenceScale
 
+  @invalid_block_size_message "block_size must be a positive integer"
+  @max_block_size BrightnessReferenceScale.max_block_size()
+
   def show(conn, params) do
     with {:ok, scale} <- BrightnessReferenceScale.new(params["illuminant"]),
          {:ok, options} <- png_options(params),
@@ -35,16 +38,26 @@ defmodule ColorMatchingWeb.BrightnessReferenceScaleController do
   end
 
   defp parse_block_size(nil), do: {:ok, 32}
-  defp parse_block_size(block_size) when is_integer(block_size), do: {:ok, block_size}
+
+  defp parse_block_size(block_size) when is_integer(block_size),
+    do: validate_block_size(block_size)
 
   defp parse_block_size(block_size) when is_binary(block_size) do
     case Integer.parse(block_size) do
-      {parsed, ""} -> {:ok, parsed}
-      _ -> {:error, "block_size must be a positive integer"}
+      {parsed, ""} -> validate_block_size(parsed)
+      _ -> {:error, @invalid_block_size_message}
     end
   end
 
-  defp parse_block_size(_block_size), do: {:error, "block_size must be a positive integer"}
+  defp parse_block_size(_block_size), do: {:error, @invalid_block_size_message}
+
+  defp validate_block_size(block_size) when block_size <= 0,
+    do: {:error, @invalid_block_size_message}
+
+  defp validate_block_size(block_size) when block_size > @max_block_size,
+    do: {:error, "block_size must be less than or equal to #{@max_block_size}"}
+
+  defp validate_block_size(block_size), do: {:ok, block_size}
 
   defp parse_orientation(nil), do: {:ok, :horizontal}
   defp parse_orientation("horizontal"), do: {:ok, :horizontal}

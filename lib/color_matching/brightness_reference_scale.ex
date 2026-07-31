@@ -24,7 +24,21 @@ defmodule ColorMatching.BrightnessReferenceScale do
   alias ColorMatching.PNG
 
   @default_block_size 32
+  @max_block_size 256
   @orientations [:horizontal, :vertical]
+  @label_padding 2
+  @digit_patterns %{
+    "0" => ["111", "101", "101", "101", "111"],
+    "1" => ["010", "110", "010", "010", "111"],
+    "2" => ["111", "001", "111", "100", "111"],
+    "3" => ["111", "001", "111", "001", "111"],
+    "4" => ["101", "101", "111", "001", "001"],
+    "5" => ["111", "100", "111", "001", "111"],
+    "6" => ["111", "100", "111", "101", "111"],
+    "7" => ["111", "001", "001", "001", "001"],
+    "8" => ["111", "101", "111", "101", "111"],
+    "9" => ["111", "101", "111", "001", "111"]
+  }
 
   @enforce_keys [:illuminant, :steps]
   defstruct [:illuminant, :steps]
@@ -47,6 +61,9 @@ defmodule ColorMatching.BrightnessReferenceScale do
     IlluminantResponse.score_range()
     |> Enum.map(&build_step/1)
   end
+
+  @spec max_block_size() :: pos_integer()
+  def max_block_size, do: @max_block_size
 
   @doc """
   Builds a reference scale bound to `illuminant` for scoring under that light.
@@ -80,10 +97,10 @@ defmodule ColorMatching.BrightnessReferenceScale do
 
     with :ok <- validate_block_size(block_size),
          :ok <- validate_orientation(orientation) do
-      {width, height} = dimensions(length(steps), block_size, orientation)
-      pixels = build_pixels(steps, block_size, orientation)
+      layout = layout(steps, block_size, orientation)
+      pixels = build_pixels(steps, layout, orientation)
 
-      PNG.encode_rgb(width, height, pixels)
+      PNG.encode_rgb(layout.width, layout.height, pixels)
     end
   end
 
@@ -117,31 +134,172 @@ defmodule ColorMatching.BrightnessReferenceScale do
     end
   end
 
-  defp dimensions(step_count, block_size, :horizontal),
-    do: {step_count * block_size, block_size}
+  defp layout(steps, block_size, :horizontal) do
+    metrics = label_metrics(steps, block_size)
 
-  defp dimensions(step_count, block_size, :vertical),
-    do: {block_size, step_count * block_size}
-
-  defp build_pixels(steps, block_size, :horizontal) do
-    for _row <- 1..block_size,
-        step <- steps,
-        _column <- 1..block_size,
-        do: pixel(step.gray_value)
+    %{
+      block_size: block_size,
+      cell_width: max(block_size, metrics.max_label_width + @label_padding * 2),
+      height: block_size + metrics.label_height + @label_padding * 2,
+      label_metrics: metrics,
+      width: length(steps) * max(block_size, metrics.max_label_width + @label_padding * 2)
+    }
   end
 
-  defp build_pixels(steps, block_size, :vertical) do
-    for step <- steps,
-        _row <- 1..block_size,
-        _column <- 1..block_size,
-        do: pixel(step.gray_value)
+  defp layout(steps, block_size, :vertical) do
+    metrics = label_metrics(steps, block_size)
+
+    %{
+      block_size: block_size,
+      cell_height: max(block_size, metrics.label_height + @label_padding * 2),
+      height: length(steps) * max(block_size, metrics.label_height + @label_padding * 2),
+      label_metrics: metrics,
+      width: block_size + metrics.max_label_width + @label_padding * 3
+    }
   end
 
+  defp build_pixels(steps, layout, :horizontal) do
+    for y <- 0..(layout.height - 1),
+        step <- steps_with_index(steps),
+        x <- 0..(layout.cell_width - 1),
+        do: horizontal_pixel(step, x, y, layout)
+  end
+
+  defp build_pixels(steps, layout, :vertical) do
+    for step <- steps_with_index(steps),
+        y <- 0..(layout.cell_height - 1),
+        x <- 0..(layout.width - 1),
+        do: vertical_pixel(step, x, y, layout)
+  end
+
+  defp pixel(:black), do: {0, 0, 0}
+  defp pixel(:white), do: {255, 255, 255}
   defp pixel(gray), do: {gray, gray, gray}
 
+  defp horizontal_pixel({step, _index}, x, y, layout) do
+    block_x = div(layout.cell_width - layout.block_size, 2)
+
+    cond do
+      within_horizontal_block?(x, y, block_x, layout.block_size) ->
+        pixel(step.gray_value)
+
+      label_pixel?(
+        step.label,
+        x,
+        y,
+        horizontal_label_origin(step.label, layout),
+        layout.label_metrics.scale
+      ) ->
+        pixel(:black)
+
+      true ->
+        pixel(:white)
+    end
+  end
+
+  defp vertical_pixel({step, index}, x, y, layout) do
+    step_y = index * layout.cell_height
+    block_y = step_y + div(layout.cell_height - layout.block_size, 2)
+
+    cond do
+      within_vertical_block?(x, y, block_y, layout.block_size) ->
+        pixel(step.gray_value)
+
+      label_pixel?(
+        step.label,
+        x,
+        y - step_y,
+        vertical_label_origin(layout),
+        layout.label_metrics.scale
+      ) ->
+        pixel(:black)
+
+      true ->
+        pixel(:white)
+    end
+  end
+
+  defp within_horizontal_block?(x, y, block_x, block_size) do
+    y < block_size and x >= block_x and x < block_x + block_size
+  end
+
+  defp within_vertical_block?(x, y, block_y, block_size) do
+    x < block_size and y >= block_y and y < block_y + block_size
+  end
+
+  defp horizontal_label_origin(label, layout) do
+    label_width = label_width(label, layout.label_metrics.scale)
+
+    %{
+      x: div(layout.cell_width - label_width, 2),
+      y: layout.block_size + @label_padding
+    }
+  end
+
+  defp vertical_label_origin(layout) do
+    %{
+      x: layout.block_size + @label_padding,
+      y: div(layout.cell_height - layout.label_metrics.label_height, 2)
+    }
+  end
+
+  defp label_pixel?(label, x, y, origin, scale) do
+    x >= origin.x and y >= origin.y and glyph_pixel?(label, x - origin.x, y - origin.y, scale)
+  end
+
+  defp glyph_pixel?(label, x, y, scale) when x >= 0 and y >= 0 do
+    digit_width = 3 * scale
+    digit_height = 5 * scale
+    gap = scale
+    label_width = label_width(label, scale)
+
+    if x < label_width and y < digit_height do
+      digit_index = div(x, digit_width + gap)
+      digit_x = rem(x, digit_width + gap)
+
+      if digit_index < String.length(label) and digit_x < digit_width do
+        digit = String.at(label, digit_index)
+        pattern = Map.fetch!(@digit_patterns, digit)
+        row = div(y, scale)
+        column = div(digit_x, scale)
+
+        Enum.at(pattern, row)
+        |> String.at(column) == "1"
+      else
+        false
+      end
+    else
+      false
+    end
+  end
+
+  defp glyph_pixel?(_label, _x, _y, _scale), do: false
+
+  defp label_metrics(steps, block_size) do
+    scale = max(div(block_size, 16), 1)
+
+    max_label_width =
+      steps
+      |> Enum.map(&label_width(&1.label, scale))
+      |> Enum.max()
+
+    %{label_height: 5 * scale, max_label_width: max_label_width, scale: scale}
+  end
+
+  defp label_width(label, scale) do
+    digit_count = String.length(label)
+    digit_count * 3 * scale + max(digit_count - 1, 0) * scale
+  end
+
+  defp steps_with_index(steps), do: Enum.with_index(steps)
+
   defp validate_block_size(block_size)
-       when is_integer(block_size) and block_size > 0,
+       when is_integer(block_size) and block_size > 0 and block_size <= @max_block_size,
        do: :ok
+
+  defp validate_block_size(block_size)
+       when is_integer(block_size) and block_size > @max_block_size,
+       do: {:error, "block_size must be less than or equal to #{@max_block_size}"}
 
   defp validate_block_size(_block_size),
     do: {:error, "block_size must be a positive integer"}

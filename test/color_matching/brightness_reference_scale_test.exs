@@ -111,8 +111,7 @@ defmodule ColorMatching.BrightnessReferenceScaleTest do
       assert {:ok, png} = Scale.to_png(scale, block_size: block_size)
       assert {:ok, %{width: width, height: height}} = PNG.inspect_header(png)
 
-      step_count = length(scale.steps)
-      assert {width, height} == {step_count * block_size, block_size}
+      assert {width, height} == horizontal_dimensions(scale.steps, block_size)
     end
 
     test "encodes each step block as a uniform gray square" do
@@ -121,25 +120,44 @@ defmodule ColorMatching.BrightnessReferenceScaleTest do
 
       assert {:ok, png} = Scale.to_png(scale, block_size: block_size)
       assert {:ok, %{width: width, pixels: pixels}} = PNG.decode_rgb(png)
+      cell_width = horizontal_cell_width(block_size)
+      block_x = horizontal_block_x(block_size)
 
       scale.steps
       |> Enum.with_index()
       |> Enum.each(fn {step, index} ->
-        x = index * block_size
+        x = index * cell_width + block_x
         pixel = pixel_at(pixels, width, x, 0)
 
         assert pixel == {step.gray_value, step.gray_value, step.gray_value}
       end)
     end
 
+    test "renders score labels into the printable PNG" do
+      {:ok, scale} = Scale.new("white")
+      block_size = 16
+
+      assert {:ok, png} = Scale.to_png(scale, block_size: block_size)
+      assert {:ok, %{width: width, pixels: pixels}} = PNG.decode_rgb(png)
+
+      {_image_width, image_height} = horizontal_dimensions(scale.steps, block_size)
+      label_row = block_size + 2
+      cell_width = horizontal_cell_width(block_size)
+
+      assert label_row < image_height
+
+      assert label_region_contains_black?(pixels, width, 0, cell_width, label_row)
+      assert label_region_contains_black?(pixels, width, 10 * cell_width, cell_width, label_row)
+    end
+
     test "verifies the full output shape and pixel count" do
       {:ok, scale} = Scale.new("white")
+      block_size = 16
 
-      assert {:ok, png} = Scale.to_png(scale, block_size: 16)
+      assert {:ok, png} = Scale.to_png(scale, block_size: block_size)
       assert {:ok, %{width: width, height: height}} = PNG.inspect_header(png)
 
-      assert width == 11 * 16
-      assert height == 16
+      assert {width, height} == horizontal_dimensions(scale.steps, block_size)
 
       assert {:ok, %{pixels: pixels}} = PNG.decode_rgb(png)
       assert length(pixels) == width * height
@@ -152,7 +170,7 @@ defmodule ColorMatching.BrightnessReferenceScaleTest do
       assert {:ok, png} = Scale.to_png(scale, block_size: block_size, orientation: :vertical)
       assert {:ok, %{width: width, height: height, pixels: pixels}} = PNG.decode_rgb(png)
 
-      assert {width, height} == {block_size, length(scale.steps) * block_size}
+      assert {width, height} == vertical_dimensions(scale.steps, block_size)
       assert length(pixels) == width * height
 
       top_pixel = pixel_at(pixels, width, 0, 0)
@@ -167,12 +185,14 @@ defmodule ColorMatching.BrightnessReferenceScaleTest do
 
       assert {:ok, png} = Scale.to_png(scale, block_size: 2)
       assert {:ok, %{width: width, pixels: pixels}} = PNG.decode_rgb(png)
+      cell_width = horizontal_cell_width(2)
+      block_x = horizontal_block_x(2)
 
       block_grays =
         scale.steps
         |> Enum.with_index()
         |> Enum.map(fn {_step, index} ->
-          pixel_at(pixels, width, index * 2, 0) |> elem(0)
+          pixel_at(pixels, width, index * cell_width + block_x, 0) |> elem(0)
         end)
 
       assert block_grays == Enum.map(scale.steps, & &1.gray_value)
@@ -184,7 +204,7 @@ defmodule ColorMatching.BrightnessReferenceScaleTest do
       assert {:ok, png} = Scale.to_png(scale)
       assert {:ok, %{width: width, height: height}} = PNG.inspect_header(png)
 
-      assert {width, height} == {11 * 32, 32}
+      assert {width, height} == horizontal_dimensions(scale.steps, 32)
     end
 
     test "rejects an invalid block size" do
@@ -192,6 +212,14 @@ defmodule ColorMatching.BrightnessReferenceScaleTest do
 
       assert {:error, "block_size must be a positive integer"} =
                Scale.to_png(scale, block_size: 0)
+    end
+
+    test "rejects an oversized block size" do
+      {:ok, scale} = Scale.new("white")
+      expected_error = "block_size must be less than or equal to #{Scale.max_block_size()}"
+
+      assert {:error, ^expected_error} =
+               Scale.to_png(scale, block_size: Scale.max_block_size() + 1)
     end
 
     test "rejects an unsupported orientation" do
@@ -204,5 +232,32 @@ defmodule ColorMatching.BrightnessReferenceScaleTest do
 
   defp pixel_at(pixels, width, x, y) do
     Enum.at(pixels, y * width + x)
+  end
+
+  defp label_region_contains_black?(pixels, width, start_x, cell_width, y) do
+    Enum.any?(start_x..(start_x + cell_width - 1), fn x ->
+      pixel_at(pixels, width, x, y) == {0, 0, 0}
+    end)
+  end
+
+  defp horizontal_dimensions(steps, block_size) do
+    label_scale = max(div(block_size, 16), 1)
+    cell_width = horizontal_cell_width(block_size)
+    {length(steps) * cell_width, block_size + 5 * label_scale + 4}
+  end
+
+  defp vertical_dimensions(steps, block_size) do
+    label_scale = max(div(block_size, 16), 1)
+    cell_height = max(block_size, 5 * label_scale + 4)
+    {block_size + 7 * label_scale + 6, length(steps) * cell_height}
+  end
+
+  defp horizontal_cell_width(block_size) do
+    label_scale = max(div(block_size, 16), 1)
+    max(block_size, 7 * label_scale + 4)
+  end
+
+  defp horizontal_block_x(block_size) do
+    div(horizontal_cell_width(block_size) - block_size, 2)
   end
 end

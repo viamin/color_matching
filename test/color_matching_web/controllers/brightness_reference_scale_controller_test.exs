@@ -1,6 +1,7 @@
 defmodule ColorMatchingWeb.BrightnessReferenceScaleControllerTest do
   use ColorMatchingWeb.ConnCase, async: false
 
+  alias ColorMatching.BrightnessReferenceScale
   alias ColorMatching.PNG
 
   describe "GET /brightness_reference_scales/:illuminant" do
@@ -17,7 +18,7 @@ defmodule ColorMatchingWeb.BrightnessReferenceScaleControllerTest do
                ~s(attachment; filename="brightness-reference-scale-red.png")
              ]
 
-      assert {:ok, %{width: 12, height: 132}} = PNG.inspect_header(response.resp_body)
+      assert {:ok, %{width: 25, height: 132}} = PNG.inspect_header(response.resp_body)
     end
 
     test "returns 422 for an unsupported illuminant", %{conn: conn} do
@@ -39,6 +40,23 @@ defmodule ColorMatchingWeb.BrightnessReferenceScaleControllerTest do
 
       assert response == %{
                "errors" => %{"base" => ["block_size must be a positive integer"]}
+             }
+    end
+
+    test "returns 422 for an oversized block size", %{conn: conn} do
+      response =
+        conn
+        |> get(~p"/brightness_reference_scales/white", %{
+          block_size: Integer.to_string(BrightnessReferenceScale.max_block_size() + 1)
+        })
+        |> json_response(422)
+
+      assert response == %{
+               "errors" => %{
+                 "base" => [
+                   "block_size must be less than or equal to #{BrightnessReferenceScale.max_block_size()}"
+                 ]
+               }
              }
     end
   end
