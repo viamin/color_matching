@@ -16,10 +16,11 @@ defmodule ColorMatching.IlluminantMatchingTest do
       exact = vector("#222222", white: 0.8, red: 0.2, green: 0.7, blue: 0.1, lps: 0.5)
       far = vector("#FF0000", white: 0.0, red: 0.0, green: 0.0, blue: 0.0, lps: 0.0)
 
-      assert {matched, 0.0} =
+      assert {matched, score} =
                IlluminantMatching.best_match([close, exact, far], target, @weights)
 
       assert matched == exact
+      assert_in_delta score, 0.0, 1.0e-12
     end
 
     test "is deterministic when multiple candidates tie" do
@@ -29,10 +30,11 @@ defmodule ColorMatching.IlluminantMatchingTest do
       second = vector("#BBBBBB", white: 0.5, red: 0.5, green: 0.5, blue: 0.5, lps: 0.5)
       third = vector("#CCCCCC", white: 0.5, red: 0.5, green: 0.5, blue: 0.5, lps: 0.5)
 
-      assert {winner, 0.0} =
+      assert {winner, score} =
                IlluminantMatching.best_match([first, second, third], target, @weights)
 
       assert winner.hex_color == "#AAAAAA"
+      assert_in_delta score, 0.0, 1.0e-12
     end
 
     test "excludes candidates missing any positive-weight light source" do
@@ -41,10 +43,11 @@ defmodule ColorMatching.IlluminantMatchingTest do
       scorable = vector("#AAAAAA", white: 0.5, red: 0.5, green: 0.5, blue: 0.5, lps: 0.5)
       missing = vector("#BBBBBB", white: 0.5, red: :missing, green: 0.5, blue: 0.5, lps: 0.5)
 
-      assert {winner, 0.0} =
+      assert {winner, score} =
                IlluminantMatching.best_match([missing, scorable], target, @weights)
 
       assert winner.hex_color == "#AAAAAA"
+      assert_in_delta score, 0.0, 1.0e-12
     end
 
     test "returns nil when every candidate is excluded" do
@@ -79,9 +82,11 @@ defmodule ColorMatching.IlluminantMatchingTest do
       missing = vector("#BBBBBB", white: 0.5, red: :missing, green: 0.5, blue: 0.5, lps: 0.5)
 
       assert [
-               {%ResponseVector{hex_color: "#AAAAAA"}, 0.0},
+               {%ResponseVector{hex_color: "#AAAAAA"}, score},
                {%ResponseVector{hex_color: "#BBBBBB"}, :excluded}
              ] = IlluminantMatching.score_candidates([scorable, missing], target, @weights)
+
+      assert_in_delta score, 0.0, 1.0e-12
     end
 
     test "uses the default scorer when none is supplied" do
