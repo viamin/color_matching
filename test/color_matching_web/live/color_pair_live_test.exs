@@ -279,7 +279,7 @@ defmodule ColorMatchingWeb.ColorPairLiveTest do
       %{
         pair: pair,
         printer_profile: sheet_profile,
-        other_profile,
+        other_profile: other_profile,
         sheet: sheet
       } = mismatched_profile_fixture()
 
@@ -324,7 +324,7 @@ defmodule ColorMatchingWeb.ColorPairLiveTest do
       %{
         pair: pair,
         printer_profile: sheet_profile,
-        other_profile,
+        other_profile: other_profile,
         sheet: sheet
       } = mismatched_profile_fixture()
 
