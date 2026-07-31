@@ -34,6 +34,7 @@ defmodule ColorMatchingWeb.Router do
 
     get "/test_sheets/recent", TestSheetController, :recent
     get "/test_sheets/:sheet_id/manifest", TestSheetController, :manifest
+    get "/test_sheets/:sheet_id/ranked_results", TestSheetController, :ranked_results
     post "/test_sheets/:sheet_id/captures", CaptureController, :create
     post "/captures/:capture_id/measurements", CaptureController, :upload_measurements
     post "/captures/:capture_id/judgments", CaptureController, :upload_judgments

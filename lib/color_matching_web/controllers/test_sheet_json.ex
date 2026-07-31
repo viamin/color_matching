@@ -13,6 +13,7 @@ defmodule ColorMatchingWeb.TestSheetJSON do
   require Logger
 
   alias ColorMatching.Persistence.TestSheet
+  alias ColorMatching.RankedResults
 
   @doc """
   Renders a full sheet manifest.
@@ -48,6 +49,71 @@ defmodule ColorMatchingWeb.TestSheetJSON do
   def recent(%{sheets: sheets}) do
     %{
       sheets: Enum.map(sheets, &render_recent_sheet/1)
+    }
+  end
+
+  @doc """
+  Renders aggregate ranked results for a test sheet.
+
+  Response schema version: `lps-ranked-results/v1`
+  """
+  @spec ranked_results(map()) :: map()
+  def ranked_results(%{sheet: sheet, results: results}) do
+    %{
+      schema_version: "lps-ranked-results/v1",
+      sheet_id: sheet.lookup_code,
+      printer_profile: render_printer_profile(sheet.printer_profile),
+      capture_count: results.capture_count,
+      latest_capture_at: datetime_to_iso8601(results.latest_capture_at),
+      earliest_capture_at: datetime_to_iso8601(results.earliest_capture_at),
+      scoring_algorithm_versions: results.algorithm_versions,
+      results: Enum.map(results.results, &render_ranked_result/1)
+    }
+  end
+
+  @spec render_ranked_result(RankedResults.Pair.t()) :: map()
+  defp render_ranked_result(pair) do
+    %{
+      rank: pair.rank,
+      pair_id: pair.pair_id,
+      scoring_algorithm_version: pair.algorithm_version,
+      row: pair.row,
+      col: pair.col,
+      source_colors: %{
+        color_a_hex: pair.color_a_hex,
+        color_b_hex: pair.color_b_hex
+      },
+      score: render_score(pair.score),
+      current_judgment: pair.current_judgment,
+      current_judgment_observed_at: datetime_to_iso8601(pair.current_judgment_observed_at),
+      observation_count: pair.observation_count,
+      latest_observation: render_latest_observation(pair.latest_observation),
+      capture_count: pair.score.capture_count,
+      latest_capture_at: datetime_to_iso8601(pair.latest_capture_at),
+      earliest_capture_at: datetime_to_iso8601(pair.earliest_capture_at)
+    }
+  end
+
+  @spec render_score(RankedResults.Score.t()) :: map()
+  defp render_score(score) do
+    %{
+      average: score.average,
+      latest: score.latest,
+      minimum: score.minimum,
+      maximum: score.maximum,
+      capture_count: score.capture_count,
+      sample_count: score.sample_count,
+      algorithm_versions: score.algorithm_versions
+    }
+  end
+
+  @spec render_latest_observation(RankedResults.LatestObservation.t() | nil) :: map() | nil
+  defp render_latest_observation(nil), do: nil
+
+  defp render_latest_observation(observation) do
+    %{
+      judgment: observation.judgment,
+      observed_at: datetime_to_iso8601(observation.observed_at)
     }
   end
 
