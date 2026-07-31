@@ -7,6 +7,7 @@ defmodule ColorMatching.PrintedPairBrowser do
   import Ecto.Query
 
   alias ColorMatching.ColorSpace
+
   alias ColorMatching.Persistence.{
     Palette,
     PrintedPairClassification,
@@ -179,13 +180,17 @@ defmodule ColorMatching.PrintedPairBrowser do
   end
 
   defp classification_filter(query, classification) do
-    where(query, [classification, _pair, _sheet],
+    where(
+      query,
+      [classification, _pair, _sheet],
       classification.classification == ^classification
     )
   end
 
   defp profile_filter(query, profile_id) do
-    where(query, [classification, _pair, _sheet],
+    where(
+      query,
+      [classification, _pair, _sheet],
       classification.reproduction_profile_id == ^profile_id
     )
   end
@@ -213,7 +218,7 @@ defmodule ColorMatching.PrintedPairBrowser do
   end
 
   defp order_by_query(query, "pair_id") do
-    order_by(query, [_classification, pair, _sheet],
+    order_by(query, [classification, pair, _sheet],
       asc: pair.pair_id,
       desc: classification.updated_at,
       desc: classification.id
@@ -228,7 +233,7 @@ defmodule ColorMatching.PrintedPairBrowser do
         on: profile.id == classification.reproduction_profile_id
       )
 
-    order_by(joined, [_classification, _pair, _sheet, profile],
+    order_by(joined, [classification, _pair, _sheet, profile],
       asc: profile.printer_make_model,
       asc: profile.paper_type,
       asc: classification.illuminant,
@@ -245,7 +250,7 @@ defmodule ColorMatching.PrintedPairBrowser do
   end
 
   defp order_by_query(query, _sort) do
-    order_by(query, [_classification, _pair, _sheet],
+    order_by(query, [classification, _pair, _sheet],
       desc: classification.updated_at,
       desc: classification.id
     )
@@ -255,7 +260,7 @@ defmodule ColorMatching.PrintedPairBrowser do
   # well enough that the post-query Elixir sort produces deterministic
   # results. `sort_entries/2` then applies the real metric ordering.
   defp stable_secondary_order_by(query) do
-    order_by(query, [_classification, pair, _sheet],
+    order_by(query, [classification, pair, _sheet],
       asc: pair.pair_id,
       desc: classification.updated_at,
       desc: classification.id
@@ -326,12 +331,8 @@ defmodule ColorMatching.PrintedPairBrowser do
 
   defp palette_options do
     Palette
-    |> join(:inner, [palette], sheet in TestSheet,
-      on: sheet.palette_id == palette.id
-    )
-    |> join(:inner, [_palette, sheet], pair in TestSheetPair,
-      on: pair.test_sheet_id == sheet.id
-    )
+    |> join(:inner, [palette], sheet in TestSheet, on: sheet.palette_id == palette.id)
+    |> join(:inner, [_palette, sheet], pair in TestSheetPair, on: pair.test_sheet_id == sheet.id)
     |> join(:inner, [_palette, _sheet, pair], classification in PrintedPairClassification,
       on:
         classification.test_sheet_pair_id == pair.id and
@@ -346,12 +347,8 @@ defmodule ColorMatching.PrintedPairBrowser do
 
   defp test_sheet_options do
     TestSheet
-    |> join(:inner, [sheet], palette in Palette,
-      on: palette.id == sheet.palette_id
-    )
-    |> join(:inner, [sheet, _palette], pair in TestSheetPair,
-      on: pair.test_sheet_id == sheet.id
-    )
+    |> join(:inner, [sheet], palette in Palette, on: palette.id == sheet.palette_id)
+    |> join(:inner, [sheet, _palette], pair in TestSheetPair, on: pair.test_sheet_id == sheet.id)
     |> join(:inner, [_sheet, _palette, pair], classification in PrintedPairClassification,
       on:
         classification.test_sheet_pair_id == pair.id and
