@@ -334,6 +334,36 @@ defmodule ColorMatching.PersistenceTest do
       assert second_vector.red == :missing
     end
 
+    test "prefers stored illuminant responses over instrument measurements" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.25
+               })
+
+      assert {:ok, _response} =
+               Persistence.set_illuminant_response(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 illuminant: "white",
+                 apparent_brightness: 7,
+                 source_measurement_id: measurement.id
+               })
+
+      vector = Persistence.response_vector(color, printer_profile)
+
+      assert vector.white == 0.7
+      assert vector.measured_at == nil
+      assert vector.inserted_at != nil
+
+      assert [batched_vector] = Persistence.response_vectors([color], printer_profile)
+      assert batched_vector.white == 0.7
+    end
+
     test "raises when building a response vector for an unpersisted printer profile" do
       %{color: color} = persisted_measurement_fixture()
 

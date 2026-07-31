@@ -21,6 +21,8 @@ defmodule ColorMatching.Persistence.IlluminantResponse do
           palette_color: PaletteColor.t() | Ecto.Association.NotLoaded.t(),
           printer_profile_id: integer() | nil,
           printer_profile: PrinterProfile.t() | Ecto.Association.NotLoaded.t(),
+          source_measurement_id: integer() | nil,
+          source_measurement: IlluminantMeasurement.t() | Ecto.Association.NotLoaded.t(),
           illuminant: String.t() | nil,
           apparent_brightness: integer() | nil,
           notes: String.t() | nil,
@@ -48,6 +50,8 @@ defmodule ColorMatching.Persistence.IlluminantResponse do
 
   @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(response, attrs) do
+    {minimum_score, maximum_score} = score_range() |> Enum.min_max()
+
     response
     |> cast(attrs, [
       :palette_color_id,
@@ -60,8 +64,8 @@ defmodule ColorMatching.Persistence.IlluminantResponse do
     |> validate_required([:palette_color_id, :printer_profile_id, :illuminant, :apparent_brightness])
     |> validate_inclusion(:illuminant, illuminants())
     |> validate_number(:apparent_brightness,
-      greater_than_or_equal_to: 0,
-      less_than_or_equal_to: 10
+      greater_than_or_equal_to: minimum_score,
+      less_than_or_equal_to: maximum_score
     )
     |> foreign_key_constraint(:palette_color_id)
     |> foreign_key_constraint(:printer_profile_id)

@@ -12,6 +12,10 @@ defmodule ColorMatching.ResponseVector do
   Missing values are first-class so callers can distinguish "never measured"
   from "measured as zero brightness". Scoring functions should treat missing
   values according to their own policy (see `ColorMatching.IlluminantScoring`).
+
+  Human-entered `IlluminantResponse` records can also supply a light source's
+  brightness. Their subjective `0..10` scores are normalized into `0.0..1.0`
+  and take precedence over instrument measurements when both are present.
   """
 
   alias ColorMatching.Persistence.{IlluminantMeasurement, IlluminantResponse}
@@ -35,6 +39,7 @@ defmodule ColorMatching.ResponseVector do
   @type light_source :: :white | :red | :green | :blue | :lps
   @type brightness :: float() | :missing
   @type profile_id :: String.t() | integer()
+  @type source_record :: IlluminantMeasurement.t() | IlluminantResponse.t()
   @type t :: %__MODULE__{
           hex_color: String.t(),
           printer_profile_id: profile_id(),
@@ -58,7 +63,9 @@ defmodule ColorMatching.ResponseVector do
   identifies the printer profile the measurements were taken under.
   `latest_measurements_by_light_source` is a map keyed by `String.t()`
   light source name (matching `ColorMatching.Persistence`'s convention).
-  Light sources without a measurement are stored as `:missing`.
+  Values can be instrument `IlluminantMeasurement` records or human-entered
+  `IlluminantResponse` records. Light sources without a record are stored as
+  `:missing`.
 
   ## Examples
 
@@ -68,7 +75,7 @@ defmodule ColorMatching.ResponseVector do
   @spec new(
           String.t(),
           profile_id(),
-          %{optional(String.t()) => IlluminantMeasurement.t()}
+          %{optional(String.t()) => source_record()}
         ) :: t()
   def new(hex_color, printer_profile_id, latest_measurements_by_light_source)
       when is_binary(hex_color) and is_map(latest_measurements_by_light_source) do
@@ -105,7 +112,9 @@ defmodule ColorMatching.ResponseVector do
 
   @spec brightness_for_source(IlluminantResponse.t() | IlluminantMeasurement.t()) :: float()
   defp brightness_for_source(%IlluminantResponse{apparent_brightness: score}), do: score / 10
-  defp brightness_for_source(%IlluminantMeasurement{normalized_brightness: brightness}), do: brightness
+
+  defp brightness_for_source(%IlluminantMeasurement{normalized_brightness: brightness}),
+    do: brightness
 
   defp brightness_for(source, latest_measurements_by_light_source) do
     case Map.get(latest_measurements_by_light_source, Atom.to_string(source)) do

@@ -1,7 +1,7 @@
 defmodule ColorMatching.ResponseVectorTest do
   use ExUnit.Case, async: true
 
-  alias ColorMatching.Persistence.IlluminantMeasurement
+  alias ColorMatching.Persistence.{IlluminantMeasurement, IlluminantResponse}
   alias ColorMatching.ResponseVector
 
   @printer_profile_id "profile-test"
@@ -75,6 +75,16 @@ defmodule ColorMatching.ResponseVectorTest do
         ResponseVector.new("#112233", @printer_profile_id, %{"green" => green, "red" => red})
 
       assert vector.measured_at == ~U[2026-07-27 12:00:00Z]
+      assert vector.inserted_at == ~U[2026-07-27 12:00:00Z]
+    end
+
+    test "normalizes human-entered response scores into brightness values" do
+      response = response_fixture("white", 7, ~U[2026-07-27 12:00:00Z])
+
+      vector = ResponseVector.new("#112233", @printer_profile_id, %{"white" => response})
+
+      assert vector.white == 0.7
+      assert vector.measured_at == nil
       assert vector.inserted_at == ~U[2026-07-27 12:00:00Z]
     end
 
@@ -156,6 +166,15 @@ defmodule ColorMatching.ResponseVectorTest do
       normalized_brightness: normalized_brightness,
       measured_at: measured_at,
       inserted_at: Keyword.get(opts, :inserted_at, measured_at)
+    }
+  end
+
+  defp response_fixture(illuminant, apparent_brightness, inserted_at) do
+    %IlluminantResponse{
+      id: :erlang.unique_integer([:positive]),
+      illuminant: illuminant,
+      apparent_brightness: apparent_brightness,
+      inserted_at: inserted_at
     }
   end
 end
