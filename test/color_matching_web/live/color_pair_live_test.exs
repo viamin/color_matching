@@ -196,6 +196,43 @@ defmodule ColorMatchingWeb.ColorPairLiveTest do
       refute persisted.active
     end
 
+    test "saves as Unset without claiming the classification was cleared", %{conn: conn} do
+      %{pair: pair, printer_profile: printer_profile, sheet: sheet} = printed_pair_fixture()
+
+      assert {:ok, _classification} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "green",
+                 classification: "strong_metamer",
+                 notes: "Before saving as unset"
+               })
+
+      {:ok, view, _html} =
+        live(
+          conn,
+          pair_path(pair, sheet, printer_profile)
+        )
+
+      html =
+        render_submit(view, "save_classification", %{
+          "classification" => %{
+            "illuminant" => "green",
+            "classification" => "",
+            "notes" => ""
+          }
+        })
+
+      assert html =~ "Saved Green classification as Unset"
+      refute html =~ "Cleared Green classification"
+
+      assert Persistence.get_active_printed_pair_classification(
+               pair.id,
+               printer_profile.id,
+               "green"
+             ) == nil
+    end
+
     test "uses pair_id to target the correct persisted pair when sheet colors repeat", %{
       conn: conn
     } do

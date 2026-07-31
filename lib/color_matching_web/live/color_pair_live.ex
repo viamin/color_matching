@@ -163,30 +163,34 @@ defmodule ColorMatchingWeb.ColorPairLive do
   end
 
   defp assign_classification_state(socket) do
+    active_by_illuminant = active_classifications_by_illuminant(socket.assigns)
+
     forms =
-      socket.assigns.illuminants
-      |> Enum.map(fn illuminant ->
-        {illuminant, classification_form(socket.assigns.classification_context, illuminant)}
+      Map.new(socket.assigns.illuminants, fn illuminant ->
+        {illuminant, classification_form(Map.get(active_by_illuminant, illuminant))}
       end)
-      |> Map.new()
 
     assign(socket, :classification_forms, forms)
   end
 
-  defp classification_form(nil, _illuminant), do: %{classification: "", notes: ""}
+  # Fetches every active classification for the pair + reproduction profile
+  # in a single query and indexes by illuminant, rather than issuing one
+  # `get_active_printed_pair_classification/3` round-trip per illuminant.
+  defp active_classifications_by_illuminant(%{classification_context: nil}), do: %{}
 
-  defp classification_form(context, illuminant) do
-    case Persistence.get_active_printed_pair_classification(
-           context.pair.id,
-           context.reproduction_profile.id,
-           illuminant
-         ) do
-      nil ->
-        %{classification: "", notes: ""}
+  defp active_classifications_by_illuminant(%{classification_context: context}) do
+    Persistence.list_printed_pair_classifications(%{
+      test_sheet_pair_id: context.pair.id,
+      reproduction_profile_id: context.reproduction_profile.id,
+      active: true
+    })
+    |> Map.new(&{&1.illuminant, &1})
+  end
 
-      classification ->
-        %{classification: classification.classification, notes: classification.notes || ""}
-    end
+  defp classification_form(nil), do: %{classification: "", notes: ""}
+
+  defp classification_form(classification) do
+    %{classification: classification.classification, notes: classification.notes || ""}
   end
 
   defp classification_scope(socket, illuminant) do
@@ -207,6 +211,11 @@ defmodule ColorMatchingWeb.ColorPairLive do
   defp save_classification(socket, scope, params) do
     case blank_to_nil(Map.get(params, "classification")) do
       nil ->
+        # Saving with "Unset" selected is still a save (the user pressed
+        # Save, not Clear); it just resolves to no active classification.
+        # Route it through the same clear mechanism as the Clear button
+        # since that's how "no active classification" is represented, but
+        # flash a "Saved" message so the copy matches the button pressed.
         Persistence.clear_printed_pair_classification(
           scope.pair.id,
           scope.reproduction_profile.id,
@@ -216,7 +225,10 @@ defmodule ColorMatchingWeb.ColorPairLive do
         {:noreply,
          socket
          |> assign_classification_state()
-         |> put_flash(:info, "Cleared #{illuminant_label(scope.illuminant)} classification")}
+         |> put_flash(
+           :info,
+           "Saved #{illuminant_label(scope.illuminant)} classification as Unset"
+         )}
 
       classification ->
         attrs = %{
