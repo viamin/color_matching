@@ -255,6 +255,63 @@ defmodule ColorMatching.Persistence do
     |> Repo.all()
   end
 
+  # ---------------------------------------------------------------------------
+  # Ranked-result aggregation (cross-capture)
+  # ---------------------------------------------------------------------------
+
+  @doc """
+  Returns every capture recorded against `test_sheet_id`, ordered by capture
+  timestamp then id so callers can derive deterministic "latest/earliest"
+  boundaries.
+  """
+  @spec list_captures_for_sheet(integer()) :: [Capture.t()]
+  def list_captures_for_sheet(test_sheet_id) when is_integer(test_sheet_id) do
+    Capture
+    |> where([capture], capture.test_sheet_id == ^test_sheet_id)
+    |> order_by([capture], asc: capture.timestamp, asc: capture.id)
+    |> Repo.all()
+  end
+
+  @doc """
+  Returns every pair score recorded for any capture of `test_sheet_id`,
+  joining through `captures` to scope the scores to the sheet.
+  """
+  @spec list_pair_scores_for_sheet(integer()) :: [ColorMatching.Persistence.CapturePairScore.t()]
+  def list_pair_scores_for_sheet(test_sheet_id) when is_integer(test_sheet_id) do
+    ColorMatching.Persistence.CapturePairScore
+    |> join(:inner, [score], capture in Capture, on: capture.id == score.capture_id)
+    |> where([_score, capture], capture.test_sheet_id == ^test_sheet_id)
+    |> order_by([score, _capture], asc: score.pair_id, asc: score.algorithm_version)
+    |> select([score, _capture], score)
+    |> Repo.all()
+  end
+
+  @doc """
+  Returns every derived pair finding belonging to `test_sheet_id`.
+  """
+  @spec list_pair_findings_for_sheet(integer()) :: [PairFinding.t()]
+  def list_pair_findings_for_sheet(test_sheet_id) when is_integer(test_sheet_id) do
+    PairFinding
+    |> where([finding], finding.test_sheet_id == ^test_sheet_id)
+    |> Repo.all()
+  end
+
+  @doc """
+  Returns the full observation history for every pair on `test_sheet_id`,
+  ordered so the latest observation per pair is deterministically last.
+  """
+  @spec list_pair_finding_observations_for_sheet(integer()) :: [PairFindingObservation.t()]
+  def list_pair_finding_observations_for_sheet(test_sheet_id) when is_integer(test_sheet_id) do
+    PairFindingObservation
+    |> where([observation], observation.test_sheet_id == ^test_sheet_id)
+    |> order_by([observation],
+      asc: observation.pair_id,
+      asc: observation.observed_at,
+      asc: observation.id
+    )
+    |> Repo.all()
+  end
+
   @spec upload_capture_measurements(integer(), map()) ::
           {:ok,
            %{
