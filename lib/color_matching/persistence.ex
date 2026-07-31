@@ -417,7 +417,8 @@ defmodule ColorMatching.Persistence do
 
     if changeset.valid? do
       Repo.insert(changeset,
-        on_conflict: {:replace, [:apparent_brightness, :notes, :source_measurement_id, :updated_at]},
+        on_conflict:
+          {:replace, [:apparent_brightness, :notes, :source_measurement_id, :updated_at]},
         conflict_target: [:palette_color_id, :printer_profile_id, :illuminant]
       )
     else
@@ -599,7 +600,8 @@ defmodule ColorMatching.Persistence do
              is_integer(printer_profile_id) do
     records =
       list_illuminant_responses(palette_color_id, printer_profile_id)
-      |> Map.merge(latest_illuminant_measurements_by_light_source(palette_color_id, printer_profile_id),
+      |> Map.merge(
+        latest_illuminant_measurements_by_light_source(palette_color_id, printer_profile_id),
         fn _illuminant, response, _measurement -> response end
       )
 
@@ -682,11 +684,18 @@ defmodule ColorMatching.Persistence do
          measurements
        )
        when is_integer(palette_color_id) and is_binary(hex_color) do
-    records = Map.merge(measurements, responses, fn _source, _measurement, response -> response end)
+    records =
+      Map.merge(measurements, responses, fn _source, _measurement, response -> response end)
+
     ResponseVector.new(hex_color, printer_profile_id, records)
   end
 
-  defp response_vector_from_records(%PaletteColor{}, _printer_profile_id, _responses, _measurements) do
+  defp response_vector_from_records(
+         %PaletteColor{},
+         _printer_profile_id,
+         _responses,
+         _measurements
+       ) do
     raise ArgumentError, "response_vectors/2 requires persisted palette colors with hex colors"
   end
 
@@ -837,12 +846,35 @@ defmodule ColorMatching.Persistence do
   @spec normalize_illuminant_response_attrs(map()) :: map()
   defp normalize_illuminant_response_attrs(attrs) do
     attrs
-    |> normalize_measurement_key(:palette_color_id, [:palette_color_id, "palette_color_id", :color_id, "color_id"])
-    |> normalize_measurement_key(:printer_profile_id, [:printer_profile_id, "printer_profile_id", :reproduction_profile_id, "reproduction_profile_id"])
-    |> normalize_measurement_key(:illuminant, [:illuminant, "illuminant", :light_source, "light_source"])
-    |> normalize_measurement_key(:apparent_brightness, [:apparent_brightness, "apparent_brightness", :brightness_score, "brightness_score"])
+    |> normalize_measurement_key(:palette_color_id, [
+      :palette_color_id,
+      "palette_color_id",
+      :color_id,
+      "color_id"
+    ])
+    |> normalize_measurement_key(:printer_profile_id, [
+      :printer_profile_id,
+      "printer_profile_id",
+      :reproduction_profile_id,
+      "reproduction_profile_id"
+    ])
+    |> normalize_measurement_key(:illuminant, [
+      :illuminant,
+      "illuminant",
+      :light_source,
+      "light_source"
+    ])
+    |> normalize_measurement_key(:apparent_brightness, [
+      :apparent_brightness,
+      "apparent_brightness",
+      :brightness_score,
+      "brightness_score"
+    ])
     |> normalize_measurement_key(:notes, [:notes, "notes"])
-    |> normalize_measurement_key(:source_measurement_id, [:source_measurement_id, "source_measurement_id"])
+    |> normalize_measurement_key(:source_measurement_id, [
+      :source_measurement_id,
+      "source_measurement_id"
+    ])
   end
 
   @spec validate_illuminant_response_references(Ecto.Changeset.t(), map()) :: Ecto.Changeset.t()
@@ -852,6 +884,45 @@ defmodule ColorMatching.Persistence do
       attrs |> Map.get(:palette_color_id) |> List.wrap() |> existing_ids(PaletteColor),
       attrs |> Map.get(:printer_profile_id) |> List.wrap() |> existing_ids(PrinterProfile)
     )
+    |> validate_source_measurement_scope()
+  end
+
+  @spec validate_source_measurement_scope(Ecto.Changeset.t()) :: Ecto.Changeset.t()
+  defp validate_source_measurement_scope(changeset) do
+    case Ecto.Changeset.get_field(changeset, :source_measurement_id) do
+      nil ->
+        changeset
+
+      source_measurement_id ->
+        scope = %{
+          palette_color_id: Ecto.Changeset.get_field(changeset, :palette_color_id),
+          printer_profile_id: Ecto.Changeset.get_field(changeset, :printer_profile_id),
+          light_source: Ecto.Changeset.get_field(changeset, :illuminant)
+        }
+
+        if valid_source_measurement_scope?(source_measurement_id, scope) do
+          changeset
+        else
+          add_error(
+            changeset,
+            :source_measurement_id,
+            "must belong to the same palette color, printer profile, and illuminant"
+          )
+        end
+    end
+  end
+
+  @spec valid_source_measurement_scope?(term(), map()) :: boolean()
+  defp valid_source_measurement_scope?(source_measurement_id, scope) do
+    IlluminantMeasurement
+    |> where(
+      [measurement],
+      measurement.id == ^source_measurement_id and
+        measurement.palette_color_id == ^scope.palette_color_id and
+        measurement.printer_profile_id == ^scope.printer_profile_id and
+        measurement.light_source == ^scope.light_source
+    )
+    |> Repo.exists?()
   end
 
   defp normalize_measurement_attrs(attrs) do
