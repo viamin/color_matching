@@ -61,7 +61,12 @@ defmodule ColorMatching.Persistence.IlluminantResponse do
       :notes,
       :source_measurement_id
     ])
-    |> validate_required([:palette_color_id, :printer_profile_id, :illuminant, :apparent_brightness])
+    |> validate_required([
+      :palette_color_id,
+      :printer_profile_id,
+      :illuminant,
+      :apparent_brightness
+    ])
     |> validate_inclusion(:illuminant, illuminants())
     |> validate_number(:apparent_brightness,
       greater_than_or_equal_to: minimum_score,
