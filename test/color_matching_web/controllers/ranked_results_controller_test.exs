@@ -97,12 +97,16 @@ defmodule ColorMatchingWeb.RankedResultsControllerTest do
   end
 
   defp upload_pair_scores(conn, capture_id, score_specs) do
+    upload_pair_scores(conn, capture_id, score_specs, @algorithm_version)
+  end
+
+  defp upload_pair_scores(conn, capture_id, score_specs, algorithm_version) do
     conn = recycle(conn)
 
     payload = %{
       pair_scores:
         Enum.map(score_specs, fn {pair_id, score} ->
-          %{pair_id: pair_id, algorithm_version: @algorithm_version, score: score}
+          %{pair_id: pair_id, algorithm_version: algorithm_version, score: score}
         end)
     }
 
@@ -164,6 +168,7 @@ defmodule ColorMatchingWeb.RankedResultsControllerTest do
       [first, second] = body["results"]
       assert first["rank"] == 1
       assert first["pair_id"] == pair_at(sheet, 0).pair_id
+      assert first["scoring_algorithm_version"] == @algorithm_version
       assert_in_delta first["score"]["average"], 0.91, 0.000_001
       assert_in_delta first["score"]["latest"], 0.91, 0.000_001
       assert first["score"]["capture_count"] == 1
@@ -177,6 +182,7 @@ defmodule ColorMatchingWeb.RankedResultsControllerTest do
 
       assert second["rank"] == 2
       assert second["pair_id"] == pair_at(sheet, 1).pair_id
+      assert second["scoring_algorithm_version"] == @algorithm_version
       assert_in_delta second["score"]["average"], 0.87, 0.000_001
     end
 
@@ -206,6 +212,7 @@ defmodule ColorMatchingWeb.RankedResultsControllerTest do
       [first, second] = body["results"]
 
       assert first["pair_id"] == pair_at(sheet, 0).pair_id
+      assert first["scoring_algorithm_version"] == @algorithm_version
       assert_in_delta first["score"]["average"], 0.9, 0.000_001
       assert_in_delta first["score"]["latest"], 0.85, 0.000_001
       assert_in_delta first["score"]["minimum"], 0.85, 0.000_001
@@ -216,9 +223,44 @@ defmodule ColorMatchingWeb.RankedResultsControllerTest do
       assert first["earliest_capture_at"] == "2026-07-28T12:34:56.123456Z"
 
       assert second["pair_id"] == pair_at(sheet, 1).pair_id
+      assert second["scoring_algorithm_version"] == @algorithm_version
       assert_in_delta second["score"]["average"], 0.87, 0.000_001
       assert_in_delta second["score"]["latest"], 0.87, 0.000_001
       assert second["score"]["capture_count"] == 1
+    end
+
+    test "returns separate ranked entries per algorithm version", %{conn: conn} do
+      sheet = create_sheet("RNKD-2362", 1)
+      pair = pair_at(sheet, 0)
+      second_algorithm_version = "ios-score/v2"
+
+      {conn, capture_id} = create_capture(conn, sheet, "2026-07-28T12:34:56.123456Z")
+
+      conn = upload_pair_scores(conn, capture_id, [{pair.pair_id, 0.9}], @algorithm_version)
+      conn = upload_pair_scores(conn, capture_id, [{pair.pair_id, 0.7}], second_algorithm_version)
+
+      body = get_ranked_results(conn, sheet)
+
+      assert body["scoring_algorithm_versions"] == [@algorithm_version, second_algorithm_version]
+      assert length(body["results"]) == 2
+
+      [first, second] = body["results"]
+
+      assert first["pair_id"] == pair.pair_id
+      assert first["scoring_algorithm_version"] == @algorithm_version
+      assert_in_delta first["score"]["average"], 0.9, 0.000_001
+      assert_in_delta first["score"]["latest"], 0.9, 0.000_001
+      assert first["score"]["sample_count"] == 1
+      assert first["score"]["capture_count"] == 1
+      assert first["score"]["algorithm_versions"] == [@algorithm_version]
+
+      assert second["pair_id"] == pair.pair_id
+      assert second["scoring_algorithm_version"] == second_algorithm_version
+      assert_in_delta second["score"]["average"], 0.7, 0.000_001
+      assert_in_delta second["score"]["latest"], 0.7, 0.000_001
+      assert second["score"]["sample_count"] == 1
+      assert second["score"]["capture_count"] == 1
+      assert second["score"]["algorithm_versions"] == [second_algorithm_version]
     end
 
     test "breaks ties deterministically using a stable key", %{conn: conn} do
@@ -258,6 +300,7 @@ defmodule ColorMatchingWeb.RankedResultsControllerTest do
 
       [result] = body["results"]
 
+      assert result["scoring_algorithm_version"] == @algorithm_version
       assert result["current_judgment"] == "match"
       assert result["current_judgment_observed_at"] == "2026-07-28T12:35:56.123456Z"
       assert result["observation_count"] == 2
@@ -288,17 +331,20 @@ defmodule ColorMatchingWeb.RankedResultsControllerTest do
 
       no_match_result = by_pair[no_match_pair.pair_id]
       assert no_match_result["current_judgment"] == "no_match"
+      assert no_match_result["scoring_algorithm_version"] == @algorithm_version
       assert no_match_result["observation_count"] == 1
       assert no_match_result["rank"] == 1
 
       scored_unjudged = by_pair[scored_unjudged_pair.pair_id]
       assert scored_unjudged["current_judgment"] == nil
+      assert scored_unjudged["scoring_algorithm_version"] == @algorithm_version
       assert scored_unjudged["observation_count"] == 0
       assert_in_delta scored_unjudged["score"]["average"], 0.8, 0.000_001
       assert scored_unjudged["rank"] == 2
 
       measured = by_pair[measured_pair.pair_id]
       assert measured["current_judgment"] == nil
+      assert measured["scoring_algorithm_version"] == nil
       assert measured["score"]["average"] == nil
       assert measured["score"]["latest"] == nil
       assert measured["score"]["capture_count"] == 0
@@ -317,7 +363,8 @@ defmodule ColorMatchingWeb.RankedResultsControllerTest do
       assert length(body["results"]) == 2
 
       assert Enum.all?(body["results"], fn result ->
-               result["score"]["average"] == nil and result["score"]["capture_count"] == 0
+               result["score"]["average"] == nil and result["score"]["capture_count"] == 0 and
+                 result["scoring_algorithm_version"] == nil
              end)
 
       ordered_pair_ids = Enum.map(body["results"], & &1["pair_id"])

@@ -76,6 +76,7 @@ defmodule ColorMatchingWeb.TestSheetJSON do
     %{
       rank: pair.rank,
       pair_id: pair.pair_id,
+      scoring_algorithm_version: pair.algorithm_version,
       row: pair.row,
       col: pair.col,
       source_colors: %{

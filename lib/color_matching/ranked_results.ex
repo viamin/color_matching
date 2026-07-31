@@ -60,6 +60,7 @@ defmodule ColorMatching.RankedResults do
     @type t :: %__MODULE__{
             rank: pos_integer(),
             pair_id: String.t(),
+            algorithm_version: String.t() | nil,
             row: integer() | nil,
             col: integer() | nil,
             color_a_hex: String.t() | nil,
@@ -76,6 +77,7 @@ defmodule ColorMatching.RankedResults do
     defstruct [
       :rank,
       :pair_id,
+      :algorithm_version,
       :row,
       :col,
       :color_a_hex,
@@ -140,7 +142,7 @@ defmodule ColorMatching.RankedResults do
 
     results =
       sheet.pairs
-      |> Enum.map(&build_pair(&1, indexes))
+      |> Enum.flat_map(&build_pair_results(&1, indexes))
       |> rank()
 
     %__MODULE__{
@@ -152,13 +154,29 @@ defmodule ColorMatching.RankedResults do
     }
   end
 
-  defp build_pair(pair, indexes) do
+  defp build_pair_results(pair, indexes) do
     scores = Map.get(indexes.scores, pair.pair_id, [])
+
+    case Enum.group_by(scores, & &1.algorithm_version) do
+      grouped_scores when map_size(grouped_scores) > 0 ->
+        grouped_scores
+        |> Enum.sort_by(fn {algorithm_version, _scores} -> algorithm_version end)
+        |> Enum.map(fn {algorithm_version, version_scores} ->
+          build_pair_result(pair, algorithm_version, version_scores, indexes)
+        end)
+
+      _empty ->
+        [build_pair_result(pair, nil, [], indexes)]
+    end
+  end
+
+  defp build_pair_result(pair, algorithm_version, scores, indexes) do
     observations = Map.get(indexes.observations, pair.pair_id, [])
     finding = Map.get(indexes.findings, pair.pair_id)
 
     %Pair{
       pair_id: pair.pair_id,
+      algorithm_version: algorithm_version,
       row: pair.row,
       col: pair.col,
       color_a_hex: pair.color_a_hex,
@@ -282,8 +300,12 @@ defmodule ColorMatching.RankedResults do
     |> Enum.map(fn {pair, rank} -> %Pair{pair | rank: rank} end)
   end
 
-  defp rank_key(%Pair{score: %Score{average: average, latest: latest}, pair_id: pair_id}) do
+  defp rank_key(%Pair{
+         score: %Score{average: average, latest: latest},
+         pair_id: pair_id,
+         algorithm_version: algorithm_version
+       }) do
     has_score = if average == nil, do: 0, else: 1
-    {-has_score, -(average || 0.0), -(latest || 0.0), pair_id}
+    {-has_score, -(average || 0.0), -(latest || 0.0), pair_id, algorithm_version || ""}
   end
 end
