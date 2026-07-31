@@ -18,6 +18,12 @@ defmodule ColorMatchingWeb.BrightnessReferenceScaleControllerTest do
                ~s(attachment; filename="brightness-reference-scale-red.png")
              ]
 
+      assert get_resp_header(response, "x-content-type-options") == ["nosniff"]
+
+      assert get_resp_header(response, "content-security-policy") == [
+               "base-uri 'self'; frame-ancestors 'self';"
+             ]
+
       assert {:ok, %{width: 25, height: 132}} = PNG.inspect_header(response.resp_body)
     end
 

@@ -10,6 +10,11 @@ defmodule ColorMatchingWeb.Router do
     plug(:put_secure_browser_headers)
   end
 
+  pipeline :download do
+    plug(:accepts, ["html", "json", "png"])
+    plug(:put_secure_browser_headers)
+  end
+
   pipeline :api do
     plug(:accepts, ["json"])
   end
@@ -19,6 +24,8 @@ defmodule ColorMatchingWeb.Router do
   end
 
   scope "/", ColorMatchingWeb do
+    pipe_through(:download)
+
     get("/brightness_reference_scales/:illuminant", BrightnessReferenceScaleController, :show)
   end
 
