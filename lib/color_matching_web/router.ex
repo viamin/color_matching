@@ -19,6 +19,10 @@ defmodule ColorMatchingWeb.Router do
   end
 
   scope "/", ColorMatchingWeb do
+    get("/brightness_reference_scales/:illuminant", BrightnessReferenceScaleController, :show)
+  end
+
+  scope "/", ColorMatchingWeb do
     pipe_through(:browser)
 
     live("/", ColorGridLive)
