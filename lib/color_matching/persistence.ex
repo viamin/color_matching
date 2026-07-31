@@ -690,19 +690,6 @@ defmodule ColorMatching.Persistence do
     raise ArgumentError, "response_vectors/2 requires persisted palette colors with hex colors"
   end
 
-         %PaletteColor{id: palette_color_id, hex_color: hex_color},
-         printer_profile_id,
-         measurements_by_palette_color
-       )
-       when is_integer(palette_color_id) and is_binary(hex_color) do
-    measurements = Map.get(measurements_by_palette_color, palette_color_id, %{})
-    ResponseVector.new(hex_color, printer_profile_id, measurements)
-  end
-
-  defp response_vector_from_measurements(%PaletteColor{}, _printer_profile_id, _measurements) do
-    raise ArgumentError, "response_vectors/2 requires persisted palette colors with hex colors"
-  end
-
   @spec fetch_bulk_measurements(map()) ::
           {:ok, [map()]} | {:error, {:invalid_request, measurement_error_map()}}
   defp fetch_bulk_measurements(attrs) do

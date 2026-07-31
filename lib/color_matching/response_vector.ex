@@ -125,6 +125,15 @@ defmodule ColorMatching.ResponseVector do
       |> Enum.reject(&is_nil/1)
       |> Enum.max_by(&DateTime.to_unix(&1, :microsecond), fn -> nil end)
 
-    %{measured_at: nil, inserted_at: inserted_at}
+    measured_at =
+      records
+      |> Enum.flat_map(fn
+        %IlluminantMeasurement{measured_at: measured_at} -> [measured_at]
+        _other -> []
+      end)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.max_by(&DateTime.to_unix(&1, :microsecond), fn -> nil end)
+
+    %{measured_at: measured_at, inserted_at: inserted_at}
   end
 end

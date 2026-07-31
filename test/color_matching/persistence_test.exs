@@ -542,6 +542,7 @@ defmodule ColorMatching.PersistenceTest do
     end
   end
 
+  describe "preset palette import" do
     test "imports preset palettes for persisted workflows" do
       assert {:ok, palettes} = Persistence.import_preset_palettes()
 
