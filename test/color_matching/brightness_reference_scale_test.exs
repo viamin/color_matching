@@ -119,7 +119,7 @@ defmodule ColorMatching.BrightnessReferenceScaleTest do
       block_size = 4
 
       assert {:ok, png} = Scale.to_png(scale, block_size: block_size)
-      assert {:ok, %{width: width, pixels: pixels}} = PNG.decode_rgb(png)
+      assert {:ok, %{width: width, pixels: pixels}} = PNG.decode_grayscale(png)
       cell_width = horizontal_cell_width(block_size)
       block_x = horizontal_block_x(block_size)
 
@@ -129,7 +129,7 @@ defmodule ColorMatching.BrightnessReferenceScaleTest do
         x = index * cell_width + block_x
         pixel = pixel_at(pixels, width, x, 0)
 
-        assert pixel == {step.gray_value, step.gray_value, step.gray_value}
+        assert pixel == step.gray_value
       end)
     end
 
@@ -138,7 +138,7 @@ defmodule ColorMatching.BrightnessReferenceScaleTest do
       block_size = 16
 
       assert {:ok, png} = Scale.to_png(scale, block_size: block_size)
-      assert {:ok, %{width: width, pixels: pixels}} = PNG.decode_rgb(png)
+      assert {:ok, %{width: width, pixels: pixels}} = PNG.decode_grayscale(png)
 
       {_image_width, image_height} = horizontal_dimensions(scale.steps, block_size)
       label_row = block_size + 2
@@ -159,8 +159,8 @@ defmodule ColorMatching.BrightnessReferenceScaleTest do
 
       assert {width, height} == horizontal_dimensions(scale.steps, block_size)
 
-      assert {:ok, %{pixels: pixels}} = PNG.decode_rgb(png)
-      assert length(pixels) == width * height
+      assert {:ok, %{pixels: pixels}} = PNG.decode_grayscale(png)
+      assert byte_size(pixels) == width * height
     end
 
     test "renders a vertical strip when requested" do
@@ -168,23 +168,23 @@ defmodule ColorMatching.BrightnessReferenceScaleTest do
       block_size = 10
 
       assert {:ok, png} = Scale.to_png(scale, block_size: block_size, orientation: :vertical)
-      assert {:ok, %{width: width, height: height, pixels: pixels}} = PNG.decode_rgb(png)
+      assert {:ok, %{width: width, height: height, pixels: pixels}} = PNG.decode_grayscale(png)
 
       assert {width, height} == vertical_dimensions(scale.steps, block_size)
-      assert length(pixels) == width * height
+      assert byte_size(pixels) == width * height
 
       top_pixel = pixel_at(pixels, width, 0, 0)
       bottom_pixel = pixel_at(pixels, width, 0, height - 1)
 
-      assert top_pixel == {0, 0, 0}
-      assert bottom_pixel == {255, 255, 255}
+      assert top_pixel == 0
+      assert bottom_pixel == 255
     end
 
     test "is suitable for side-by-side comparison: steps form a smooth black-to-white ramp" do
       {:ok, scale} = Scale.new("lps")
 
       assert {:ok, png} = Scale.to_png(scale, block_size: 2)
-      assert {:ok, %{width: width, pixels: pixels}} = PNG.decode_rgb(png)
+      assert {:ok, %{width: width, pixels: pixels}} = PNG.decode_grayscale(png)
       cell_width = horizontal_cell_width(2)
       block_x = horizontal_block_x(2)
 
@@ -192,7 +192,7 @@ defmodule ColorMatching.BrightnessReferenceScaleTest do
         scale.steps
         |> Enum.with_index()
         |> Enum.map(fn {_step, index} ->
-          pixel_at(pixels, width, index * cell_width + block_x, 0) |> elem(0)
+          pixel_at(pixels, width, index * cell_width + block_x, 0)
         end)
 
       assert block_grays == Enum.map(scale.steps, & &1.gray_value)
@@ -231,12 +231,12 @@ defmodule ColorMatching.BrightnessReferenceScaleTest do
   end
 
   defp pixel_at(pixels, width, x, y) do
-    Enum.at(pixels, y * width + x)
+    :binary.at(pixels, y * width + x)
   end
 
   defp label_region_contains_black?(pixels, width, start_x, cell_width, y) do
     Enum.any?(start_x..(start_x + cell_width - 1), fn x ->
-      pixel_at(pixels, width, x, y) == {0, 0, 0}
+      pixel_at(pixels, width, x, y) == 0
     end)
   end
 

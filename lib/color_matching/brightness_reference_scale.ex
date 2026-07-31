@@ -103,7 +103,7 @@ defmodule ColorMatching.BrightnessReferenceScale do
       layout = layout(steps, block_size, orientation)
       pixels = build_pixels(steps, layout, orientation)
 
-      PNG.encode_rgb(layout.width, layout.height, pixels)
+      PNG.encode_grayscale(layout.width, layout.height, pixels)
     end
   end
 
@@ -175,9 +175,9 @@ defmodule ColorMatching.BrightnessReferenceScale do
         do: vertical_pixel(step, x, y, layout)
   end
 
-  defp pixel(:black), do: {0, 0, 0}
-  defp pixel(:white), do: {255, 255, 255}
-  defp pixel(gray), do: {gray, gray, gray}
+  defp pixel(:black), do: 0
+  defp pixel(:white), do: 255
+  defp pixel(gray), do: gray
 
   defp horizontal_pixel({step, _index}, x, y, layout) do
     block_x = div(layout.cell_width - layout.block_size, 2)
