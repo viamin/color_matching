@@ -13,6 +13,7 @@ defmodule ColorMatching.Persistence do
     CaptureJudgmentUpload,
     CaptureUpload,
     IlluminantMeasurement,
+    IlluminantResponse,
     PairFinding,
     PairFindingObservation,
     Palette,
@@ -401,6 +402,69 @@ defmodule ColorMatching.Persistence do
   end
 
   # ---------------------------------------------------------------------------
+  # Illuminant responses
+  # ---------------------------------------------------------------------------
+
+  @spec set_illuminant_response(map()) ::
+          {:ok, IlluminantResponse.t()} | {:error, Ecto.Changeset.t()}
+  def set_illuminant_response(attrs) when is_map(attrs) do
+    attrs = normalize_illuminant_response_attrs(attrs)
+
+    changeset =
+      %IlluminantResponse{}
+      |> IlluminantResponse.changeset(attrs)
+      |> validate_illuminant_response_references(attrs)
+
+    if changeset.valid? do
+      Repo.insert(changeset,
+        on_conflict:
+          {:replace, [:apparent_brightness, :notes, :source_measurement_id, :updated_at]},
+        conflict_target: [:palette_color_id, :printer_profile_id, :illuminant]
+      )
+    else
+      {:error, changeset}
+    end
+  end
+
+  @spec update_illuminant_response(map()) ::
+          {:ok, IlluminantResponse.t()} | {:error, Ecto.Changeset.t()}
+  def update_illuminant_response(attrs), do: set_illuminant_response(attrs)
+
+  @spec clear_illuminant_response(integer(), integer(), String.t()) :: {non_neg_integer(), nil}
+  def clear_illuminant_response(palette_color_id, printer_profile_id, illuminant) do
+    IlluminantResponse
+    |> where(
+      [response],
+      response.palette_color_id == ^palette_color_id and
+        response.printer_profile_id == ^printer_profile_id and response.illuminant == ^illuminant
+    )
+    |> Repo.delete_all()
+  end
+
+  @spec list_illuminant_responses(integer(), integer()) ::
+          %{optional(String.t()) => IlluminantResponse.t()}
+  def list_illuminant_responses(palette_color_id, printer_profile_id) do
+    IlluminantResponse
+    |> where(
+      [response],
+      response.palette_color_id == ^palette_color_id and
+        response.printer_profile_id == ^printer_profile_id
+    )
+    |> order_by([response], asc: response.illuminant)
+    |> Repo.all()
+    |> Map.new(&{&1.illuminant, &1})
+  end
+
+  @spec get_illuminant_response(integer(), integer(), String.t()) :: IlluminantResponse.t() | nil
+  def get_illuminant_response(palette_color_id, printer_profile_id, illuminant) do
+    Repo.get_by(IlluminantResponse,
+      palette_color_id: palette_color_id,
+      printer_profile_id: printer_profile_id,
+      illuminant: illuminant
+    )
+  end
+
+  # ---------------------------------------------------------------------------
   # Illuminant measurements
   # ---------------------------------------------------------------------------
 
@@ -482,6 +546,19 @@ defmodule ColorMatching.Persistence do
       when is_list(palette_colors) and is_integer(printer_profile_id) do
     palette_color_ids = Enum.map(palette_colors, & &1.id)
 
+    responses_by_palette_color =
+      IlluminantResponse
+      |> where(
+        [response],
+        response.palette_color_id in ^palette_color_ids and
+          response.printer_profile_id == ^printer_profile_id
+      )
+      |> Repo.all()
+      |> Enum.group_by(& &1.palette_color_id, &{&1.illuminant, &1})
+      |> Map.new(fn {palette_color_id, responses} ->
+        {palette_color_id, Map.new(responses)}
+      end)
+
     measurements_by_palette_color =
       palette_color_ids
       |> latest_illuminant_measurements_query(printer_profile_id)
@@ -493,7 +570,12 @@ defmodule ColorMatching.Persistence do
 
     Enum.map(
       palette_colors,
-      &response_vector_from_measurements(&1, printer_profile_id, measurements_by_palette_color)
+      &response_vector_from_records(
+        &1,
+        printer_profile_id,
+        Map.get(responses_by_palette_color, &1.id, %{}),
+        Map.get(measurements_by_palette_color, &1.id, %{})
+      )
     )
   end
 
@@ -516,10 +598,14 @@ defmodule ColorMatching.Persistence do
       )
       when is_integer(palette_color_id) and is_binary(hex_color) and
              is_integer(printer_profile_id) do
-    measurements =
-      latest_illuminant_measurements_by_light_source(palette_color_id, printer_profile_id)
+    records =
+      list_illuminant_responses(palette_color_id, printer_profile_id)
+      |> Map.merge(
+        latest_illuminant_measurements_by_light_source(palette_color_id, printer_profile_id),
+        fn _illuminant, response, _measurement -> response end
+      )
 
-    ResponseVector.new(hex_color, printer_profile_id, measurements)
+    ResponseVector.new(hex_color, printer_profile_id, records)
   end
 
   def response_vector(%PaletteColor{}, %PrinterProfile{}) do
@@ -591,17 +677,25 @@ defmodule ColorMatching.Persistence do
     where(query, [measurement], measurement.light_source == ^light_source)
   end
 
-  defp response_vector_from_measurements(
+  defp response_vector_from_records(
          %PaletteColor{id: palette_color_id, hex_color: hex_color},
          printer_profile_id,
-         measurements_by_palette_color
+         responses,
+         measurements
        )
        when is_integer(palette_color_id) and is_binary(hex_color) do
-    measurements = Map.get(measurements_by_palette_color, palette_color_id, %{})
-    ResponseVector.new(hex_color, printer_profile_id, measurements)
+    records =
+      Map.merge(measurements, responses, fn _source, _measurement, response -> response end)
+
+    ResponseVector.new(hex_color, printer_profile_id, records)
   end
 
-  defp response_vector_from_measurements(%PaletteColor{}, _printer_profile_id, _measurements) do
+  defp response_vector_from_records(
+         %PaletteColor{},
+         _printer_profile_id,
+         _responses,
+         _measurements
+       ) do
     raise ArgumentError, "response_vectors/2 requires persisted palette colors with hex colors"
   end
 
@@ -749,7 +843,88 @@ defmodule ColorMatching.Persistence do
      ]}
   end
 
-  @spec normalize_measurement_attrs(map()) :: map()
+  @spec normalize_illuminant_response_attrs(map()) :: map()
+  defp normalize_illuminant_response_attrs(attrs) do
+    attrs
+    |> normalize_measurement_key(:palette_color_id, [
+      :palette_color_id,
+      "palette_color_id",
+      :color_id,
+      "color_id"
+    ])
+    |> normalize_measurement_key(:printer_profile_id, [
+      :printer_profile_id,
+      "printer_profile_id",
+      :reproduction_profile_id,
+      "reproduction_profile_id"
+    ])
+    |> normalize_measurement_key(:illuminant, [
+      :illuminant,
+      "illuminant",
+      :light_source,
+      "light_source"
+    ])
+    |> normalize_measurement_key(:apparent_brightness, [
+      :apparent_brightness,
+      "apparent_brightness",
+      :brightness_score,
+      "brightness_score"
+    ])
+    |> normalize_measurement_key(:notes, [:notes, "notes"])
+    |> normalize_measurement_key(:source_measurement_id, [
+      :source_measurement_id,
+      "source_measurement_id"
+    ])
+  end
+
+  @spec validate_illuminant_response_references(Ecto.Changeset.t(), map()) :: Ecto.Changeset.t()
+  defp validate_illuminant_response_references(changeset, attrs) do
+    changeset
+    |> validate_measurement_references(
+      attrs |> Map.get(:palette_color_id) |> List.wrap() |> existing_ids(PaletteColor),
+      attrs |> Map.get(:printer_profile_id) |> List.wrap() |> existing_ids(PrinterProfile)
+    )
+    |> validate_source_measurement_scope()
+  end
+
+  @spec validate_source_measurement_scope(Ecto.Changeset.t()) :: Ecto.Changeset.t()
+  defp validate_source_measurement_scope(changeset) do
+    case Ecto.Changeset.get_field(changeset, :source_measurement_id) do
+      nil ->
+        changeset
+
+      source_measurement_id ->
+        scope = %{
+          palette_color_id: Ecto.Changeset.get_field(changeset, :palette_color_id),
+          printer_profile_id: Ecto.Changeset.get_field(changeset, :printer_profile_id),
+          light_source: Ecto.Changeset.get_field(changeset, :illuminant)
+        }
+
+        if valid_source_measurement_scope?(source_measurement_id, scope) do
+          changeset
+        else
+          add_error(
+            changeset,
+            :source_measurement_id,
+            "must belong to the same palette color, printer profile, and illuminant"
+          )
+        end
+    end
+  end
+
+  @spec valid_source_measurement_scope?(term(), map()) :: boolean()
+  defp valid_source_measurement_scope?(source_measurement_id, scope) do
+    IlluminantMeasurement
+    |> where(
+      [measurement],
+      measurement.id == ^source_measurement_id and
+        measurement.palette_color_id == ^scope.palette_color_id and
+        measurement.printer_profile_id == ^scope.printer_profile_id and
+        measurement.light_source == ^scope.light_source
+    )
+    |> Repo.exists?()
+  end
+
   defp normalize_measurement_attrs(attrs) do
     attrs
     |> normalize_measurement_key(:palette_color_id, [

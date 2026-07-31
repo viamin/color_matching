@@ -334,6 +334,36 @@ defmodule ColorMatching.PersistenceTest do
       assert second_vector.red == :missing
     end
 
+    test "prefers stored illuminant responses over instrument measurements" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.25
+               })
+
+      assert {:ok, _response} =
+               Persistence.set_illuminant_response(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 illuminant: "white",
+                 apparent_brightness: 7,
+                 source_measurement_id: measurement.id
+               })
+
+      vector = Persistence.response_vector(color, printer_profile)
+
+      assert vector.white == 0.7
+      assert vector.measured_at == nil
+      assert vector.inserted_at != nil
+
+      assert [batched_vector] = Persistence.response_vectors([color], printer_profile)
+      assert batched_vector.white == 0.7
+    end
+
     test "raises when building a response vector for an unpersisted printer profile" do
       %{color: color} = persisted_measurement_fixture()
 
@@ -479,6 +509,151 @@ defmodule ColorMatching.PersistenceTest do
              ]
 
       assert Persistence.list_illuminant_measurements(color.id, printer_profile.id) == []
+    end
+  end
+
+  describe "illuminant responses" do
+    test "creates, updates, clears, and fetches a score per color, profile, and illuminant" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      attrs = %{
+        color_id: color.id,
+        printer_profile_id: printer_profile.id,
+        illuminant: "red",
+        apparent_brightness: 7,
+        notes: "Compared with printed reference scale"
+      }
+
+      assert {:ok, response} = Persistence.set_illuminant_response(attrs)
+      assert response.apparent_brightness == 7
+
+      assert Persistence.get_illuminant_response(color.id, printer_profile.id, "red").id ==
+               response.id
+
+      assert Persistence.list_illuminant_responses(color.id, printer_profile.id)["red"].id ==
+               response.id
+
+      assert {:ok, updated} =
+               Persistence.update_illuminant_response(%{attrs | apparent_brightness: 4})
+
+      assert updated.id == response.id
+      assert updated.apparent_brightness == 4
+
+      assert {1, nil} = Persistence.clear_illuminant_response(color.id, printer_profile.id, "red")
+      assert Persistence.get_illuminant_response(color.id, printer_profile.id, "red") == nil
+    end
+
+    test "validates the subjective 0 to 10 score and separates profiles and illuminants" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      for score <- [-1, 11] do
+        assert {:error, changeset} =
+                 Persistence.set_illuminant_response(%{
+                   palette_color_id: color.id,
+                   printer_profile_id: printer_profile.id,
+                   illuminant: "white",
+                   apparent_brightness: score
+                 })
+
+        assert %{apparent_brightness: [_]} = errors_on(changeset)
+      end
+
+      assert {:ok, _} =
+               Persistence.set_illuminant_response(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 illuminant: "white",
+                 apparent_brightness: 5
+               })
+
+      assert {:ok, _} =
+               Persistence.set_illuminant_response(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 illuminant: "blue",
+                 apparent_brightness: 6
+               })
+
+      assert Map.keys(Persistence.list_illuminant_responses(color.id, printer_profile.id)) == [
+               "blue",
+               "white"
+             ]
+
+      assert Persistence.list_illuminant_responses(color.id, printer_profile.id)["white"].apparent_brightness ==
+               5
+
+      assert Persistence.list_illuminant_responses(color.id, printer_profile.id)["blue"].apparent_brightness ==
+               6
+    end
+
+    test "validates source_measurement_id against the response scope" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+      %{color: other_color} = persisted_measurement_fixture()
+      %{printer_profile: other_printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, matching_measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.42
+               })
+
+      assert {:ok, wrong_color_measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: other_color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.43
+               })
+
+      assert {:ok, wrong_profile_measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: other_printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.44
+               })
+
+      assert {:ok, wrong_illuminant_measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "blue",
+                 normalized_brightness: 0.45
+               })
+
+      valid_attrs = %{
+        palette_color_id: color.id,
+        printer_profile_id: printer_profile.id,
+        illuminant: "white",
+        apparent_brightness: 5
+      }
+
+      assert {:ok, response} =
+               Persistence.set_illuminant_response(
+                 Map.put(valid_attrs, :source_measurement_id, matching_measurement.id)
+               )
+
+      assert response.source_measurement_id == matching_measurement.id
+
+      for measurement <- [
+            wrong_color_measurement,
+            wrong_profile_measurement,
+            wrong_illuminant_measurement
+          ] do
+        assert {:error, changeset} =
+                 Persistence.set_illuminant_response(
+                   Map.put(valid_attrs, :source_measurement_id, measurement.id)
+                 )
+
+        assert %{
+                 source_measurement_id: [
+                   "must belong to the same palette color, printer profile, and illuminant"
+                 ]
+               } =
+                 errors_on(changeset)
+      end
     end
   end
 
@@ -776,9 +951,11 @@ defmodule ColorMatching.PersistenceTest do
   end
 
   defp persisted_measurement_fixture do
+    unique_suffix = System.unique_integer([:positive])
+
     assert {:ok, palette} =
              Persistence.create_palette(%{
-               name: "Measured Swatches",
+               name: "Measured Swatches #{unique_suffix}",
                colors: [
                  %{hex_color: "#112233", sort_order: 0, display_label: "Patch 1"}
                ]
