@@ -1,6 +1,7 @@
 defmodule ColorMatchingWeb.ColorGridLive do
   use ColorMatchingWeb, :live_view
   alias ColorMatching.{ColorFormat, ColorUtils, GeneratedSheet, Grid, PrinterProfile}
+  alias ColorMatching.Persistence.TestSheet
 
   @default_colors ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#FD79A8"]
   # Lower bound for grid_size; matches the `min` attribute on the grid-size
@@ -311,11 +312,31 @@ defmodule ColorMatchingWeb.ColorGridLive do
 
   defp pair_second_color(%{bottom_right_color: color}), do: color
 
+  # NOTE: `sheet_id` and `pair_id` here are placeholders, not real identifiers.
+  # `TestSheet.pair_id/3` (and `ColorPairLive.persisted_sheet/1`, which reads
+  # `sheet_id`) expect the persisted `TestSheet`'s `lookup_code` (an
+  # "XXXX-XXXX" code), but `generated_sheet.id` is a `sheet-<sha256-prefix>`
+  # hash derived from in-memory grid state (see `GeneratedSheet.new/1`). This
+  # mismatch already existed for `sheet_id` before manual classification was
+  # added, and pre-dates this function's `pair_id` call.
+  #
+  # There is currently no code path that persists a `TestSheet` from the
+  # grid's in-memory state (colors/grid_size/palette/printer profile), and
+  # the grid does not track a persisted `palette_id`, so there is nothing to
+  # look up a real `lookup_code` from here. As a result,
+  # `ColorPairLive.build_classification_context/3` always resolves to `nil`
+  # for links generated from this page, and the manual classification
+  # controls are unreachable via grid clicks today; they are only reachable
+  # via a URL built from a real persisted `TestSheet`/`TestSheetPair` (e.g.
+  # from the iOS capture flow). Resolving this needs the grid to know which
+  # persisted `TestSheet` (if any) backs its current state, which is a
+  # larger change tracked as follow-up work rather than part of this PR.
   defp pair_link_params(cell, generated_sheet) do
     [
       a: cell.top_left_color,
       b: pair_second_color(cell),
-      sheet_id: generated_sheet.id
+      sheet_id: generated_sheet.id,
+      pair_id: TestSheet.pair_id(generated_sheet.id, cell.row, cell.col)
     ] ++ PrinterProfile.to_query_params(generated_sheet.printer_profile)
   end
 
