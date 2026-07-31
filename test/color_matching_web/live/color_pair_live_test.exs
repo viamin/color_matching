@@ -286,13 +286,7 @@ defmodule ColorMatchingWeb.ColorPairLiveTest do
       {:ok, view, _html} =
         live(
           conn,
-          ~p"/pair?#{[
-            a: pair.color_a_hex,
-            b: pair.color_b_hex,
-            sheet_id: sheet.lookup_code,
-            pair_id: pair.pair_id,
-            reproduction_profile_id: other_profile.id
-          ]}"
+          ~p"/pair?#{[a: pair.color_a_hex, b: pair.color_b_hex, sheet_id: sheet.lookup_code, pair_id: pair.pair_id, reproduction_profile_id: other_profile.id]}"
         )
 
       html =
@@ -349,13 +343,7 @@ defmodule ColorMatchingWeb.ColorPairLiveTest do
       {:ok, view, _html} =
         live(
           conn,
-          ~p"/pair?#{[
-            a: pair.color_a_hex,
-            b: pair.color_b_hex,
-            sheet_id: sheet.lookup_code,
-            pair_id: pair.pair_id,
-            printer_profile_id: other_profile.id
-          ]}"
+          ~p"/pair?#{[a: pair.color_a_hex, b: pair.color_b_hex, sheet_id: sheet.lookup_code, pair_id: pair.pair_id, printer_profile_id: other_profile.id]}"
         )
 
       html = render_click(view, "clear_classification", %{"illuminant" => "red"})
