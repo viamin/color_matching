@@ -131,7 +131,8 @@ defmodule ColorMatching.PrintedPairBrowserTest do
 
   describe "filter_options/0" do
     test "returns only contexts that have active classifications" do
-      %{primary_pair: pair, primary_profile: profile} = printed_pair_browser_fixture()
+      %{primary_pair: pair, primary_profile: profile, primary_palette: palette} =
+        printed_pair_browser_fixture()
 
       assert {:ok, _classification} =
                Persistence.set_printed_pair_classification(%{
@@ -146,7 +147,7 @@ defmodule ColorMatching.PrintedPairBrowserTest do
       assert {"Green", "green"} in options.illuminants
       assert {"Weak metamer", "weak_metamer"} in options.classifications
       assert Enum.any?(options.profiles, fn {_label, id} -> id == profile.id end)
-      assert Enum.any?(options.palettes)
+      assert {palette.name, palette.id} in options.palettes
       assert Enum.any?(options.test_sheets)
     end
   end

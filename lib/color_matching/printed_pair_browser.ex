@@ -340,6 +340,7 @@ defmodule ColorMatching.PrintedPairBrowser do
     |> select([palette], {palette.id, palette.name})
     |> distinct(true)
     |> Repo.all()
+    |> Enum.map(fn {id, name} -> {name, id} end)
     |> Enum.sort()
   end
 
