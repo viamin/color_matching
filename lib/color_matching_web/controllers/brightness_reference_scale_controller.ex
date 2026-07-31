@@ -13,6 +13,7 @@ defmodule ColorMatchingWeb.BrightnessReferenceScaleController do
 
   @invalid_block_size_message "block_size must be a positive integer"
   @max_block_size BrightnessReferenceScale.max_block_size()
+  @default_block_size BrightnessReferenceScale.default_block_size()
 
   def show(conn, params) do
     with {:ok, scale} <- BrightnessReferenceScale.new(params["illuminant"]),
@@ -37,7 +38,7 @@ defmodule ColorMatchingWeb.BrightnessReferenceScaleController do
     end
   end
 
-  defp parse_block_size(nil), do: {:ok, 32}
+  defp parse_block_size(nil), do: {:ok, @default_block_size}
 
   defp parse_block_size(block_size) when is_integer(block_size),
     do: validate_block_size(block_size)

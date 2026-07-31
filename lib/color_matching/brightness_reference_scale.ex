@@ -65,6 +65,9 @@ defmodule ColorMatching.BrightnessReferenceScale do
   @spec max_block_size() :: pos_integer()
   def max_block_size, do: @max_block_size
 
+  @spec default_block_size() :: pos_integer()
+  def default_block_size, do: @default_block_size
+
   @doc """
   Builds a reference scale bound to `illuminant` for scoring under that light.
 
