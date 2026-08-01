@@ -33,6 +33,7 @@ defmodule ColorMatchingWeb.Router do
     pipe_through(:browser)
 
     live("/", ColorGridLive)
+    live("/printer-profiles", PrinterProfilesLive)
     live("/palettes", PalettesLive)
     live("/palettes/:palette_id/colors/:color_id", ColorDetailLive)
     live("/printed-pairs", PrintedPairBrowserLive)

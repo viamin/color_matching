@@ -1,6 +1,6 @@
 defmodule ColorMatchingWeb.ColorGridLive do
   use ColorMatchingWeb, :live_view
-  alias ColorMatching.{ColorFormat, ColorUtils, GeneratedSheet, Grid, PrinterProfile}
+  alias ColorMatching.{ColorFormat, ColorUtils, GeneratedSheet, Grid, Persistence, PrinterProfile}
   alias ColorMatching.Persistence.TestSheet
 
   @default_colors ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#FD79A8"]
@@ -15,8 +15,8 @@ defmodule ColorMatchingWeb.ColorGridLive do
   @max_grid_colors 12
 
   def mount(_params, _session, socket) do
-    printer_profiles = PrinterProfile.default_profiles()
-    [default_printer_profile | _] = printer_profiles
+    printer_profiles = persisted_printer_profiles()
+    default_printer_profile = List.first(PrinterProfile.default_profiles())
 
     # NOTE: intentionally do not `push_active_palette/1` here. On a hard
     # refresh the PaletteStorage hook hydrates the saved palette from
@@ -32,7 +32,6 @@ defmodule ColorMatchingWeb.ColorGridLive do
      |> assign(:active_palette, nil)
      |> assign(:printer_profiles, printer_profiles)
      |> assign(:active_printer_profile, default_printer_profile)
-     |> assign(:printer_profile_form, empty_printer_profile_form())
      |> assign(:display_format, ColorFormat.default_display_format())
      |> assign(:display_formats, ColorFormat.display_formats())
      |> assign(:max_grid_colors, @max_grid_colors)
@@ -127,37 +126,6 @@ defmodule ColorMatchingWeb.ColorGridLive do
 
   def handle_event("palettes_updated", _params, socket), do: {:noreply, socket}
 
-  def handle_event("update_printer_profile_form", %{"profile" => params}, socket) do
-    {:noreply, assign(socket, :printer_profile_form, normalize_printer_profile_form(params))}
-  end
-
-  def handle_event("create_printer_profile", %{"profile" => params}, socket) do
-    case PrinterProfile.validate(params) do
-      {:ok, printer_profile} ->
-        printer_profiles =
-          upsert_printer_profile(socket.assigns.printer_profiles, printer_profile)
-
-        {:noreply,
-         socket
-         |> assign(:printer_profiles, printer_profiles)
-         |> assign(:active_printer_profile, printer_profile)
-         |> assign(:printer_profile_form, empty_printer_profile_form())
-         |> assign_grid()
-         |> persist_printer_profiles()
-         |> persist_active_printer_profile()
-         |> put_flash(
-           :info,
-           "Created printer profile #{PrinterProfile.display_name(printer_profile)}"
-         )}
-
-      {:error, message} ->
-        {:noreply,
-         socket
-         |> assign(:printer_profile_form, normalize_printer_profile_form(params))
-         |> put_flash(:error, message)}
-    end
-  end
-
   def handle_event("select_printer_profile", %{"profile_id" => profile_id}, socket) do
     printer_profile =
       Enum.find(socket.assigns.printer_profiles, &(&1.id == profile_id)) ||
@@ -222,7 +190,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
       profiles
       |> Enum.map(&PrinterProfile.from_map/1)
       |> Enum.reject(&is_nil/1)
-      |> PrinterProfile.merge_with_defaults()
+      |> merge_printer_profiles(persisted_printer_profiles())
 
     {:noreply,
      socket
@@ -282,12 +250,6 @@ defmodule ColorMatchingWeb.ColorGridLive do
     })
   end
 
-  defp persist_printer_profiles(socket) do
-    push_event(socket, "save_printer_profiles", %{
-      profiles: Enum.map(socket.assigns.printer_profiles, &Map.from_struct/1)
-    })
-  end
-
   defp persist_active_printer_profile(socket) do
     push_event(socket, "set_active_printer_profile", %{
       profile_id: socket.assigns.active_printer_profile.id
@@ -340,34 +302,23 @@ defmodule ColorMatchingWeb.ColorGridLive do
     ] ++ PrinterProfile.to_query_params(generated_sheet.printer_profile)
   end
 
-  defp normalize_printer_profile_form(params) when is_map(params) do
-    Enum.reduce(empty_printer_profile_form(), %{}, fn {key, _default}, acc ->
-      Map.put(acc, key, Map.get(params, Atom.to_string(key), Map.get(params, key, "")))
-    end)
-  end
-
-  defp empty_printer_profile_form do
-    %{
-      printer_make_model: "",
-      paper_type: "",
-      ink_type: "",
-      icc_profile: "",
-      print_settings: "",
-      driver_name: "",
-      driver_version: "",
-      calibration_date: "",
-      calibration_version: "",
-      notes: ""
-    }
-  end
-
-  defp upsert_printer_profile(printer_profiles, printer_profile) do
-    [printer_profile | Enum.reject(printer_profiles, &(&1.id == printer_profile.id))]
-  end
-
   defp active_printer_profile(printer_profiles, assigns) do
     Enum.find(printer_profiles, &(&1.id == assigns.active_printer_profile.id)) ||
       List.first(printer_profiles)
+  end
+
+  defp persisted_printer_profiles do
+    persisted_profiles =
+      Persistence.list_printer_profiles()
+      |> Enum.map(&PrinterProfile.from_persistence/1)
+
+    merge_printer_profiles([], persisted_profiles)
+  end
+
+  defp merge_printer_profiles(local_profiles, persisted_profiles) do
+    [local_profiles, persisted_profiles]
+    |> PrinterProfile.merge_profiles()
+    |> PrinterProfile.merge_with_defaults()
   end
 
   def render(assigns) do
@@ -536,115 +487,40 @@ defmodule ColorMatchingWeb.ColorGridLive do
           </p>
         </div>
 
-        <form
-          id="select-printer-profile-form"
-          phx-change="select_printer_profile"
-          class="mb-4 flex flex-col gap-2 md:max-w-xl"
-        >
-          <label for="profile_id" class="text-sm font-medium text-gray-700">
-            Active printer profile
-          </label>
-          <select
-            id="profile_id"
-            name="profile_id"
-            class="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+        <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <form
+            id="select-printer-profile-form"
+            phx-change="select_printer_profile"
+            class="flex flex-1 flex-col gap-2 md:max-w-xl"
           >
-            <%= for profile <- @printer_profiles do %>
-              <option value={profile.id} selected={profile.id == @active_printer_profile.id}>
-                {PrinterProfile.display_name(profile)}
-              </option>
-            <% end %>
-          </select>
-          <p class="text-xs text-gray-600">
-            ICC: {@active_printer_profile.icc_profile || "Not specified"}.
-            Calibration: {@active_printer_profile.calibration_version || "Not specified"}.
-          </p>
-        </form>
+            <label for="profile_id" class="text-sm font-medium text-gray-700">
+              Active printer profile
+            </label>
+            <select
+              id="profile_id"
+              name="profile_id"
+              class="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            >
+              <%= for profile <- @printer_profiles do %>
+                <option value={profile.id} selected={profile.id == @active_printer_profile.id}>
+                  {PrinterProfile.option_label(profile)}
+                </option>
+              <% end %>
+            </select>
+            <p class="text-xs text-gray-600">
+              Source: {PrinterProfile.source_label(@active_printer_profile)}. ICC: {@active_printer_profile.icc_profile ||
+                "Not specified"}.
+              Calibration: {@active_printer_profile.calibration_version || "Not specified"}.
+            </p>
+          </form>
 
-        <form
-          id="create-printer-profile-form"
-          phx-change="update_printer_profile_form"
-          phx-submit="create_printer_profile"
-        >
-          <div class="grid gap-3 md:grid-cols-2">
-            <input
-              type="text"
-              name="profile[printer_make_model]"
-              value={@printer_profile_form.printer_make_model}
-              placeholder="Printer make/model"
-              class="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-            <input
-              type="text"
-              name="profile[paper_type]"
-              value={@printer_profile_form.paper_type}
-              placeholder="Paper type"
-              class="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-            <input
-              type="text"
-              name="profile[ink_type]"
-              value={@printer_profile_form.ink_type}
-              placeholder="Ink type"
-              class="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-            <input
-              type="text"
-              name="profile[icc_profile]"
-              value={@printer_profile_form.icc_profile}
-              placeholder="ICC color profile"
-              class="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-            <input
-              type="text"
-              name="profile[print_settings]"
-              value={@printer_profile_form.print_settings}
-              placeholder="Print quality/settings"
-              class="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-            <input
-              type="text"
-              name="profile[driver_name]"
-              value={@printer_profile_form.driver_name}
-              placeholder="Driver"
-              class="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-            <input
-              type="text"
-              name="profile[driver_version]"
-              value={@printer_profile_form.driver_version}
-              placeholder="Driver version"
-              class="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-            <input
-              type="text"
-              name="profile[calibration_date]"
-              value={@printer_profile_form.calibration_date}
-              placeholder="Calibration date"
-              class="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-            <input
-              type="text"
-              name="profile[calibration_version]"
-              value={@printer_profile_form.calibration_version}
-              placeholder="Calibration version"
-              class="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-            <input
-              type="text"
-              name="profile[notes]"
-              value={@printer_profile_form.notes}
-              placeholder="Notes"
-              class="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-          </div>
-          <button
-            type="submit"
-            class="mt-3 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
+          <.link
+            navigate={~p"/printer-profiles"}
+            class="rounded-lg border border-emerald-700 px-3 py-2 text-sm font-medium text-emerald-800 hover:bg-white"
           >
-            Create Printer Profile
-          </button>
-        </form>
+            Manage Printer Profiles
+          </.link>
+        </div>
       </div>
 
       <!-- Grid Size Control -->
