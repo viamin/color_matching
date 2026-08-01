@@ -510,7 +510,8 @@ defmodule ColorMatchingWeb.ColorGridLive do
               <% end %>
             </select>
             <p class="text-xs text-gray-600">
-              Source: {PrinterProfile.source_label(@active_printer_profile)}. ICC: {@active_printer_profile.icc_profile || "Not specified"}.
+              Source: {PrinterProfile.source_label(@active_printer_profile)}. ICC: {@active_printer_profile.icc_profile ||
+                "Not specified"}.
               Calibration: {@active_printer_profile.calibration_version || "Not specified"}.
             </p>
           </form>

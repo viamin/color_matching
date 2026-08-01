@@ -212,7 +212,11 @@ defmodule ColorMatching.PrinterProfile do
 
   @spec merge_with_defaults([t()]) :: [t()]
   def merge_with_defaults(printer_profiles) when is_list(printer_profiles) do
-    merge_profiles([printer_profiles, default_profiles()])
+    defaults_by_id = Map.new(default_profiles(), &{&1.id, &1})
+
+    printer_profiles
+    |> Enum.map(&canonicalize_default_profile(&1, defaults_by_id))
+    |> then(&merge_profiles([&1, Map.values(defaults_by_id)]))
   end
 
   @spec from_query_params(map(), [t()]) :: t() | nil
@@ -237,6 +241,10 @@ defmodule ColorMatching.PrinterProfile do
       end)
 
     from_map(attrs)
+  end
+
+  defp canonicalize_default_profile(%__MODULE__{id: id} = profile, defaults_by_id) do
+    Map.get(defaults_by_id, id, profile)
   end
 
   defp validate_required(attrs, key, label) do

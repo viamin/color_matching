@@ -87,7 +87,8 @@ defmodule ColorMatchingWeb.PrinterProfilesLive do
 
     case PrinterProfile.validate(attrs) do
       {:ok, printer_profile} ->
-        printer_profiles = upsert_printer_profile(socket.assigns.printer_profiles, printer_profile)
+        printer_profiles =
+          upsert_printer_profile(socket.assigns.printer_profiles, printer_profile)
 
         {:noreply,
          socket
@@ -97,7 +98,10 @@ defmodule ColorMatchingWeb.PrinterProfilesLive do
          |> assign(:printer_profile_form, form_for(printer_profile))
          |> persist_printer_profiles()
          |> persist_active_printer_profile()
-         |> put_flash(:info, "#{action} printer profile #{PrinterProfile.display_name(printer_profile)}")}
+         |> put_flash(
+           :info,
+           "#{action} printer profile #{PrinterProfile.display_name(printer_profile)}"
+         )}
 
       {:error, message} ->
         {:noreply,
@@ -114,7 +118,9 @@ defmodule ColorMatchingWeb.PrinterProfilesLive do
     case Persistence.update_printer_profile(persisted_profile, params) do
       {:ok, updated_profile} ->
         printer_profile = PrinterProfile.from_persistence(updated_profile)
-        printer_profiles = upsert_printer_profile(socket.assigns.printer_profiles, printer_profile)
+
+        printer_profiles =
+          upsert_printer_profile(socket.assigns.printer_profiles, printer_profile)
 
         {:noreply,
          socket
@@ -123,7 +129,10 @@ defmodule ColorMatchingWeb.PrinterProfilesLive do
          |> assign(:editing_profile_id, printer_profile.id)
          |> assign(:printer_profile_form, form_for(printer_profile))
          |> persist_active_printer_profile()
-         |> put_flash(:info, "Updated printer profile #{PrinterProfile.display_name(printer_profile)}")}
+         |> put_flash(
+           :info,
+           "Updated printer profile #{PrinterProfile.display_name(printer_profile)}"
+         )}
 
       {:error, changeset} ->
         {:noreply,
@@ -229,7 +238,8 @@ defmodule ColorMatchingWeb.PrinterProfilesLive do
           "Save Browser-local Profile"
         end
 
-      nil -> "Create Browser-local Profile"
+      nil ->
+        "Create Browser-local Profile"
     end
   end
 
@@ -242,7 +252,8 @@ defmodule ColorMatchingWeb.PrinterProfilesLive do
           "Edit Browser-local Profile"
         end
 
-      nil -> "Create Browser-local Profile"
+      nil ->
+        "Create Browser-local Profile"
     end
   end
 

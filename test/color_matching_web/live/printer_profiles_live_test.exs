@@ -73,7 +73,9 @@ defmodule ColorMatchingWeb.PrinterProfilesLiveTest do
       render_hook(view, "printer_profiles_loaded", %{"profiles" => [browser_local_profile]})
 
       view
-      |> element("button[phx-click='edit_printer_profile'][phx-value-profile_id='profile-studio-rag']")
+      |> element(
+        "button[phx-click='edit_printer_profile'][phx-value-profile_id='profile-studio-rag']"
+      )
       |> render_click()
 
       view
