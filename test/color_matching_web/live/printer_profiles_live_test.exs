@@ -11,6 +11,8 @@ defmodule ColorMatchingWeb.PrinterProfilesLiveTest do
 
       assert html =~ "Printer Profiles"
       assert html =~ "Back to Grid"
+      assert html =~ ~s(data-load-palettes="false")
+      assert html =~ ~s(data-load-printer-profiles="true")
       assert html =~ "Epson SureColor P900 on Ultra Premium Luster"
       assert html =~ "Default"
       refute html =~ "Edit Persisted Profile"

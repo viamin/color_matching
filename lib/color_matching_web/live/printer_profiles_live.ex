@@ -263,6 +263,7 @@ defmodule ColorMatchingWeb.PrinterProfilesLive do
       class="mx-auto max-w-6xl p-6"
       phx-hook="PaletteStorage"
       id="printer-profile-storage"
+      data-load-palettes="false"
       data-load-printer-profiles="true"
     >
       <div class="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
