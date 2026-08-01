@@ -173,14 +173,20 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       assert html =~ "HSV"
     end
 
-    test "renders printer profile controls and default profile metadata", %{conn: conn} do
+    test "renders compact printer profile controls and links to profile management", %{
+      conn: conn
+    } do
       {:ok, _view, html} = live(conn, ~p"/")
 
       assert html =~ "Printer Profile"
       assert html =~ "Active printer profile"
-      assert html =~ "Create Printer Profile"
-      assert html =~ "Epson SureColor P900 on Ultra Premium Luster"
+      assert html =~ "Manage Printer Profiles"
+      assert html =~ "/printer-profiles"
+      assert html =~ "Epson SureColor P900 on Ultra Premium Luster (Default)"
+      assert html =~ "Source: Default."
       assert html =~ "Sheet sheet-"
+      refute html =~ "create-printer-profile-form"
+      refute html =~ "Create Printer Profile"
     end
 
     test "validates color input format", %{conn: conn} do
@@ -635,80 +641,7 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       assert print_section =~ ~s(class="absolute inset-0 triangle-diagonal-split")
     end
 
-    test "creating a printer profile selects it for generated sheets and pair links", %{
-      conn: conn
-    } do
-      {:ok, view, _html} = live(conn, ~p"/")
-
-      view
-      |> form("form[phx-submit='create_printer_profile']", %{
-        "profile" => %{
-          "printer_make_model" => "HP DesignJet Z9+",
-          "paper_type" => "Photo Rag",
-          "ink_type" => "OEM pigment",
-          "icc_profile" => "Z9 Photo Rag",
-          "print_settings" => "Best",
-          "driver_name" => "HP Driver",
-          "driver_version" => "61.3",
-          "calibration_date" => "2026-07-10",
-          "calibration_version" => "rag-1",
-          "notes" => "Studio profile"
-        }
-      })
-      |> render_submit()
-
-      html = render(view)
-
-      assert html =~ "HP DesignJet Z9+ on Photo Rag"
-      assert html =~ "Sheet sheet-"
-      assert html =~ "for HP DesignJet Z9+ on Photo Rag"
-      assert html =~ "profile_id=profile-"
-      assert html =~ "sheet_id=sheet-"
-      refute html =~ "profile_notes="
-      assert html =~ "profile_printer_make_model=HP+DesignJet+Z9%2B"
-    end
-
-    test "creating a printer profile persists it and marks it active for future mounts", %{
-      conn: conn
-    } do
-      {:ok, view, _html} = live(conn, ~p"/")
-
-      view
-      |> form("form[phx-submit='create_printer_profile']", %{
-        "profile" => %{
-          "printer_make_model" => "HP DesignJet Z9+",
-          "paper_type" => "Photo Rag",
-          "ink_type" => "OEM pigment",
-          "icc_profile" => "Z9 Photo Rag",
-          "print_settings" => "Best",
-          "driver_name" => "HP Driver",
-          "driver_version" => "61.3",
-          "calibration_date" => "2026-07-10",
-          "calibration_version" => "rag-1",
-          "notes" => "Studio profile"
-        }
-      })
-      |> render_submit()
-
-      assert_push_event(view, "save_printer_profiles", %{profiles: profiles})
-      assert_push_event(view, "set_active_printer_profile", %{profile_id: active_profile_id})
-
-      custom_profile =
-        Enum.find(profiles, fn profile ->
-          (Map.get(profile, "printer_make_model") || Map.get(profile, :printer_make_model)) ==
-            "HP DesignJet Z9+"
-        end)
-
-      assert (Map.get(custom_profile, "paper_type") || Map.get(custom_profile, :paper_type)) ==
-               "Photo Rag"
-
-      assert (Map.get(custom_profile, "ink_type") || Map.get(custom_profile, :ink_type)) ==
-               "OEM pigment"
-
-      assert active_profile_id == (Map.get(custom_profile, "id") || Map.get(custom_profile, :id))
-    end
-
-    test "hydrates persisted printer profiles and active selection from the storage hook", %{
+    test "hydrates browser-local printer profiles and active selection from the storage hook", %{
       conn: conn
     } do
       {:ok, view, _html} = live(conn, ~p"/")
@@ -735,9 +668,26 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
         })
 
       assert html =~ "HP DesignJet Z9+ on Photo Rag"
+      assert html =~ "HP DesignJet Z9+ on Photo Rag (Browser local)"
       assert html =~ "ICC: Z9 Photo Rag."
       assert html =~ "Calibration: rag-1."
       assert html =~ ~s(value="#{persisted_profile["id"]}" selected)
+    end
+
+    test "renders persisted database-backed printer profiles as selectable options", %{conn: conn} do
+      assert {:ok, persisted_profile} =
+               ColorMatching.Persistence.create_printer_profile(%{
+                 printer_make_model: "Epson SureColor P700",
+                 paper_type: "Legacy Baryta",
+                 ink_type: "OEM UltraChrome",
+                 icc_profile: "P700 Baryta",
+                 calibration_version: "baryta-2"
+               })
+
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      assert html =~ "Epson SureColor P700 on Legacy Baryta (Persisted)"
+      assert html =~ ~s(value="persisted-#{persisted_profile.id}")
     end
   end
 end

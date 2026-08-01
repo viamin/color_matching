@@ -101,6 +101,72 @@ defmodule ColorMatching.PrinterProfile do
     "#{profile.printer_make_model} on #{profile.paper_type}"
   end
 
+  @spec from_persistence(struct()) :: t()
+  def from_persistence(%ColorMatching.Persistence.PrinterProfile{} = profile) do
+    new(%{
+      id: persisted_id(profile.id),
+      printer_make_model: profile.printer_make_model,
+      paper_type: profile.paper_type,
+      ink_type: profile.ink_type,
+      icc_profile: profile.icc_profile,
+      print_settings: profile.print_settings,
+      driver_name: profile.driver_name,
+      driver_version: profile.driver_version,
+      calibration_date: iso8601_date(profile.calibration_date),
+      calibration_version: profile.calibration_version,
+      notes: profile.notes
+    })
+  end
+
+  @spec merge_profiles([[t()]] | [t()]) :: [t()]
+  def merge_profiles(profile_lists) when is_list(profile_lists) do
+    profile_lists
+    |> List.flatten()
+    |> Enum.reduce({MapSet.new(), []}, fn
+      %__MODULE__{id: id} = profile, {seen, merged} ->
+        if MapSet.member?(seen, id) do
+          {seen, merged}
+        else
+          {MapSet.put(seen, id), merged ++ [profile]}
+        end
+    end)
+    |> elem(1)
+  end
+
+  @spec default_profile?(t()) :: boolean()
+  def default_profile?(%__MODULE__{id: id}) do
+    id in Enum.map(default_profiles(), & &1.id)
+  end
+
+  @spec persisted_profile?(t()) :: boolean()
+  def persisted_profile?(%__MODULE__{id: "persisted-" <> _rest}), do: true
+  def persisted_profile?(%__MODULE__{}), do: false
+
+  @spec browser_local_profile?(t()) :: boolean()
+  def browser_local_profile?(%__MODULE__{} = profile) do
+    not default_profile?(profile) and not persisted_profile?(profile)
+  end
+
+  @spec source_label(t()) :: String.t()
+  def source_label(%__MODULE__{} = profile) do
+    cond do
+      default_profile?(profile) -> "Default"
+      persisted_profile?(profile) -> "Persisted"
+      true -> "Browser local"
+    end
+  end
+
+  @spec option_label(t()) :: String.t()
+  def option_label(%__MODULE__{} = profile) do
+    "#{display_name(profile)} (#{source_label(profile)})"
+  end
+
+  @spec persisted_record_id(t() | String.t() | integer() | nil) :: integer() | nil
+  def persisted_record_id(%__MODULE__{id: id}), do: persisted_record_id(id)
+  def persisted_record_id("persisted-" <> value), do: String.to_integer(value)
+  def persisted_record_id(id) when is_integer(id), do: id
+  def persisted_record_id(_id), do: nil
+
   @spec to_query_params(t()) :: keyword(String.t())
   def to_query_params(%__MODULE__{} = profile) do
     Enum.reduce(@query_param_fields, [], fn {field, atom_key}, params ->
@@ -146,15 +212,7 @@ defmodule ColorMatching.PrinterProfile do
 
   @spec merge_with_defaults([t()]) :: [t()]
   def merge_with_defaults(printer_profiles) when is_list(printer_profiles) do
-    default_profiles = default_profiles()
-    default_ids = MapSet.new(default_profiles, & &1.id)
-
-    custom_profiles =
-      Enum.reject(printer_profiles, fn profile ->
-        MapSet.member?(default_ids, profile.id)
-      end)
-
-    custom_profiles ++ default_profiles
+    merge_profiles([printer_profiles, default_profiles()])
   end
 
   @spec from_query_params(map(), [t()]) :: t() | nil
@@ -216,6 +274,12 @@ defmodule ColorMatching.PrinterProfile do
 
     "profile-" <> binary_part(Base.encode16(:crypto.hash(:sha256, material), case: :lower), 0, 12)
   end
+
+  defp persisted_id(id) when is_integer(id), do: "persisted-#{id}"
+  defp persisted_id(id), do: id
+
+  defp iso8601_date(%Date{} = date), do: Date.to_iso8601(date)
+  defp iso8601_date(value), do: value
 
   defp fetch(map, key) do
     case Map.fetch(map, key) do
