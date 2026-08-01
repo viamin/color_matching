@@ -5,7 +5,7 @@ defmodule ColorMatching.MixProject do
     [
       app: :color_matching,
       version: "0.1.0",
-      elixir: "~> 1.14",
+      elixir: "~> 1.17",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
@@ -81,6 +81,7 @@ defmodule ColorMatching.MixProject do
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false},
       # Test coverage
+      {:castore, "~> 1.0", only: :test},
       {:excoveralls, "~> 0.18", only: :test}
     ]
   end
