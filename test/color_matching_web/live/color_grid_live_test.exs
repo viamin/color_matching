@@ -708,5 +708,28 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       assert html =~ "Epson SureColor P700 on Legacy Baryta (Persisted)"
       assert html =~ ~s(value="persisted-#{persisted_profile.id}")
     end
+
+    test "keeps the first built-in default profile active on initial mount when persisted profiles exist",
+         %{conn: conn} do
+      assert {:ok, persisted_profile} =
+               ColorMatching.Persistence.create_printer_profile(%{
+                 printer_make_model: "HP DesignJet Z9+",
+                 paper_type: "Photo Rag",
+                 ink_type: "OEM pigment",
+                 icc_profile: "Z9 Photo Rag",
+                 calibration_version: "rag-1"
+               })
+
+      [default_profile | _rest] = ColorMatching.PrinterProfile.default_profiles()
+
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      assert html =~ "Source: Default."
+      assert html =~ "ICC: #{default_profile.icc_profile}."
+      assert html =~ "Calibration: #{default_profile.calibration_version}."
+      assert html =~ ~s(value="#{default_profile.id}" selected)
+      assert html =~ ~s(value="persisted-#{persisted_profile.id}")
+      refute html =~ ~s(value="persisted-#{persisted_profile.id}" selected)
+    end
   end
 end

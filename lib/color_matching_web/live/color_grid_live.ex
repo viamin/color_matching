@@ -16,7 +16,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
 
   def mount(_params, _session, socket) do
     printer_profiles = persisted_printer_profiles()
-    [default_printer_profile | _] = printer_profiles
+    default_printer_profile = List.first(PrinterProfile.default_profiles())
 
     # NOTE: intentionally do not `push_active_palette/1` here. On a hard
     # refresh the PaletteStorage hook hydrates the saved palette from

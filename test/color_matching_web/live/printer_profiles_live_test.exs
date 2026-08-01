@@ -3,7 +3,7 @@ defmodule ColorMatchingWeb.PrinterProfilesLiveTest do
 
   import Phoenix.LiveViewTest
 
-  alias ColorMatching.Persistence
+  alias ColorMatching.{Persistence, PrinterProfile}
 
   describe "PrinterProfilesLive" do
     test "renders the dedicated management page and keeps defaults read-only", %{conn: conn} do
@@ -182,6 +182,39 @@ defmodule ColorMatchingWeb.PrinterProfilesLiveTest do
       assert updated_profile.icc_profile == "PRO-310 Smooth v2"
       assert updated_profile.calibration_version == "smooth-2"
       assert updated_profile.notes == "Updated baseline profile"
+    end
+
+    test "keeps the first built-in default profile active on initial mount when persisted profiles exist",
+         %{conn: conn} do
+      assert {:ok, persisted_profile} =
+               Persistence.create_printer_profile(%{
+                 printer_make_model: "Epson SureColor P700",
+                 paper_type: "Legacy Baryta",
+                 ink_type: "OEM UltraChrome",
+                 icc_profile: "P700 Baryta",
+                 calibration_version: "baryta-2"
+               })
+
+      [default_profile | _rest] = ColorMatching.PrinterProfile.default_profiles()
+
+      {:ok, _view, html} = live(conn, ~p"/printer-profiles")
+
+      document = Floki.parse_document!(html)
+
+      [active_article] =
+        Floki.find(document, "article")
+        |> Enum.filter(fn article ->
+          article
+          |> Floki.find("span")
+          |> Floki.text(sep: " ")
+          |> String.contains?("Active")
+        end)
+
+      active_text = Floki.text(active_article, sep: " ")
+
+      assert active_text =~ PrinterProfile.display_name(default_profile)
+      refute active_text =~ "Epson SureColor P700 on Legacy Baryta"
+      assert html =~ ~s(phx-value-profile_id="persisted-#{persisted_profile.id}")
     end
   end
 end

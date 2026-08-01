@@ -5,11 +5,12 @@ defmodule ColorMatchingWeb.PrinterProfilesLive do
 
   def mount(_params, _session, socket) do
     printer_profiles = persisted_printer_profiles()
+    default_printer_profile = List.first(PrinterProfile.default_profiles())
 
     {:ok,
      socket
      |> assign(:printer_profiles, printer_profiles)
-     |> assign(:active_printer_profile_id, List.first(printer_profiles).id)
+     |> assign(:active_printer_profile_id, default_printer_profile.id)
      |> assign(:editing_profile_id, nil)
      |> assign(:printer_profile_form, empty_printer_profile_form())}
   end
