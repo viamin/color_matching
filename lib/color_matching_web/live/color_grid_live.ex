@@ -1,6 +1,7 @@
 defmodule ColorMatchingWeb.ColorGridLive do
   use ColorMatchingWeb, :live_view
   alias ColorMatching.{ColorFormat, ColorUtils, GeneratedSheet, Grid, PrinterProfile}
+  alias ColorMatching.Persistence
   alias ColorMatching.Persistence.TestSheet
 
   @default_colors ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#FD79A8"]
@@ -15,7 +16,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
   @max_grid_colors 12
 
   def mount(_params, _session, socket) do
-    printer_profiles = PrinterProfile.default_profiles()
+    printer_profiles = initial_printer_profiles()
     [default_printer_profile | _] = printer_profiles
 
     # NOTE: intentionally do not `push_active_palette/1` here. On a hard
@@ -222,7 +223,7 @@ defmodule ColorMatchingWeb.ColorGridLive do
       profiles
       |> Enum.map(&PrinterProfile.from_map/1)
       |> Enum.reject(&is_nil/1)
-      |> PrinterProfile.merge_with_defaults()
+      |> merge_printer_profiles()
 
     {:noreply,
      socket
@@ -287,6 +288,43 @@ defmodule ColorMatchingWeb.ColorGridLive do
       profiles: Enum.map(socket.assigns.printer_profiles, &Map.from_struct/1)
     })
   end
+
+  defp initial_printer_profiles do
+    []
+    |> merge_printer_profiles()
+  end
+
+  defp merge_printer_profiles(printer_profiles) do
+    printer_profiles
+    |> Kernel.++(persisted_printer_profiles())
+    |> Enum.uniq_by(& &1.id)
+    |> PrinterProfile.merge_with_defaults()
+  end
+
+  defp persisted_printer_profiles do
+    Persistence.list_printer_profiles()
+    |> Enum.map(&printer_profile_from_persistence/1)
+  end
+
+  defp printer_profile_from_persistence(%Persistence.PrinterProfile{} = profile) do
+    PrinterProfile.new(%{
+      id: "db-#{profile.id}",
+      printer_make_model: profile.printer_make_model,
+      paper_type: profile.paper_type,
+      ink_type: profile.ink_type,
+      icc_profile: profile.icc_profile,
+      print_settings: profile.print_settings,
+      driver_name: profile.driver_name,
+      driver_version: profile.driver_version,
+      calibration_date: date_to_string(profile.calibration_date),
+      calibration_version: profile.calibration_version,
+      notes: profile.notes
+    })
+  end
+
+  defp date_to_string(%Date{} = date), do: Date.to_iso8601(date)
+  defp date_to_string(nil), do: nil
+  defp date_to_string(date), do: to_string(date)
 
   defp persist_active_printer_profile(socket) do
     push_event(socket, "set_active_printer_profile", %{

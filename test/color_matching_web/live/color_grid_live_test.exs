@@ -183,6 +183,26 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       assert html =~ "Sheet sheet-"
     end
 
+    test "renders persisted printer profiles in the active profile dropdown", %{conn: conn} do
+      {:ok, profile} =
+        ColorMatching.Persistence.create_printer_profile(%{
+          printer_make_model: "HP ENVY 4500 series",
+          paper_type: "Plain paper / Letter",
+          ink_type: "HP OEM dye ink",
+          icc_profile: "AirPrint default / ColorSync managed",
+          print_settings: "Queue HP_ENVY_4500_series; MediaType=any; PageSize=Letter",
+          driver_name: "HP ENVY 4500 series-AirPrint",
+          driver_version: "3.0",
+          calibration_date: ~D[2026-07-31],
+          calibration_version: "macOS AirPrint queue snapshot 2026-07-31"
+        })
+
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      assert html =~ "HP ENVY 4500 series on Plain paper / Letter"
+      assert html =~ ~s(value="db-#{profile.id}")
+    end
+
     test "validates color input format", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
 
