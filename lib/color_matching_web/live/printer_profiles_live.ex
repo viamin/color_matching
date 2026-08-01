@@ -171,11 +171,9 @@ defmodule ColorMatchingWeb.PrinterProfilesLive do
   end
 
   defp merge_printer_profiles(local_profiles, persisted_profiles) do
-    PrinterProfile.merge_profiles([
-      local_profiles,
-      persisted_profiles,
-      PrinterProfile.default_profiles()
-    ])
+    [local_profiles, persisted_profiles]
+    |> PrinterProfile.merge_profiles()
+    |> PrinterProfile.merge_with_defaults()
   end
 
   defp upsert_printer_profile(printer_profiles, printer_profile) do

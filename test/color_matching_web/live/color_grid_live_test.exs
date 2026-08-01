@@ -127,17 +127,8 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
     test "screen grid cells link to a color pair comparison page", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/")
 
-      [default_profile | _] = ColorMatching.PrinterProfile.default_profiles()
       assert html =~ ~s(href="/pair?a=%23FF6B6B&amp;b=%23009494&amp;sheet_id=sheet-)
       assert html =~ ~s(&amp;pair_id=pair-)
-      assert html =~ ~s(&amp;profile_id=#{default_profile.id})
-
-      assert html =~
-               URI.encode_query(profile_printer_make_model: default_profile.printer_make_model)
-
-      assert html =~ URI.encode_query(profile_paper_type: default_profile.paper_type)
-      assert html =~ URI.encode_query(profile_ink_type: default_profile.ink_type)
-      refute html =~ "profile_notes="
       assert html =~ ~s(aria-label="Compare #FF6B6B and #009494")
       assert html =~ ~s(href="/pair?a=%23FF6B6B&amp;b=%23B1323B&amp;sheet_id=sheet-)
       assert html =~ ~s(aria-label="Compare #FF6B6B and #B1323B")
@@ -672,6 +663,34 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       assert html =~ "ICC: Z9 Photo Rag."
       assert html =~ "Calibration: rag-1."
       assert html =~ ~s(value="#{persisted_profile["id"]}" selected)
+    end
+
+    test "canonicalizes stale default printer profiles loaded from browser storage", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      [default_profile | _] = ColorMatching.PrinterProfile.default_profiles()
+
+      stale_default_profile = %{
+        "id" => default_profile.id,
+        "printer_make_model" => default_profile.printer_make_model,
+        "paper_type" => default_profile.paper_type,
+        "ink_type" => default_profile.ink_type,
+        "icc_profile" => "Outdated ICC",
+        "driver_version" => "0.9",
+        "calibration_version" => "stale-local-copy"
+      }
+
+      render_hook(view, "printer_profiles_loaded", %{"profiles" => [stale_default_profile]})
+
+      html =
+        render_hook(view, "active_printer_profile_loaded", %{
+          "profile_id" => default_profile.id
+        })
+
+      assert html =~ "ICC: #{default_profile.icc_profile}."
+      assert html =~ "Calibration: #{default_profile.calibration_version}."
+      refute html =~ "Outdated ICC"
+      refute html =~ "stale-local-copy"
     end
 
     test "renders persisted database-backed printer profiles as selectable options", %{conn: conn} do

@@ -316,11 +316,9 @@ defmodule ColorMatchingWeb.ColorGridLive do
   end
 
   defp merge_printer_profiles(local_profiles, persisted_profiles) do
-    PrinterProfile.merge_profiles([
-      local_profiles,
-      persisted_profiles,
-      PrinterProfile.default_profiles()
-    ])
+    [local_profiles, persisted_profiles]
+    |> PrinterProfile.merge_profiles()
+    |> PrinterProfile.merge_with_defaults()
   end
 
   def render(assigns) do

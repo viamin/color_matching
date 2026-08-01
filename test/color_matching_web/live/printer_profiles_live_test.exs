@@ -113,6 +113,30 @@ defmodule ColorMatchingWeb.PrinterProfilesLiveTest do
                "Photo Rag Bright White"
     end
 
+    test "canonicalizes stale default printer profiles loaded from browser storage", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/printer-profiles")
+
+      [default_profile | _] = ColorMatching.PrinterProfile.default_profiles()
+
+      stale_default_profile = %{
+        "id" => default_profile.id,
+        "printer_make_model" => default_profile.printer_make_model,
+        "paper_type" => default_profile.paper_type,
+        "ink_type" => default_profile.ink_type,
+        "icc_profile" => "Outdated ICC",
+        "driver_version" => "0.9",
+        "calibration_version" => "stale-local-copy"
+      }
+
+      html =
+        render_hook(view, "printer_profiles_loaded", %{"profiles" => [stale_default_profile]})
+
+      assert html =~ default_profile.icc_profile
+      assert html =~ default_profile.calibration_version
+      refute html =~ "Outdated ICC"
+      refute html =~ "stale-local-copy"
+    end
+
     test "edits a persisted profile on the dedicated page", %{conn: conn} do
       assert {:ok, persisted_profile} =
                Persistence.create_printer_profile(%{
