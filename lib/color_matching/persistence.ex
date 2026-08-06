@@ -124,6 +124,14 @@ defmodule ColorMatching.Persistence do
     |> Repo.insert()
   end
 
+  @spec update_printer_profile(PrinterProfile.t(), map()) ::
+          {:ok, PrinterProfile.t()} | {:error, Ecto.Changeset.t()}
+  def update_printer_profile(%PrinterProfile{} = printer_profile, attrs) when is_map(attrs) do
+    printer_profile
+    |> PrinterProfile.changeset(attrs)
+    |> Repo.update()
+  end
+
   # ---------------------------------------------------------------------------
   # Test sheets
   # ---------------------------------------------------------------------------

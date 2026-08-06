@@ -16,7 +16,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup toolchain
         uses: jdx/mise-action@v4
@@ -24,7 +24,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cache deps
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: deps
           key: ${{ runner.os }}-mix-${{ hashFiles('mise.toml', '**/mix.lock') }}
@@ -32,7 +32,7 @@ jobs:
             ${{ runner.os }}-mix-
 
       - name: Cache _build
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: _build
           key: ${{ runner.os }}-build-${{ hashFiles('mise.toml', '**/mix.lock') }}
@@ -79,7 +79,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup toolchain
         uses: jdx/mise-action@v4
@@ -87,7 +87,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cache deps
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: deps
           key: ${{ runner.os }}-mix-${{ hashFiles('mise.toml', '**/mix.lock') }}
@@ -95,7 +95,7 @@ jobs:
             ${{ runner.os }}-mix-
 
       - name: Cache _build
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: _build
           key: ${{ runner.os }}-build-${{ hashFiles('mise.toml', '**/mix.lock') }}
