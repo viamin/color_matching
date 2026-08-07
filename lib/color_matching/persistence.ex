@@ -58,6 +58,18 @@ defmodule ColorMatching.Persistence do
     |> Repo.all()
   end
 
+  @doc """
+  Lists every palette color across all palettes, preloaded with its parent
+  palette and ordered by `sort_order` then `id`.
+  """
+  @spec list_palette_colors() :: [PaletteColor.t()]
+  def list_palette_colors do
+    PaletteColor
+    |> order_by([color], asc: color.sort_order, asc: color.id)
+    |> preload(:palette)
+    |> Repo.all()
+  end
+
   @spec get_palette!(integer()) :: Palette.t()
   def get_palette!(id) do
     Palette
@@ -609,6 +621,68 @@ defmodule ColorMatching.Persistence do
   @spec response_vectors([PaletteColor.t()], PrinterProfile.t()) :: [ResponseVector.t()]
   def response_vectors(palette_colors, %PrinterProfile{id: printer_profile_id})
       when is_list(palette_colors) and is_integer(printer_profile_id) do
+    {responses_by_palette_color, measurements_by_palette_color} =
+      grouped_response_records(palette_colors, printer_profile_id)
+
+    Enum.map(
+      palette_colors,
+      &response_vector_from_records(
+        &1,
+        printer_profile_id,
+        Map.get(responses_by_palette_color, &1.id, %{}),
+        Map.get(measurements_by_palette_color, &1.id, %{})
+      )
+    )
+  end
+
+  def response_vectors(_palette_colors, %PrinterProfile{}) do
+    raise ArgumentError, "response_vectors/2 requires a persisted printer profile"
+  end
+
+  @doc """
+  Returns per-palette-color, per-light-source response detail for a printer
+  profile.
+
+  Like `response_vectors/2`, but preserves the originating record type and raw
+  measured values so API consumers can distinguish instrument measurements
+  from human-entered responses and inspect raw readings.
+
+  Returns a map of `palette_color_id => %{light_source => detail}`. When both a
+  response and a measurement exist for a light source, the human-entered
+  response wins — matching `response_vectors/2`. Light sources with neither a
+  response nor a measurement are omitted, so callers can detect missing
+  measurements rather than mistaking them for zero brightness.
+
+  Each detail map contains:
+
+    * `:brightness` — merged normalized brightness in `0.0..1.0` (the value
+      used for matching; `apparent_brightness / 10` for responses)
+    * `:source` — `"response"` or `"measurement"`
+    * `:apparent_brightness` — the raw 0-10 score for responses, `nil` otherwise
+    * `:raw_value` / `:raw_unit` — instrument reading and unit, `nil` otherwise
+    * `:measured_at` / `:test_run_id` — measurement provenance, `nil` otherwise
+  """
+  @spec response_details([PaletteColor.t()], PrinterProfile.t()) ::
+          %{optional(integer()) => %{String.t() => map()}}
+  def response_details(palette_colors, %PrinterProfile{id: printer_profile_id})
+      when is_list(palette_colors) and is_integer(printer_profile_id) do
+    {responses_by_palette_color, measurements_by_palette_color} =
+      grouped_response_records(palette_colors, printer_profile_id)
+
+    palette_color_ids = Enum.map(palette_colors, & &1.id)
+
+    Map.new(palette_color_ids, fn palette_color_id ->
+      responses = Map.get(responses_by_palette_color, palette_color_id, %{})
+      measurements = Map.get(measurements_by_palette_color, palette_color_id, %{})
+
+      {palette_color_id, detail_for_color(responses, measurements)}
+    end)
+  end
+
+  @spec grouped_response_records([PaletteColor.t()], integer()) ::
+          {%{optional(integer()) => %{String.t() => IlluminantResponse.t()}},
+           %{optional(integer()) => %{String.t() => IlluminantMeasurement.t()}}}
+  defp grouped_response_records(palette_colors, printer_profile_id) do
     palette_color_ids = Enum.map(palette_colors, & &1.id)
 
     responses_by_palette_color =
@@ -633,19 +707,41 @@ defmodule ColorMatching.Persistence do
         {palette_color_id, Map.new(measurements)}
       end)
 
-    Enum.map(
-      palette_colors,
-      &response_vector_from_records(
-        &1,
-        printer_profile_id,
-        Map.get(responses_by_palette_color, &1.id, %{}),
-        Map.get(measurements_by_palette_color, &1.id, %{})
-      )
-    )
+    {responses_by_palette_color, measurements_by_palette_color}
   end
 
-  def response_vectors(_palette_colors, %PrinterProfile{}) do
-    raise ArgumentError, "response_vectors/2 requires a persisted printer profile"
+  defp detail_for_color(responses, measurements) do
+    ResponseVector.light_sources()
+    |> Enum.reduce(%{}, fn source, acc ->
+      source_name = Atom.to_string(source)
+
+      case {Map.get(responses, source_name), Map.get(measurements, source_name)} do
+        {nil, nil} ->
+          acc
+
+        {%IlluminantResponse{} = response, _measurement} ->
+          Map.put(acc, source_name, %{
+            brightness: response.apparent_brightness / 10,
+            source: "response",
+            apparent_brightness: response.apparent_brightness,
+            raw_value: nil,
+            raw_unit: nil,
+            measured_at: nil,
+            test_run_id: nil
+          })
+
+        {nil, %IlluminantMeasurement{} = measurement} ->
+          Map.put(acc, source_name, %{
+            brightness: measurement.normalized_brightness,
+            source: "measurement",
+            apparent_brightness: nil,
+            raw_value: measurement.raw_measured_value,
+            raw_unit: measurement.raw_value_unit,
+            measured_at: measurement.measured_at,
+            test_run_id: measurement.test_run_id
+          })
+      end
+    end)
   end
 
   @doc """
