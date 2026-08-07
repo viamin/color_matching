@@ -168,20 +168,30 @@ defmodule ColorMatching.Persistence.CaptureUpload do
   defp resolve_score(attrs) do
     # The iOS contract sends pair similarity as "similarity" (0..1) or
     # "distance" (0..1, lower is closer). Map either onto the stored "score".
+    # All branches clamp into [0,1] so a legacy caller sending an out-of-range
+    # "score"/"similarity" stays accepted (matching "distance") instead of being
+    # rejected by the changeset's 0..1 validation.
     score = fetch_value(attrs, :score)
     similarity = fetch_value(attrs, :similarity)
     distance = fetch_value(attrs, :distance)
 
     cond do
-      present?(score) -> score
-      present?(similarity) -> similarity
-      is_number(distance) -> (1.0 - distance * 1.0) |> max(0.0) |> min(1.0)
+      present?(score) -> clamp(score)
+      present?(similarity) -> clamp(similarity)
+      is_number(distance) -> clamp(1.0 - distance * 1.0)
       true -> nil
     end
   end
 
   defp present?(nil), do: false
   defp present?(_), do: true
+
+  @spec clamp(term()) :: term()
+  defp clamp(value) when is_number(value) do
+    (value * 1.0) |> max(0.0) |> min(1.0)
+  end
+
+  defp clamp(value), do: value
 
   @spec fetch_value(map(), atom()) :: term()
   defp fetch_value(attrs, key) when is_atom(key) do

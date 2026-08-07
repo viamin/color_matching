@@ -710,5 +710,63 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
       [score] = Persistence.list_capture_pair_scores(String.to_integer(capture_id))
       assert score.score == 1.0
     end
+
+    test "clamps an out-of-range similarity score into the documented 0..1 range", %{
+      conn: conn
+    } do
+      sheet = create_sheet("CMAC-2349")
+
+      capture_id =
+        conn
+        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> json_response(201)
+        |> Map.fetch!("capture_id")
+
+      conn = recycle(conn)
+      [pair | _] = sheet.pairs
+
+      conn
+      |> post(~p"/api/v1/captures/#{capture_id}/measurements", %{
+        pair_scores: [
+          %{
+            pair_id: pair.pair_id,
+            similarity: 1.5,
+            algorithm_version: "lps-distance-v1"
+          }
+        ]
+      })
+      |> json_response(200)
+
+      [score] = Persistence.list_capture_pair_scores(String.to_integer(capture_id))
+      assert score.score == 1.0
+    end
+
+    test "clamps an out-of-range legacy score into the documented 0..1 range", %{conn: conn} do
+      sheet = create_sheet("CMAC-234A")
+
+      capture_id =
+        conn
+        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> json_response(201)
+        |> Map.fetch!("capture_id")
+
+      conn = recycle(conn)
+      [pair | _] = sheet.pairs
+
+      conn
+      |> post(~p"/api/v1/captures/#{capture_id}/measurements", %{
+        pair_scores: [
+          %{
+            pair_id: pair.pair_id,
+            score: 75.0,
+            algorithm_version: "lps-distance-v1"
+          }
+        ]
+      })
+      |> json_response(200)
+
+      [score] = Persistence.list_capture_pair_scores(String.to_integer(capture_id))
+      assert score.score == 1.0
+    end
   end
 end
