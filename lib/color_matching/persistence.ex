@@ -355,7 +355,8 @@ defmodule ColorMatching.Persistence do
 
       %Capture{test_sheet_id: test_sheet_id} = capture ->
         valid_pair_ids = valid_pair_ids_for_sheet(test_sheet_id)
-        CaptureUpload.upload(capture, attrs, valid_pair_ids)
+        valid_patch_ids = valid_patch_ids_for_sheet(valid_pair_ids)
+        CaptureUpload.upload(capture, attrs, valid_patch_ids, valid_pair_ids)
     end
   end
 
@@ -1143,6 +1144,12 @@ defmodule ColorMatching.Persistence do
   @spec normalize_capture_attrs(map()) :: map()
   defp normalize_capture_attrs(attrs) do
     attrs
+    |> flatten_capture_groups()
+    |> normalize_capture_aliases(:exposure_duration, [
+      :exposure_duration_seconds,
+      "exposure_duration_seconds"
+    ])
+    |> normalize_capture_aliases(:rejection_reasons, [:rejections, "rejections"])
     |> normalize_capture_key(:device_model)
     |> normalize_capture_key(:lens)
     |> normalize_capture_key(:exposure_duration)
@@ -1171,6 +1178,32 @@ defmodule ColorMatching.Persistence do
       :white_balance_gains,
       :rejection_reasons
     ])
+  end
+
+  @spec flatten_capture_groups(map()) :: map()
+  defp flatten_capture_groups(attrs) do
+    # The iOS contract nests device/exposure metadata under "metadata" and
+    # quality signals under "quality"; older callers send them flat. Accept both
+    # by hoisting nested groups to the top level before key normalization.
+    Enum.reduce([:metadata, "metadata", :quality, "quality"], attrs, fn key, acc ->
+      case Map.get(acc, key) do
+        map when is_map(map) -> acc |> Map.merge(map) |> Map.delete(key)
+        _ -> acc
+      end
+    end)
+  end
+
+  @spec normalize_capture_aliases(map(), atom(), [atom() | String.t()]) :: map()
+  defp normalize_capture_aliases(attrs, canonical_key, source_keys) do
+    case first_present_value(attrs, source_keys) do
+      nil ->
+        attrs
+
+      value ->
+        attrs
+        |> Map.drop(source_keys)
+        |> Map.put(canonical_key, value)
+    end
   end
 
   @spec normalize_capture_key(map(), atom()) :: map()
@@ -1214,6 +1247,18 @@ defmodule ColorMatching.Persistence do
     |> where([pair], pair.test_sheet_id == ^test_sheet_id)
     |> select([pair], pair.pair_id)
     |> Repo.all()
+    |> MapSet.new()
+  end
+
+  @spec valid_patch_ids_for_sheet(MapSet.t(String.t())) :: MapSet.t(String.t())
+  defp valid_patch_ids_for_sheet(pair_ids) do
+    # The manifest exposes two patches per pair ("#{pair_id}#first"/"#second").
+    # Measurements may reference either the per-patch ids or, for backward
+    # compatibility, the bare pair id, so accept the union.
+    pair_ids
+    |> Enum.flat_map(fn pair_id ->
+      [pair_id, "#{pair_id}#first", "#{pair_id}#second"]
+    end)
     |> MapSet.new()
   end
 

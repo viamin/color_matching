@@ -9,7 +9,7 @@ defmodule ColorMatchingWeb.CaptureController do
       {:ok, capture} ->
         conn
         |> put_status(:created)
-        |> json(%{capture_id: capture.id})
+        |> json(%{capture_id: Integer.to_string(capture.id)})
 
       {:error, :test_sheet_not_found} ->
         conn
@@ -46,7 +46,7 @@ defmodule ColorMatchingWeb.CaptureController do
         conn
         |> put_status(:ok)
         |> json(%{
-          capture_id: capture_id,
+          capture_id: Integer.to_string(capture_id),
           measurement_count: length(measurements),
           pair_score_count: length(pair_scores)
         })
@@ -73,7 +73,7 @@ defmodule ColorMatchingWeb.CaptureController do
         conn
         |> put_status(:ok)
         |> json(%{
-          capture_id: capture_id,
+          capture_id: Integer.to_string(capture_id),
           judgment_count: length(observations)
         })
 

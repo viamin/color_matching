@@ -107,20 +107,29 @@ defmodule ColorMatchingWeb.TestSheetControllerTest do
       assert body["sheet_version"] == "lps-letter-grid-v1"
       assert is_binary(body["manifest_url"])
       assert is_binary(body["created_at"])
-      assert body["page_geometry"]["width_mm"] == 215.9
-      assert body["page_geometry"]["height_mm"] == 279.4
-      assert body["page_geometry"]["units"] == "mm"
-      assert body["safe_inset_mm"] == 12.7
+      assert body["page"]["width"] == 215.9
+      assert body["page"]["height"] == 279.4
+      assert body["page"]["units"] == "mm"
+      assert is_list(body["registration_markers"])
+      assert is_list(body["patches"])
+      assert is_list(body["pairs"])
     end
 
     test "manifest includes decoded registration_markers", %{conn: conn} do
       sheet = create_sheet("ABCD-2348")
 
       conn = get(conn, ~p"/api/v1/test_sheets/#{sheet.lookup_code}/manifest")
-
       body = json_response(conn, 200)
-      assert body["registration_markers"]["type"] == "corner_circles"
-      assert body["registration_markers"]["radius_mm"] == 5.0
+      markers = body["registration_markers"]
+      assert length(markers) == 4
+
+      assert Enum.map(markers, & &1["role"]) ==
+               ["top_left", "top_right", "bottom_right", "bottom_left"]
+
+      marker = List.first(markers)
+      assert marker["shape"] == "solid_square"
+      assert is_map(marker["rect"])
+      assert marker["rect"]["width"] > 0
     end
 
     test "manifest includes printer_profile", %{conn: conn} do
@@ -141,15 +150,27 @@ defmodule ColorMatchingWeb.TestSheetControllerTest do
 
       body = json_response(conn, 200)
       patches = body["patches"]
-      assert length(patches) == 2
+      pairs = body["pairs"]
+      # Each pair cell yields two patches (first/second color sides).
+      assert length(patches) == length(pairs) * 2
 
-      first_patch = List.first(patches)
-      assert is_binary(first_patch["pair_id"])
-      assert String.starts_with?(first_patch["pair_id"], "pair-")
-      assert is_integer(first_patch["row"])
-      assert is_integer(first_patch["col"])
-      assert is_binary(first_patch["color_a_hex"])
-      assert is_binary(first_patch["color_b_hex"])
+      [first_patch, second_patch | _rest] = patches
+      pair = List.first(pairs)
+
+      assert first_patch["id"] == "#{pair["id"]}#first"
+      assert second_patch["id"] == "#{pair["id"]}#second"
+      assert first_patch["role"] == "pair_color"
+      assert first_patch["pair_id"] == pair["id"]
+      assert first_patch["pair_side"] == "first"
+      assert second_patch["pair_side"] == "second"
+      assert is_binary(first_patch["source_color"])
+      assert is_number(first_patch["safe_inset_mm"])
+      assert is_map(first_patch["rect"])
+      assert first_patch["rect"]["width"] > 0
+
+      assert pair["first_patch_id"] == first_patch["id"]
+      assert pair["second_patch_id"] == second_patch["id"]
+      assert length(pair["source_colors"]) == 2
     end
 
     test "manifest_url points to the manifest endpoint", %{conn: conn} do
