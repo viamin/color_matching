@@ -44,6 +44,10 @@ defmodule ColorMatchingWeb.Router do
   scope "/api/v1", ColorMatchingWeb do
     pipe_through [:api, :api_auth]
 
+    get "/printer_profiles", ColorPaletteController, :printer_profiles
+    get "/palettes", ColorPaletteController, :palettes
+    get "/colors", ColorPaletteController, :colors
+
     get "/test_sheets/recent", TestSheetController, :recent
     get "/test_sheets/:sheet_id/manifest", TestSheetController, :manifest
     get "/test_sheets/:sheet_id/ranked_results", TestSheetController, :ranked_results
