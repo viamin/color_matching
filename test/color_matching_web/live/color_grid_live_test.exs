@@ -731,5 +731,39 @@ defmodule ColorMatchingWeb.ColorGridLiveTest do
       assert html =~ ~s(value="persisted-#{persisted_profile.id}")
       refute html =~ ~s(value="persisted-#{persisted_profile.id}" selected)
     end
+
+    test "keeps persisted database-backed profiles in the dropdown after browser-local profiles hydrate",
+         %{conn: conn} do
+      assert {:ok, persisted_profile} =
+               ColorMatching.Persistence.create_printer_profile(%{
+                 printer_make_model: "Epson SureColor P700",
+                 paper_type: "Legacy Baryta",
+                 ink_type: "OEM UltraChrome",
+                 icc_profile: "P700 Baryta",
+                 calibration_version: "baryta-2"
+               })
+
+      {:ok, view, html} = live(conn, ~p"/")
+
+      assert html =~ ~s(value="persisted-#{persisted_profile.id}")
+
+      html =
+        render_hook(view, "printer_profiles_loaded", %{
+          "profiles" => [
+            %{
+              "id" => "profile-studio-rag",
+              "printer_make_model" => "HP DesignJet Z9+",
+              "paper_type" => "Photo Rag",
+              "ink_type" => "OEM pigment",
+              "icc_profile" => "Z9 Photo Rag",
+              "calibration_version" => "rag-1"
+            }
+          ]
+        })
+
+      assert html =~ ~s(value="persisted-#{persisted_profile.id}")
+      assert html =~ "Epson SureColor P700 on Legacy Baryta (Persisted)"
+      assert html =~ "HP DesignJet Z9+ on Photo Rag (Browser local)"
+    end
   end
 end
