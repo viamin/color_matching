@@ -29,14 +29,15 @@ defmodule ColorMatching.Persistence.CaptureUpload do
 
   @type invalid_request :: %{optional(atom()) => [String.t()]}
 
-  @spec upload(Capture.t(), map(), MapSet.t(String.t())) ::
+  @spec upload(Capture.t(), map(), MapSet.t(String.t()), MapSet.t(String.t())) ::
           {:ok,
            %{measurements: [CapturePatchMeasurement.t()], pair_scores: [CapturePairScore.t()]}}
           | {:error, {:invalid_request, invalid_request()}}
           | {:error, {:invalid_rows, invalid_rows()}}
-  def upload(%Capture{id: capture_id}, attrs, valid_pair_ids) when is_integer(capture_id) do
+  def upload(%Capture{id: capture_id}, attrs, valid_patch_ids, valid_pair_ids)
+      when is_integer(capture_id) do
     with {:ok, measurements, pair_scores} <- fetch_payload_lists(attrs),
-         prepared_measurements <- prepare_measurements(measurements, capture_id, valid_pair_ids),
+         prepared_measurements <- prepare_measurements(measurements, capture_id, valid_patch_ids),
          prepared_pair_scores <- prepare_pair_scores(pair_scores, capture_id, valid_pair_ids),
          {:ok, %{measurements: persisted_measurements, pair_scores: persisted_pair_scores}} <-
            persist(prepared_measurements, prepared_pair_scores) do
@@ -132,16 +133,24 @@ defmodule ColorMatching.Persistence.CaptureUpload do
 
   @spec normalize_measurement_attrs(map(), integer()) :: map()
   defp normalize_measurement_attrs(attrs, capture_id) do
+    # The iOS contract nests robustness stats under "stats"; older callers send
+    # them flat. Accept both, with the top-level value preferred.
+    stats = fetch_value(attrs, :stats) || %{}
+
     %{
       capture_id: capture_id,
       patch_id: fetch_value(attrs, :patch_id),
       linear_rgb_median: encode_rgb_payload(fetch_value(attrs, :linear_rgb_median)),
       normalized_linear_rgb_median:
         encode_rgb_payload(fetch_value(attrs, :normalized_linear_rgb_median)),
-      sample_count: fetch_value(attrs, :sample_count),
-      clipping_fraction: fetch_value(attrs, :clipping_fraction),
-      mean: encode_rgb_payload(fetch_value(attrs, :mean)),
-      standard_deviation: encode_rgb_payload(fetch_value(attrs, :standard_deviation))
+      sample_count: fetch_value(attrs, :sample_count) || fetch_value(stats, :sample_count),
+      clipping_fraction:
+        fetch_value(attrs, :clipping_fraction) || fetch_value(stats, :clipping_fraction),
+      mean: encode_rgb_payload(fetch_value(attrs, :mean) || fetch_value(stats, :mean)),
+      standard_deviation:
+        encode_rgb_payload(
+          fetch_value(attrs, :standard_deviation) || fetch_value(stats, :standard_deviation)
+        )
     }
   end
 
@@ -151,9 +160,38 @@ defmodule ColorMatching.Persistence.CaptureUpload do
       capture_id: capture_id,
       pair_id: fetch_value(attrs, :pair_id),
       algorithm_version: fetch_value(attrs, :algorithm_version),
-      score: fetch_value(attrs, :score)
+      score: resolve_score(attrs)
     }
   end
+
+  @spec resolve_score(map()) :: term()
+  defp resolve_score(attrs) do
+    # The iOS contract sends pair similarity as "similarity" (0..1) or
+    # "distance" (0..1, lower is closer). Map either onto the stored "score".
+    # All branches clamp into [0,1] so a legacy caller sending an out-of-range
+    # "score"/"similarity" stays accepted (matching "distance") instead of being
+    # rejected by the changeset's 0..1 validation.
+    score = fetch_value(attrs, :score)
+    similarity = fetch_value(attrs, :similarity)
+    distance = fetch_value(attrs, :distance)
+
+    cond do
+      present?(score) -> clamp(score)
+      present?(similarity) -> clamp(similarity)
+      is_number(distance) -> clamp(1.0 - distance * 1.0)
+      true -> nil
+    end
+  end
+
+  defp present?(nil), do: false
+  defp present?(_), do: true
+
+  @spec clamp(term()) :: term()
+  defp clamp(value) when is_number(value) do
+    (value * 1.0) |> max(0.0) |> min(1.0)
+  end
+
+  defp clamp(value), do: value
 
   @spec fetch_value(map(), atom()) :: term()
   defp fetch_value(attrs, key) when is_atom(key) do

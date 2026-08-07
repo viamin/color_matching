@@ -134,8 +134,9 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
         |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
         |> json_response(201)
 
-      assert is_integer(response["capture_id"])
-      assert Persistence.get_capture(response["capture_id"]).test_sheet_id == sheet.id
+      capture_id = response["capture_id"]
+      assert is_binary(capture_id)
+      assert Persistence.get_capture(String.to_integer(capture_id)).test_sheet_id == sheet.id
     end
 
     test "returns structured 404 JSON for an unknown sheet", %{conn: conn} do
@@ -430,9 +431,9 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
                "judgment_count" => 1
              }
 
-      assert observation.capture_id == capture_id
+      assert observation.capture_id == String.to_integer(capture_id)
       assert observation.judgment == "near_match"
-      assert pair_finding.current_capture_id == capture_id
+      assert pair_finding.current_capture_id == String.to_integer(capture_id)
       assert pair_finding.current_judgment == "near_match"
     end
 
@@ -482,7 +483,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
              }
 
       assert Enum.map(observations, & &1.judgment) == ["near_match", "match"]
-      assert pair_finding.current_capture_id == second_capture_id
+      assert pair_finding.current_capture_id == String.to_integer(second_capture_id)
       assert pair_finding.current_judgment == "match"
     end
 
@@ -558,6 +559,214 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
                  ]
                }
              }
+    end
+  end
+
+  describe "iOS contract payload compatibility" do
+    test "accepts nested metadata/quality body and returns a string capture_id", %{conn: conn} do
+      sheet = create_sheet("CMAC-2345")
+
+      response =
+        conn
+        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", %{
+          metadata: %{
+            device_model: "iPhone16,2",
+            lens: "built_in_wide_angle",
+            exposure_duration_seconds: 0.016,
+            iso: 100,
+            focus_lens_position: 0.42,
+            white_balance_gains: %{red: 1.2, green: 1.0, blue: 1.4},
+            image_width: 4032,
+            image_height: 3024,
+            app_version: "0.1.0",
+            timestamp: "2026-07-25T12:00:00Z"
+          },
+          quality: %{
+            detected_marker_count: 4,
+            blur_score: 0.82,
+            rejections: []
+          }
+        })
+        |> json_response(201)
+
+      assert is_binary(response["capture_id"])
+    end
+
+    test "accepts nested stats, per-patch ids, and distance/similarity scores", %{conn: conn} do
+      sheet = create_sheet("CMAC-2346")
+
+      capture_id =
+        conn
+        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> json_response(201)
+        |> Map.fetch!("capture_id")
+
+      conn = recycle(conn)
+      [pair | _] = sheet.pairs
+
+      response =
+        conn
+        |> post(~p"/api/v1/captures/#{capture_id}/measurements", %{
+          scoring_algorithm_version: "lps-distance-v1",
+          measurements: [
+            %{
+              patch_id: "#{pair.pair_id}#first",
+              linear_rgb_median: %{r: 0.12, g: 0.10, b: 0.02},
+              normalized_linear_rgb_median: %{r: 0.15, g: 0.12, b: 0.02},
+              stats: %{
+                sample_count: 900,
+                clipping_fraction: 0.0,
+                mean: %{r: 0.12, g: 0.10, b: 0.02},
+                standard_deviation: %{r: 0.01, g: 0.01, b: 0.004}
+              }
+            }
+          ],
+          pair_scores: [
+            %{
+              pair_id: pair.pair_id,
+              distance: 0.035,
+              similarity: 0.965,
+              algorithm_version: "lps-distance-v1"
+            }
+          ]
+        })
+        |> json_response(200)
+
+      assert response["measurement_count"] == 1
+      assert response["pair_score_count"] == 1
+
+      # "similarity" is preferred over "distance" when mapping onto the stored score.
+      [score] = Persistence.list_capture_pair_scores(String.to_integer(capture_id))
+      assert score.score == 0.965
+    end
+
+    test "rejects a pair score whose distance is non-numeric", %{conn: conn} do
+      sheet = create_sheet("CMAC-2347")
+
+      capture_id =
+        conn
+        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> json_response(201)
+        |> Map.fetch!("capture_id")
+
+      conn = recycle(conn)
+      [pair | _] = sheet.pairs
+
+      response =
+        conn
+        |> post(~p"/api/v1/captures/#{capture_id}/measurements", %{
+          scoring_algorithm_version: "lps-distance-v1",
+          pair_scores: [
+            %{
+              pair_id: pair.pair_id,
+              distance: "not-a-number",
+              algorithm_version: "lps-distance-v1"
+            }
+          ]
+        })
+        |> json_response(422)
+
+      assert response == %{
+               "errors" => %{
+                 "measurements" => [],
+                 "pair_scores" => [
+                   %{
+                     "index" => 0,
+                     "pair_id" => pair.pair_id,
+                     "errors" => %{"score" => ["can't be blank"]}
+                   }
+                 ]
+               }
+             }
+
+      assert Persistence.list_capture_pair_scores(capture_id) == []
+    end
+
+    test "clamps a negative distance score into the documented 0..1 range", %{conn: conn} do
+      sheet = create_sheet("CMAC-2348")
+
+      capture_id =
+        conn
+        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> json_response(201)
+        |> Map.fetch!("capture_id")
+
+      conn = recycle(conn)
+      [pair | _] = sheet.pairs
+
+      conn
+      |> post(~p"/api/v1/captures/#{capture_id}/measurements", %{
+        scoring_algorithm_version: "lps-distance-v1",
+        pair_scores: [
+          %{
+            pair_id: pair.pair_id,
+            distance: -0.5,
+            algorithm_version: "lps-distance-v1"
+          }
+        ]
+      })
+      |> json_response(200)
+
+      [score] = Persistence.list_capture_pair_scores(String.to_integer(capture_id))
+      assert score.score == 1.0
+    end
+
+    test "clamps an out-of-range similarity score into the documented 0..1 range", %{
+      conn: conn
+    } do
+      sheet = create_sheet("CMAC-2349")
+
+      capture_id =
+        conn
+        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> json_response(201)
+        |> Map.fetch!("capture_id")
+
+      conn = recycle(conn)
+      [pair | _] = sheet.pairs
+
+      conn
+      |> post(~p"/api/v1/captures/#{capture_id}/measurements", %{
+        pair_scores: [
+          %{
+            pair_id: pair.pair_id,
+            similarity: 1.5,
+            algorithm_version: "lps-distance-v1"
+          }
+        ]
+      })
+      |> json_response(200)
+
+      [score] = Persistence.list_capture_pair_scores(String.to_integer(capture_id))
+      assert score.score == 1.0
+    end
+
+    test "clamps an out-of-range legacy score into the documented 0..1 range", %{conn: conn} do
+      sheet = create_sheet("CMAC-234A")
+
+      capture_id =
+        conn
+        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> json_response(201)
+        |> Map.fetch!("capture_id")
+
+      conn = recycle(conn)
+      [pair | _] = sheet.pairs
+
+      conn
+      |> post(~p"/api/v1/captures/#{capture_id}/measurements", %{
+        pair_scores: [
+          %{
+            pair_id: pair.pair_id,
+            score: 75.0,
+            algorithm_version: "lps-distance-v1"
+          }
+        ]
+      })
+      |> json_response(200)
+
+      [score] = Persistence.list_capture_pair_scores(String.to_integer(capture_id))
+      assert score.score == 1.0
     end
   end
 end

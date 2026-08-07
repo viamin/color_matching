@@ -10,10 +10,9 @@ defmodule ColorMatchingWeb.TestSheetJSON do
     endpoint: ColorMatchingWeb.Endpoint,
     router: ColorMatchingWeb.Router
 
-  require Logger
-
   alias ColorMatching.Persistence.TestSheet
   alias ColorMatching.RankedResults
+  alias ColorMatching.SheetGeometry
 
   @doc """
   Renders a full sheet manifest.
@@ -22,23 +21,28 @@ defmodule ColorMatchingWeb.TestSheetJSON do
   """
   @spec manifest(map()) :: map()
   def manifest(%{sheet: sheet}) do
+    geometry = SheetGeometry.build(sheet)
+
     %{
       schema_version: "lps-sheet-manifest/v1",
       sheet_id: sheet.lookup_code,
       sheet_version: sheet.sheet_version,
       manifest_url: manifest_url(sheet),
       created_at: datetime_to_iso8601(sheet.inserted_at),
-      page_geometry: %{
-        width_mm: sheet.page_width_mm,
-        height_mm: sheet.page_height_mm,
-        units: sheet.page_units
+      page: %{
+        units: geometry.units,
+        width: geometry.page_width,
+        height: geometry.page_height
       },
-      registration_markers: decode_json_field(sheet.reg_marker_layout),
-      patch_layout: decode_json_field(sheet.patch_layout),
-      safe_inset_mm: sheet.safe_inset_mm,
+      registration_markers: Enum.map(geometry.markers, &render_marker/1),
       printer_profile: render_printer_profile(sheet.printer_profile),
-      capture_profile: nil,
-      patches: Enum.map(sheet.pairs, &render_pair/1)
+      capture_profile: %{
+        expected_illuminant: "low_pressure_sodium",
+        preferred_camera: "built_in_wide_angle_rear",
+        scoring_algorithm_version: "lps-distance-v1"
+      },
+      patches: Enum.flat_map(sheet.pairs, &render_patches(&1, geometry)),
+      pairs: Enum.map(sheet.pairs, &render_pair_manifest/1)
     }
   end
 
@@ -142,34 +146,67 @@ defmodule ColorMatchingWeb.TestSheetJSON do
     }
   end
 
-  @spec render_pair(ColorMatching.Persistence.TestSheetPair.t()) :: map()
-  defp render_pair(pair) do
+  @spec render_marker(SheetGeometry.marker()) :: map()
+  defp render_marker(%{role: role, rect: rect}) do
+    %{role: role, shape: "solid_square", rect: render_rect(rect)}
+  end
+
+  @spec render_patches(ColorMatching.Persistence.TestSheetPair.t(), SheetGeometry.t()) :: [
+          map()
+        ]
+  defp render_patches(pair, geometry) do
+    cell = SheetGeometry.cell_rect(geometry, pair.row, pair.col)
+    [first, second] = SheetGeometry.patch_rects(cell)
+
+    [
+      render_patch(pair, "first", pair.color_a_hex, first, geometry),
+      render_patch(pair, "second", pair.color_b_hex, second, geometry)
+    ]
+  end
+
+  @spec render_patch(
+          ColorMatching.Persistence.TestSheetPair.t(),
+          String.t(),
+          String.t(),
+          SheetGeometry.rect(),
+          SheetGeometry.t()
+        ) :: map()
+  defp render_patch(pair, side, source_color, rect, geometry) do
     %{
+      id: patch_id(pair.pair_id, side),
+      role: "pair_color",
       pair_id: pair.pair_id,
-      row: pair.row,
-      col: pair.col,
-      color_a_hex: pair.color_a_hex,
-      color_b_hex: pair.color_b_hex
+      pair_side: side,
+      reference_role: nil,
+      source_color: source_color,
+      safe_inset_mm: geometry.patch_inset,
+      rect: render_rect(rect)
     }
+  end
+
+  @spec render_pair_manifest(ColorMatching.Persistence.TestSheetPair.t()) :: map()
+  defp render_pair_manifest(pair) do
+    %{
+      id: pair.pair_id,
+      first_patch_id: patch_id(pair.pair_id, "first"),
+      second_patch_id: patch_id(pair.pair_id, "second"),
+      source_colors: [pair.color_a_hex, pair.color_b_hex],
+      grid_row: pair.row,
+      grid_col: pair.col
+    }
+  end
+
+  @spec patch_id(String.t(), String.t()) :: String.t()
+  defp patch_id(pair_id, side), do: "#{pair_id}##{side}"
+
+  @spec render_rect(SheetGeometry.rect()) :: map()
+  defp render_rect(%{x: x, y: y, width: width, height: height}) do
+    %{x: x, y: y, width: width, height: height}
   end
 
   @spec manifest_url(TestSheet.t()) :: String.t()
   defp manifest_url(sheet) do
     url(~p"/api/v1/test_sheets/#{sheet.lookup_code}/manifest")
-  end
-
-  @spec decode_json_field(String.t() | nil) :: term()
-  defp decode_json_field(nil), do: nil
-
-  defp decode_json_field(json_string) when is_binary(json_string) do
-    case Jason.decode(json_string) do
-      {:ok, value} ->
-        value
-
-      {:error, reason} ->
-        Logger.error("TestSheetJSON: failed to decode JSON field: #{inspect(reason)}")
-        raise "data integrity error: unparseable JSON field in test sheet record"
-    end
   end
 
   @spec render_date(Date.t() | nil) :: String.t() | nil
