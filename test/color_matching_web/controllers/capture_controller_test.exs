@@ -639,5 +639,47 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
       [score] = Persistence.list_capture_pair_scores(String.to_integer(capture_id))
       assert score.score == 0.965
     end
+
+    test "rejects a pair score whose distance is non-numeric", %{conn: conn} do
+      sheet = create_sheet("CMAC-2347")
+
+      capture_id =
+        conn
+        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> json_response(201)
+        |> Map.fetch!("capture_id")
+
+      conn = recycle(conn)
+      [pair | _] = sheet.pairs
+
+      response =
+        conn
+        |> post(~p"/api/v1/captures/#{capture_id}/measurements", %{
+          scoring_algorithm_version: "lps-distance-v1",
+          pair_scores: [
+            %{
+              pair_id: pair.pair_id,
+              distance: "not-a-number",
+              algorithm_version: "lps-distance-v1"
+            }
+          ]
+        })
+        |> json_response(422)
+
+      assert response == %{
+               "errors" => %{
+                 "measurements" => [],
+                 "pair_scores" => [
+                   %{
+                     "index" => 0,
+                     "pair_id" => pair.pair_id,
+                     "errors" => %{"score" => ["can't be blank"]}
+                   }
+                 ]
+               }
+             }
+
+      assert Persistence.list_capture_pair_scores(capture_id) == []
+    end
   end
 end

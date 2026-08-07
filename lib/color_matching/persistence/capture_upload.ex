@@ -175,16 +175,13 @@ defmodule ColorMatching.Persistence.CaptureUpload do
     cond do
       present?(score) -> score
       present?(similarity) -> similarity
-      present?(distance) -> max(0.0, 1.0 - to_float(distance))
+      is_number(distance) -> max(0.0, 1.0 - distance * 1.0)
       true -> nil
     end
   end
 
   defp present?(nil), do: false
   defp present?(_), do: true
-
-  defp to_float(value) when is_number(value), do: value * 1.0
-  defp to_float(_), do: 0.0
 
   @spec fetch_value(map(), atom()) :: term()
   defp fetch_value(attrs, key) when is_atom(key) do

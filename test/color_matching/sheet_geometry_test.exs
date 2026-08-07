@@ -49,6 +49,21 @@ defmodule ColorMatching.SheetGeometryTest do
       assert geometry.grid_size == 3
       assert length(geometry.markers) == 4
     end
+
+    test "respects an explicit gap of zero instead of defaulting" do
+      geometry =
+        SheetGeometry.build(
+          sheet(%{patch_layout: ~s({"cell_size_mm": 20, "gap_mm": 0, "grid_size": 3})})
+        )
+
+      assert geometry.gap == 0.0
+
+      # Touching cells: the column step equals the cell size, not cell + default gap.
+      c00 = SheetGeometry.cell_rect(geometry, 0, 0)
+      c01 = SheetGeometry.cell_rect(geometry, 0, 1)
+
+      assert c01.x == c00.x + 20.0
+    end
   end
 
   describe "cell_rect/3 and patch_rects/1" do

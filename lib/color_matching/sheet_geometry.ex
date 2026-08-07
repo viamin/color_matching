@@ -148,9 +148,16 @@ defmodule ColorMatching.SheetGeometry do
   end
 
   defp fetch(map, key, default) when is_map(map) do
-    Map.get(map, key) || Map.get(map, String.to_existing_atom(key)) || default
+    case Map.fetch(map, key) do
+      {:ok, value} -> value
+      :error -> fetch_atom_key(map, key, default)
+    end
+  end
+
+  defp fetch_atom_key(map, key, default) do
+    Map.get(map, String.to_existing_atom(key), default)
   rescue
-    ArgumentError -> Map.get(map, key, default)
+    ArgumentError -> default
   end
 
   defp decode(nil), do: nil
