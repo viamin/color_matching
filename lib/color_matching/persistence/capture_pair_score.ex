@@ -34,6 +34,7 @@ defmodule ColorMatching.Persistence.CapturePairScore do
     pair_score
     |> cast(attrs, [:capture_id, :pair_id, :algorithm_version, :score])
     |> validate_required([:capture_id, :pair_id, :algorithm_version, :score])
+    |> validate_number(:score, greater_than_or_equal_to: 0.0, less_than_or_equal_to: 1.0)
     |> foreign_key_constraint(:capture_id)
     |> unique_constraint(:pair_id,
       name: :capture_pair_scores_capture_id_pair_id_algorithm_version_index

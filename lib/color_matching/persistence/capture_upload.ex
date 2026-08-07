@@ -175,7 +175,7 @@ defmodule ColorMatching.Persistence.CaptureUpload do
     cond do
       present?(score) -> score
       present?(similarity) -> similarity
-      is_number(distance) -> max(0.0, 1.0 - distance * 1.0)
+      is_number(distance) -> (1.0 - distance * 1.0) |> max(0.0) |> min(1.0)
       true -> nil
     end
   end
