@@ -402,6 +402,93 @@ defmodule ColorMatching.PersistenceTest do
       refute Map.has_key?(profile_color.response_details, "red")
     end
 
+    test "keeps the most recent record per light source when duplicate hexes overlap" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, duplicate_palette} =
+               Persistence.create_palette(%{
+                 name: "Overlapping Hex Palette",
+                 colors: [
+                   %{hex_color: color.hex_color, sort_order: 0, display_label: "Duplicate"}
+                 ]
+               })
+
+      duplicate_color = Persistence.get_palette!(duplicate_palette.id).colors |> List.first()
+
+      assert {:ok, _older_measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.2,
+                 measured_at: ~U[2026-01-01 08:00:00Z]
+               })
+
+      assert {:ok, _newer_measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: duplicate_color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.8,
+                 measured_at: ~U[2026-02-01 08:00:00Z]
+               })
+
+      assert {:ok, _earlier_response} =
+               Persistence.set_illuminant_response(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 illuminant: "green",
+                 apparent_brightness: 3
+               })
+
+      assert {:ok, _later_response} =
+               Persistence.set_illuminant_response(%{
+                 palette_color_id: duplicate_color.id,
+                 printer_profile_id: printer_profile.id,
+                 illuminant: "green",
+                 apparent_brightness: 8
+               })
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
+      assert profile_color.response_details["white"][:source] == "measurement"
+      assert profile_color.response_details["white"][:brightness] == 0.8
+
+      assert profile_color.response_details["green"][:source] == "response"
+      assert profile_color.response_details["green"][:brightness] == 0.8
+      assert profile_color.response_details["green"][:apparent_brightness] == 8
+    end
+
+    test "collapses duplicate hexes that differ only by case" do
+      %{printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, palette} =
+               Persistence.create_palette(%{
+                 name: "Case Duplicate Palette",
+                 colors: [
+                   %{hex_color: "#AABBCC", sort_order: 0, display_label: "Upper"},
+                   %{hex_color: "#aabbcc", sort_order: 1, display_label: "Lower"}
+                 ]
+               })
+
+      [upper, lower] = Persistence.get_palette!(palette.id).colors
+
+      for color <- [upper, lower] do
+        assert {:ok, _measurement} =
+                 Persistence.create_illuminant_measurement(%{
+                   palette_color_id: color.id,
+                   printer_profile_id: printer_profile.id,
+                   light_source: "white",
+                   normalized_brightness: 0.5
+                 })
+      end
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
+      assert profile_color.hex_color == "#AABBCC"
+      assert profile_color.name == "Upper"
+    end
+
     test "orders profile-scoped colors by canonical sort order" do
       %{printer_profile: printer_profile} = persisted_measurement_fixture()
 
