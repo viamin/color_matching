@@ -402,6 +402,36 @@ defmodule ColorMatching.PersistenceTest do
       refute Map.has_key?(profile_color.response_details, "red")
     end
 
+    test "orders profile-scoped colors by canonical sort order" do
+      %{printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, palette} =
+               Persistence.create_palette(%{
+                 name: "Ordering Fixture",
+                 colors: [
+                   %{hex_color: "#FF0000", sort_order: 0, display_label: "First"},
+                   %{hex_color: "#0000FF", sort_order: 1, display_label: "Second"}
+                 ]
+               })
+
+      [first, second] = Persistence.get_palette!(palette.id).colors
+
+      for color <- [first, second] do
+        assert {:ok, _measurement} =
+                 Persistence.create_illuminant_measurement(%{
+                   palette_color_id: color.id,
+                   printer_profile_id: printer_profile.id,
+                   light_source: "white",
+                   normalized_brightness: 0.5
+                 })
+      end
+
+      assert Enum.map(Persistence.list_profile_colors(printer_profile), & &1.hex_color) == [
+               "#FF0000",
+               "#0000FF"
+             ]
+    end
+
     test "raises when listing profile colors for an unpersisted printer profile" do
       assert_raise ArgumentError,
                    "list_profile_colors/1 requires a persisted printer profile",

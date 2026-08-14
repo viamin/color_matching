@@ -199,6 +199,24 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
   end
 
   describe "GET /api/v1/printer_profiles/:printer_profile_id/colors" do
+    test "returns 404 for an unknown printer profile", %{conn: conn} do
+      body =
+        conn
+        |> get(~p"/api/v1/printer_profiles/999999/colors")
+        |> json_response(404)
+
+      assert body["errors"]["detail"] =~ "printer profile"
+    end
+
+    test "returns 400 for a non-integer printer_profile_id", %{conn: conn} do
+      body =
+        conn
+        |> get(~p"/api/v1/printer_profiles/not-an-id/colors")
+        |> json_response(400)
+
+      assert body["errors"]["detail"] =~ "printer_profile_id"
+    end
+
     test "returns a profile-scoped working color set without palette fields", %{conn: conn} do
       %{printer_profile: profile, dark: dark, light: light} = response_fixture()
 
@@ -243,6 +261,24 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
   end
 
   describe "GET /api/v1/printer_profiles/:printer_profile_id/metamer_pairs" do
+    test "returns 404 for an unknown printer profile", %{conn: conn} do
+      body =
+        conn
+        |> get(~p"/api/v1/printer_profiles/999999/metamer_pairs")
+        |> json_response(404)
+
+      assert body["errors"]["detail"] =~ "printer profile"
+    end
+
+    test "returns 400 for a non-integer printer_profile_id", %{conn: conn} do
+      body =
+        conn
+        |> get(~p"/api/v1/printer_profiles/not-an-id/metamer_pairs")
+        |> json_response(400)
+
+      assert body["errors"]["detail"] =~ "printer_profile_id"
+    end
+
     test "returns active confirmed metamer pairs for the profile", %{conn: conn} do
       %{
         pair: pair,

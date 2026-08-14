@@ -105,13 +105,15 @@ defmodule ColorMatching.Persistence do
           }
         end)
 
-      %{
-        name: canonical_color.display_label,
-        hex_color: canonical_color.hex_color,
-        response_details: detail_for_color(responses, measurements)
-      }
+      {canonical_color.sort_order, canonical_color.id,
+       %{
+         name: canonical_color.display_label,
+         hex_color: canonical_color.hex_color,
+         response_details: detail_for_color(responses, measurements)
+       }}
     end)
-    |> Enum.sort_by(& &1.hex_color)
+    |> Enum.sort_by(fn {sort_order, id, _color} -> {sort_order, id} end)
+    |> Enum.map(fn {_sort_order, _id, color} -> color end)
   end
 
   def list_profile_colors(%PrinterProfile{}) do
