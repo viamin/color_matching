@@ -370,7 +370,9 @@ defmodule ColorMatching.PersistenceTest do
       assert {:ok, duplicate_palette} =
                Persistence.create_palette(%{
                  name: "Duplicate Hex Palette",
-                 colors: [%{hex_color: color.hex_color, sort_order: 0, display_label: "Duplicate"}]
+                 colors: [
+                   %{hex_color: color.hex_color, sort_order: 0, display_label: "Duplicate"}
+                 ]
                })
 
       duplicate_color = Persistence.get_palette!(duplicate_palette.id).colors |> List.first()
@@ -395,9 +397,21 @@ defmodule ColorMatching.PersistenceTest do
 
       assert profile_color.hex_color == color.hex_color
       assert profile_color.name == color.display_label
-      assert profile_color.response_details["white"]["brightness"] == 0.25
-      assert profile_color.response_details["green"]["brightness"] == 0.6
+      assert profile_color.response_details["white"][:brightness] == 0.25
+      assert profile_color.response_details["green"][:brightness] == 0.6
       refute Map.has_key?(profile_color.response_details, "red")
+    end
+
+    test "raises when listing profile colors for an unpersisted printer profile" do
+      assert_raise ArgumentError,
+                   "list_profile_colors/1 requires a persisted printer profile",
+                   fn ->
+                     Persistence.list_profile_colors(%PrinterProfile{
+                       printer_make_model: "Fixture Printer",
+                       paper_type: "Fixture Paper",
+                       ink_type: "Fixture Ink"
+                     })
+                   end
     end
 
     test "raises when building a response vector for an unpersisted printer profile" do
@@ -1037,6 +1051,18 @@ defmodule ColorMatching.PersistenceTest do
                "strong_metamer",
                "weak_metamer"
              ]
+    end
+
+    test "raises when listing confirmed metamer pairs for an unpersisted printer profile" do
+      assert_raise ArgumentError,
+                   "list_confirmed_metamer_pairs/1 requires a persisted printer profile",
+                   fn ->
+                     Persistence.list_confirmed_metamer_pairs(%PrinterProfile{
+                       printer_make_model: "Fixture Printer",
+                       paper_type: "Fixture Paper",
+                       ink_type: "Fixture Ink"
+                     })
+                   end
     end
   end
 

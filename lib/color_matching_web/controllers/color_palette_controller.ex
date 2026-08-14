@@ -94,23 +94,18 @@ defmodule ColorMatchingWeb.ColorPaletteController do
   `GET /api/v1/printer_profiles/:printer_profile_id/colors`
   """
   def profile_colors(conn, params) do
-    with {:ok, printer_profile} <- fetch_printer_profile(params) do
-      json(conn, %{
-        printer_profile: profile_json(printer_profile),
-        colors:
-          printer_profile
-          |> Persistence.list_profile_colors()
-          |> Enum.map(&profile_color_json/1)
-      })
-    else
-      {:error, :missing_param, key} ->
-        bad_request(conn, "missing required query parameter: #{key}")
+    case fetch_printer_profile(params) do
+      {:ok, printer_profile} ->
+        json(conn, %{
+          printer_profile: profile_json(printer_profile),
+          colors:
+            printer_profile
+            |> Persistence.list_profile_colors()
+            |> Enum.map(&profile_color_json/1)
+        })
 
-      {:error, :invalid_param, key} ->
-        bad_request(conn, "invalid #{key}: expected an integer")
-
-      {:error, :printer_profile_not_found} ->
-        not_found(conn, "printer profile not found")
+      error ->
+        printer_profile_error(conn, error)
     end
   end
 
@@ -118,23 +113,18 @@ defmodule ColorMatchingWeb.ColorPaletteController do
   `GET /api/v1/printer_profiles/:printer_profile_id/metamer_pairs`
   """
   def metamer_pairs(conn, params) do
-    with {:ok, printer_profile} <- fetch_printer_profile(params) do
-      json(conn, %{
-        printer_profile: profile_json(printer_profile),
-        metamer_pairs:
-          printer_profile
-          |> Persistence.list_confirmed_metamer_pairs()
-          |> Enum.map(&metamer_pair_json/1)
-      })
-    else
-      {:error, :missing_param, key} ->
-        bad_request(conn, "missing required query parameter: #{key}")
+    case fetch_printer_profile(params) do
+      {:ok, printer_profile} ->
+        json(conn, %{
+          printer_profile: profile_json(printer_profile),
+          metamer_pairs:
+            printer_profile
+            |> Persistence.list_confirmed_metamer_pairs()
+            |> Enum.map(&metamer_pair_json/1)
+        })
 
-      {:error, :invalid_param, key} ->
-        bad_request(conn, "invalid #{key}: expected an integer")
-
-      {:error, :printer_profile_not_found} ->
-        not_found(conn, "printer profile not found")
+      error ->
+        printer_profile_error(conn, error)
     end
   end
 
@@ -267,6 +257,15 @@ defmodule ColorMatchingWeb.ColorPaletteController do
   end
 
   defp datetime_to_iso8601(%DateTime{} = datetime), do: DateTime.to_iso8601(datetime)
+
+  defp printer_profile_error(conn, {:error, :missing_param, key}),
+    do: bad_request(conn, "missing required query parameter: #{key}")
+
+  defp printer_profile_error(conn, {:error, :invalid_param, key}),
+    do: bad_request(conn, "invalid #{key}: expected an integer")
+
+  defp printer_profile_error(conn, {:error, :printer_profile_not_found}),
+    do: not_found(conn, "printer profile not found")
 
   defp bad_request(conn, detail) do
     conn |> put_status(:bad_request) |> json(%{errors: %{detail: detail}})

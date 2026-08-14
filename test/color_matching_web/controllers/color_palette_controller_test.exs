@@ -290,6 +290,7 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
         |> json_response(200)
 
       assert body["printer_profile"]["id"] == printer_profile.id
+
       assert Enum.map(body["metamer_pairs"], & &1["pair_id"]) |> Enum.sort() ==
                Enum.sort([pair.pair_id, second_pair.pair_id])
 
@@ -404,7 +405,7 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
 
     assert {:ok, sheet} =
              Persistence.create_test_sheet(%{
-               lookup_code: "PAIR-API",
+               lookup_code: "PARE-TEST",
                palette_id: palette.id,
                printer_profile_id: printer_profile.id,
                sheet_version: "2026-07-30",
