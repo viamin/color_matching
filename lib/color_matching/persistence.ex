@@ -70,6 +70,54 @@ defmodule ColorMatching.Persistence do
     |> Repo.all()
   end
 
+  @doc """
+  Returns the distinct working color set for a printer profile, independent of
+  palette membership.
+
+  The working set is defined by palette colors that have either measurements or
+  responses for the profile. Colors are deduplicated by hex so clients can
+  compose against a profile-scoped view instead of palette membership.
+  """
+  @spec list_profile_colors(PrinterProfile.t()) :: [map()]
+  def list_profile_colors(%PrinterProfile{id: printer_profile_id})
+      when is_integer(printer_profile_id) do
+    palette_colors = profile_palette_colors(printer_profile_id)
+
+    {responses_by_palette_color, measurements_by_palette_color} =
+      grouped_response_records(palette_colors, printer_profile_id)
+
+    palette_colors
+    |> Enum.group_by(&String.upcase(&1.hex_color))
+    |> Enum.map(fn {_hex_color, colors} ->
+      canonical_color = Enum.min_by(colors, &{&1.sort_order, &1.id})
+
+      {responses, measurements} =
+        Enum.reduce(colors, {%{}, %{}}, fn color, {response_acc, measurement_acc} ->
+          {
+            merge_profile_responses(
+              response_acc,
+              Map.get(responses_by_palette_color, color.id, %{})
+            ),
+            merge_profile_measurements(
+              measurement_acc,
+              Map.get(measurements_by_palette_color, color.id, %{})
+            )
+          }
+        end)
+
+      %{
+        name: canonical_color.display_label,
+        hex_color: canonical_color.hex_color,
+        response_details: detail_for_color(responses, measurements)
+      }
+    end)
+    |> Enum.sort_by(& &1.hex_color)
+  end
+
+  def list_profile_colors(%PrinterProfile{}) do
+    raise ArgumentError, "list_profile_colors/1 requires a persisted printer profile"
+  end
+
   @spec get_palette!(integer()) :: Palette.t()
   def get_palette!(id) do
     Palette
@@ -315,6 +363,27 @@ defmodule ColorMatching.Persistence do
     PairFinding
     |> where([finding], finding.test_sheet_id == ^test_sheet_id)
     |> Repo.all()
+  end
+
+  @doc """
+  Returns the active human-confirmed metamer pair classifications for a printer
+  profile.
+
+  Contrasting classifications are excluded because this query is intended for
+  composer-facing retrieval of confirmed metamer pairs only.
+  """
+  @spec list_confirmed_metamer_pairs(PrinterProfile.t()) :: [PrintedPairClassification.t()]
+  def list_confirmed_metamer_pairs(%PrinterProfile{id: printer_profile_id})
+      when is_integer(printer_profile_id) do
+    list_printed_pair_classifications(%{
+      reproduction_profile_id: printer_profile_id,
+      active: true
+    })
+    |> Enum.filter(&(&1.classification in ["strong_metamer", "weak_metamer"]))
+  end
+
+  def list_confirmed_metamer_pairs(%PrinterProfile{}) do
+    raise ArgumentError, "list_confirmed_metamer_pairs/1 requires a persisted printer profile"
   end
 
   @doc """
@@ -709,6 +778,89 @@ defmodule ColorMatching.Persistence do
       end)
 
     {responses_by_palette_color, measurements_by_palette_color}
+  end
+
+  defp profile_palette_colors(printer_profile_id) do
+    PaletteColor
+    |> join(:left, [color], response in IlluminantResponse,
+      on:
+        response.palette_color_id == color.id and
+          response.printer_profile_id == ^printer_profile_id
+    )
+    |> join(:left, [color, response], measurement in IlluminantMeasurement,
+      on:
+        measurement.palette_color_id == color.id and
+          measurement.printer_profile_id == ^printer_profile_id
+    )
+    |> where(
+      [color, response, measurement],
+      not is_nil(response.id) or not is_nil(measurement.id)
+    )
+    |> distinct(true)
+    |> order_by([color], asc: color.sort_order, asc: color.id)
+    |> Repo.all()
+  end
+
+  defp merge_profile_responses(existing, additions) do
+    Map.merge(existing, additions, fn _source, left, right ->
+      most_recent_response(left, right)
+    end)
+  end
+
+  defp merge_profile_measurements(existing, additions) do
+    Map.merge(existing, additions, fn _source, left, right ->
+      most_recent_measurement(left, right)
+    end)
+  end
+
+  defp most_recent_response(
+         %IlluminantResponse{} = left,
+         %IlluminantResponse{} = right
+       ) do
+    case compare_datetimes(left.updated_at, right.updated_at) do
+      :lt ->
+        right
+
+      :gt ->
+        left
+
+      :eq ->
+        if compare_datetimes(left.inserted_at, right.inserted_at) == :lt do
+          right
+        else
+          left
+        end
+    end
+  end
+
+  defp most_recent_measurement(
+         %IlluminantMeasurement{} = left,
+         %IlluminantMeasurement{} = right
+       ) do
+    case compare_datetimes(
+           measurement_sort_datetime(left.measured_at),
+           measurement_sort_datetime(right.measured_at)
+         ) do
+      :lt ->
+        right
+
+      :gt ->
+        left
+
+      :eq ->
+        if compare_datetimes(left.inserted_at, right.inserted_at) == :lt do
+          right
+        else
+          left
+        end
+    end
+  end
+
+  defp measurement_sort_datetime(nil), do: ~U[0000-01-01 00:00:00Z]
+  defp measurement_sort_datetime(%DateTime{} = measured_at), do: measured_at
+
+  defp compare_datetimes(%DateTime{} = left, %DateTime{} = right) do
+    DateTime.compare(left, right)
   end
 
   defp detail_for_color(responses, measurements) do

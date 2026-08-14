@@ -198,6 +198,114 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
     end
   end
 
+  describe "GET /api/v1/printer_profiles/:printer_profile_id/colors" do
+    test "returns a profile-scoped working color set without palette fields", %{conn: conn} do
+      %{printer_profile: profile, dark: dark, light: light} = response_fixture()
+
+      {:ok, duplicate_palette} =
+        Persistence.create_palette(%{
+          name: "Duplicate API Palette",
+          colors: [%{hex_color: dark.hex_color, sort_order: 0, display_label: "Duplicate Dark"}]
+        })
+
+      duplicate_dark = Persistence.get_palette!(duplicate_palette.id).colors |> List.first()
+
+      assert {:ok, _} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: duplicate_dark.id,
+                 printer_profile_id: profile.id,
+                 light_source: "green",
+                 normalized_brightness: 0.4
+               })
+
+      body =
+        conn
+        |> get(~p"/api/v1/printer_profiles/#{profile.id}/colors")
+        |> json_response(200)
+
+      assert body["printer_profile"]["id"] == profile.id
+      assert length(body["colors"]) == 2
+
+      dark_color = Enum.find(body["colors"], &(&1["hex"] == dark.hex_color))
+      light_color = Enum.find(body["colors"], &(&1["hex"] == light.hex_color))
+
+      assert Map.keys(dark_color) |> Enum.sort() == ["hex", "name", "responses", "rgb"]
+      assert dark_color["name"] == "Dark"
+      assert dark_color["responses"]["white"]["brightness"] == 0.1
+      assert dark_color["responses"]["red"]["brightness"] == 0.9
+      assert dark_color["responses"]["green"]["brightness"] == 0.4
+      assert light_color["responses"]["white"]["brightness"] == 0.9
+      refute Map.has_key?(dark_color, "palette_id")
+      refute Map.has_key?(dark_color, "palette_name")
+      refute Map.has_key?(dark_color, "sort_order")
+      refute Map.has_key?(dark_color, "id")
+    end
+  end
+
+  describe "GET /api/v1/printer_profiles/:printer_profile_id/metamer_pairs" do
+    test "returns active confirmed metamer pairs for the profile", %{conn: conn} do
+      %{
+        pair: pair,
+        second_pair: second_pair,
+        printer_profile: printer_profile,
+        second_printer_profile: second_printer_profile
+      } = printed_pair_classification_fixture()
+
+      assert {:ok, strong_metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer",
+                 notes: "Confirmed under sodium."
+               })
+
+      assert {:ok, weak_metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: second_pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "blue",
+                 classification: "weak_metamer"
+               })
+
+      assert {:ok, _contrasting} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "green",
+                 classification: "contrasting"
+               })
+
+      assert {:ok, _other_profile} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: second_printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      body =
+        conn
+        |> get(~p"/api/v1/printer_profiles/#{printer_profile.id}/metamer_pairs")
+        |> json_response(200)
+
+      assert body["printer_profile"]["id"] == printer_profile.id
+      assert Enum.map(body["metamer_pairs"], & &1["pair_id"]) |> Enum.sort() ==
+               Enum.sort([pair.pair_id, second_pair.pair_id])
+
+      lps_pair = Enum.find(body["metamer_pairs"], &(&1["pair_id"] == pair.pair_id))
+      blue_pair = Enum.find(body["metamer_pairs"], &(&1["pair_id"] == second_pair.pair_id))
+
+      assert lps_pair["classification"] == strong_metamer.classification
+      assert lps_pair["illuminant"] == "lps"
+      assert lps_pair["notes"] == "Confirmed under sodium."
+      assert lps_pair["color_a_hex"] == pair.color_a_hex
+      assert lps_pair["color_b_hex"] == pair.color_b_hex
+      assert blue_pair["classification"] == weak_metamer.classification
+      refute Enum.any?(body["metamer_pairs"], &(&1["classification"] == "contrasting"))
+    end
+  end
+
   # ---------------------------------------------------------------------------
   # Fixtures
   # ---------------------------------------------------------------------------
@@ -267,5 +375,52 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
              })
 
     %{palette: palette, printer_profile: profile, dark: dark}
+  end
+
+  defp printed_pair_classification_fixture do
+    assert {:ok, palette} =
+             Persistence.create_palette(%{
+               name: "Printed Pair API Palette",
+               colors: [
+                 %{hex_color: "#112233", sort_order: 0, display_label: "Patch 1"},
+                 %{hex_color: "#445566", sort_order: 1, display_label: "Patch 2"},
+                 %{hex_color: "#778899", sort_order: 2, display_label: "Patch 3"}
+               ]
+             })
+
+    assert {:ok, printer_profile} =
+             Persistence.create_printer_profile(%{
+               printer_make_model: "Epson SureColor P900",
+               paper_type: "Ultra Premium Luster",
+               ink_type: "OEM UltraChrome PRO10"
+             })
+
+    assert {:ok, second_printer_profile} =
+             Persistence.create_printer_profile(%{
+               printer_make_model: "Canon imagePROGRAF PRO-1100",
+               paper_type: "Pro Luster",
+               ink_type: "OEM Lucia Pro II"
+             })
+
+    assert {:ok, sheet} =
+             Persistence.create_test_sheet(%{
+               lookup_code: "PAIR-API",
+               palette_id: palette.id,
+               printer_profile_id: printer_profile.id,
+               sheet_version: "2026-07-30",
+               pairs: [
+                 %{row: 0, col: 0, color_a_hex: "#112233", color_b_hex: "#445566"},
+                 %{row: 0, col: 1, color_a_hex: "#112233", color_b_hex: "#778899"}
+               ]
+             })
+
+    [pair, second_pair] = sheet.pairs
+
+    %{
+      pair: pair,
+      second_pair: second_pair,
+      printer_profile: printer_profile,
+      second_printer_profile: second_printer_profile
+    }
   end
 end

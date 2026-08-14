@@ -364,6 +364,42 @@ defmodule ColorMatching.PersistenceTest do
       assert batched_vector.white == 0.7
     end
 
+    test "builds a profile-scoped working color set without palette duplicates" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, duplicate_palette} =
+               Persistence.create_palette(%{
+                 name: "Duplicate Hex Palette",
+                 colors: [%{hex_color: color.hex_color, sort_order: 0, display_label: "Duplicate"}]
+               })
+
+      duplicate_color = Persistence.get_palette!(duplicate_palette.id).colors |> List.first()
+
+      assert {:ok, _white_measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.25
+               })
+
+      assert {:ok, _green_measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: duplicate_color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "green",
+                 normalized_brightness: 0.6
+               })
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
+      assert profile_color.hex_color == color.hex_color
+      assert profile_color.name == color.display_label
+      assert profile_color.response_details["white"]["brightness"] == 0.25
+      assert profile_color.response_details["green"]["brightness"] == 0.6
+      refute Map.has_key?(profile_color.response_details, "red")
+    end
+
     test "raises when building a response vector for an unpersisted printer profile" do
       %{color: color} = persisted_measurement_fixture()
 
@@ -947,6 +983,60 @@ defmodule ColorMatching.PersistenceTest do
              })
              |> Enum.map(& &1.id)
              |> Enum.sort() == Enum.sort([matching.id])
+    end
+
+    test "lists confirmed metamer pairs for a profile" do
+      %{
+        pair: pair,
+        second_pair: second_pair,
+        printer_profile: printer_profile,
+        second_printer_profile: second_printer_profile
+      } = printed_pair_classification_fixture()
+
+      assert {:ok, strong_metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      assert {:ok, weak_metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: second_pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "blue",
+                 classification: "weak_metamer"
+               })
+
+      assert {:ok, _contrasting} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "green",
+                 classification: "contrasting"
+               })
+
+      assert {:ok, _other_profile} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: second_printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      confirmed_pairs = Persistence.list_confirmed_metamer_pairs(printer_profile)
+
+      assert Enum.map(confirmed_pairs, & &1.id) |> Enum.sort() ==
+               Enum.sort([strong_metamer.id, weak_metamer.id])
+
+      assert Enum.all?(confirmed_pairs, &(&1.active == true))
+      assert Enum.all?(confirmed_pairs, &(&1.reproduction_profile_id == printer_profile.id))
+
+      assert Enum.map(confirmed_pairs, & &1.classification) |> Enum.sort() == [
+               "strong_metamer",
+               "weak_metamer"
+             ]
     end
   end
 

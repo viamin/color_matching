@@ -28,3 +28,15 @@ A pair may have multiple classifications over time, including historical inactiv
 ## Relationship to pair findings
 
 `PairFinding` and `PairFindingObservation` remain the capture-derived vocabulary of `match`, `near_match`, and `no_match`. They represent observations or computed judgments from the existing capture workflow. `PrintedPairClassification` is a richer, manual product concept that coexists with them: it records a person's illuminant-specific interpretation of physical swatches and does not reinterpret or overwrite capture findings.
+
+## Relationship to palettes
+
+Palettes are a search construct. They define the candidate color sets used to
+generate and print test sheets, but palette membership is not part of the
+composer-facing meaning of a confirmed pair.
+
+Once a pair has been found and classified for a reproduction profile, the
+relevant concepts are the profile, the two colors, their profile-scoped
+measurements/responses, and the active printed-pair classification. Clients
+consuming profile colors or confirmed metamer pairs should not need palette ids
+or palette membership to render or compose with those results.

@@ -8,6 +8,11 @@ defmodule ColorMatchingWeb.ColorPaletteController do
   `color_matching` data model:
 
     * `GET /api/v1/printer_profiles` — available printer/material profiles
+    * `GET /api/v1/printer_profiles/:printer_profile_id/colors` — the
+      profile-scoped working color set with measured responses and no palette
+      metadata
+    * `GET /api/v1/printer_profiles/:printer_profile_id/metamer_pairs` —
+      confirmed metamer pairs for the profile
     * `GET /api/v1/palettes` — available palettes
     * `GET /api/v1/colors?printer_profile_id=N&palette_id=M` — palette colors
       with their measured illuminant response vectors
@@ -17,6 +22,10 @@ defmodule ColorMatchingWeb.ColorPaletteController do
   across all palettes is returned. Light sources without a measurement are
   omitted from a color's `responses` so clients can distinguish "missing" from
   "measured as zero brightness".
+
+  Palettes remain a search construct used to assemble candidate colors and
+  printed test sheets. Composer-facing retrieval should prefer the profile
+  routes, which are intentionally decoupled from palette membership.
   """
 
   use ColorMatchingWeb, :controller
@@ -78,6 +87,54 @@ defmodule ColorMatchingWeb.ColorPaletteController do
 
       {:error, :palette_not_found} ->
         not_found(conn, "palette not found")
+    end
+  end
+
+  @doc """
+  `GET /api/v1/printer_profiles/:printer_profile_id/colors`
+  """
+  def profile_colors(conn, params) do
+    with {:ok, printer_profile} <- fetch_printer_profile(params) do
+      json(conn, %{
+        printer_profile: profile_json(printer_profile),
+        colors:
+          printer_profile
+          |> Persistence.list_profile_colors()
+          |> Enum.map(&profile_color_json/1)
+      })
+    else
+      {:error, :missing_param, key} ->
+        bad_request(conn, "missing required query parameter: #{key}")
+
+      {:error, :invalid_param, key} ->
+        bad_request(conn, "invalid #{key}: expected an integer")
+
+      {:error, :printer_profile_not_found} ->
+        not_found(conn, "printer profile not found")
+    end
+  end
+
+  @doc """
+  `GET /api/v1/printer_profiles/:printer_profile_id/metamer_pairs`
+  """
+  def metamer_pairs(conn, params) do
+    with {:ok, printer_profile} <- fetch_printer_profile(params) do
+      json(conn, %{
+        printer_profile: profile_json(printer_profile),
+        metamer_pairs:
+          printer_profile
+          |> Persistence.list_confirmed_metamer_pairs()
+          |> Enum.map(&metamer_pair_json/1)
+      })
+    else
+      {:error, :missing_param, key} ->
+        bad_request(conn, "missing required query parameter: #{key}")
+
+      {:error, :invalid_param, key} ->
+        bad_request(conn, "invalid #{key}: expected an integer")
+
+      {:error, :printer_profile_not_found} ->
+        not_found(conn, "printer profile not found")
     end
   end
 
@@ -154,6 +211,30 @@ defmodule ColorMatchingWeb.ColorPaletteController do
       palette_name: palette_name(resolved_palette),
       sort_order: color.sort_order,
       responses: Map.new(details, fn {source, detail} -> {source, response_json(detail)} end)
+    }
+  end
+
+  defp profile_color_json(color) do
+    %{
+      name: color.name,
+      hex: color.hex_color,
+      rgb: rgb_json(color.hex_color),
+      responses:
+        Map.new(color.response_details, fn {source, detail} -> {source, response_json(detail)} end)
+    }
+  end
+
+  defp metamer_pair_json(classification) do
+    pair = classification.test_sheet_pair
+
+    %{
+      pair_id: pair.pair_id,
+      color_a_hex: pair.color_a_hex,
+      color_b_hex: pair.color_b_hex,
+      illuminant: classification.illuminant,
+      classification: classification.classification,
+      notes: classification.notes,
+      classified_at: datetime_to_iso8601(classification.inserted_at)
     }
   end
 
