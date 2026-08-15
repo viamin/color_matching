@@ -194,7 +194,7 @@ defmodule ColorMatchingWeb.ColorPaletteController do
       palette_id: color.palette_id,
       palette_name: palette_name(resolved_palette),
       sort_order: color.sort_order,
-      responses: Map.new(details, fn {source, detail} -> {source, response_json(detail)} end)
+      responses: responses_json(details)
     }
   end
 
@@ -203,8 +203,7 @@ defmodule ColorMatchingWeb.ColorPaletteController do
       name: color.name,
       hex: color.hex_color,
       rgb: rgb_json(color.hex_color),
-      responses:
-        Map.new(color.response_details, fn {source, detail} -> {source, response_json(detail)} end)
+      responses: responses_json(color.response_details)
     }
   end
 
@@ -230,6 +229,10 @@ defmodule ColorMatchingWeb.ColorPaletteController do
       {:ok, {r, g, b}} -> %{r: r, g: g, b: b}
       {:error, _message} -> nil
     end
+  end
+
+  defp responses_json(response_details) do
+    Map.new(response_details, fn {source, detail} -> {source, response_json(detail)} end)
   end
 
   defp response_json(detail) do
