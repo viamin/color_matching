@@ -1170,6 +1170,28 @@ defmodule ColorMatching.PersistenceTest do
              ]
     end
 
+    test "excludes superseded metamer classifications that are no longer active" do
+      %{pair: pair, printer_profile: printer_profile} = printed_pair_classification_fixture()
+
+      assert {:ok, _superseded} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      assert {:ok, _replacement} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "contrasting"
+               })
+
+      assert Persistence.list_confirmed_metamer_pairs(printer_profile) == []
+    end
+
     test "raises when listing confirmed metamer pairs for an unpersisted printer profile" do
       assert_raise ArgumentError,
                    "list_confirmed_metamer_pairs/1 requires a persisted printer profile",

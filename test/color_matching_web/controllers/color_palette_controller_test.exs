@@ -341,6 +341,33 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert blue_pair["classification"] == weak_metamer.classification
       refute Enum.any?(body["metamer_pairs"], &(&1["classification"] == "contrasting"))
     end
+
+    test "drops pairs whose metamer classification was superseded", %{conn: conn} do
+      %{pair: pair, printer_profile: printer_profile} = printed_pair_classification_fixture()
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      assert {:ok, _} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "contrasting"
+               })
+
+      body =
+        conn
+        |> get(~p"/api/v1/printer_profiles/#{printer_profile.id}/metamer_pairs")
+        |> json_response(200)
+
+      assert body["metamer_pairs"] == []
+    end
   end
 
   # ---------------------------------------------------------------------------
