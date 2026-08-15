@@ -316,6 +316,43 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert unmeasured_color["name"] == "Patch 2"
       assert unmeasured_color["responses"] == %{}
     end
+
+    test "names pair hexes that match no palette color after the hex itself", %{conn: conn} do
+      %{palette: palette, printer_profile: printer_profile} =
+        printed_pair_classification_fixture()
+
+      assert {:ok, sheet} =
+               Persistence.create_test_sheet(%{
+                 lookup_code: "PWDA-TEST",
+                 palette_id: palette.id,
+                 printer_profile_id: printer_profile.id,
+                 sheet_version: "2026-08-01",
+                 pairs: [%{row: 1, col: 0, color_a_hex: "#ABCDEF", color_b_hex: "#FEDCBA"}]
+               })
+
+      [pair] = sheet.pairs
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      body =
+        conn
+        |> get(~p"/api/v1/printer_profiles/#{printer_profile.id}/colors")
+        |> json_response(200)
+
+      assert Enum.map(body["colors"], & &1["hex"]) == ["#ABCDEF", "#FEDCBA"]
+
+      for color <- body["colors"] do
+        assert color["name"] == color["hex"]
+        assert color["responses"] == %{}
+        assert match?(%{"r" => _, "g" => _, "b" => _}, color["rgb"])
+      end
+    end
   end
 
   describe "GET /api/v1/printer_profiles/:printer_profile_id/metamer_pairs" do
