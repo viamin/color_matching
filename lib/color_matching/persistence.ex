@@ -826,8 +826,10 @@ defmodule ColorMatching.Persistence do
   defp pair_hex_palette_colors([]), do: []
 
   defp pair_hex_palette_colors(pair_hexes) do
+    upcased_hexes = Enum.map(pair_hexes, &String.upcase/1)
+
     PaletteColor
-    |> where([color], fragment("upper(?)", color.hex_color) in ^pair_hexes)
+    |> where([color], fragment("upper(?)", color.hex_color) in ^upcased_hexes)
     |> order_by([color], asc: color.sort_order, asc: color.id)
     |> Repo.all()
   end

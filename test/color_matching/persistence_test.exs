@@ -820,6 +820,43 @@ defmodule ColorMatching.PersistenceTest do
       assert synthetic_entry.name == "#FEDCBA"
     end
 
+    test "names pair-only hexes from palette colors when the pair hex is lowercase" do
+      %{palette: palette, printer_profile: printer_profile} =
+        printed_pair_classification_fixture()
+
+      assert {:ok, _case_palette} =
+               Persistence.create_palette(%{
+                 name: "Uppercase Pair Palette",
+                 colors: [%{hex_color: "#ABCDEF", sort_order: 0, display_label: "Upper Pair"}]
+               })
+
+      assert {:ok, sheet} =
+               Persistence.create_test_sheet(%{
+                 lookup_code: "PWDF-TEST",
+                 palette_id: palette.id,
+                 printer_profile_id: printer_profile.id,
+                 sheet_version: "2026-08-01",
+                 pairs: [%{row: 1, col: 0, color_a_hex: "#abcdef", color_b_hex: "#FEDCBA"}]
+               })
+
+      [case_pair] = sheet.pairs
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: case_pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "weak_metamer"
+               })
+
+      [named_entry, synthetic_entry] = Persistence.list_profile_colors(printer_profile)
+
+      assert named_entry.hex_color == "#ABCDEF"
+      assert named_entry.name == "Upper Pair"
+      assert synthetic_entry.hex_color == "#FEDCBA"
+      assert synthetic_entry.name == "#FEDCBA"
+    end
+
     test "merges a confirmed pair hex with measurements on the same hex" do
       %{palette: palette, pair: pair, printer_profile: printer_profile} =
         printed_pair_classification_fixture()
