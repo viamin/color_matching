@@ -217,6 +217,18 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert body["errors"]["detail"] =~ "printer_profile_id"
     end
 
+    test "returns an empty working set when no colors have data for the profile", %{conn: conn} do
+      {:ok, profile} = profile_fixture("Unmeasured Printer", "Matte", "Dye")
+
+      body =
+        conn
+        |> get(~p"/api/v1/printer_profiles/#{profile.id}/colors")
+        |> json_response(200)
+
+      assert body["printer_profile"]["id"] == profile.id
+      assert body["colors"] == []
+    end
+
     test "returns a profile-scoped working color set without palette fields", %{conn: conn} do
       %{printer_profile: profile, dark: dark, light: light} = response_fixture()
 
