@@ -2,7 +2,13 @@ defmodule ColorMatching.PersistenceTest do
   use ColorMatching.DataCase, async: false
 
   alias ColorMatching.{Palette, Persistence}
-  alias ColorMatching.Persistence.{PaletteColor, PrintedPairClassification, PrinterProfile}
+
+  alias ColorMatching.Persistence.{
+    IlluminantResponse,
+    PaletteColor,
+    PrintedPairClassification,
+    PrinterProfile
+  }
 
   describe "palettes" do
     test "creates and reads a palette with persisted colors" do
@@ -479,6 +485,151 @@ defmodule ColorMatching.PersistenceTest do
       assert profile_color.response_details["white"][:brightness] == 0.8
 
       assert profile_color.response_details["green"][:source] == "response"
+      assert profile_color.response_details["green"][:brightness] == 0.8
+      assert profile_color.response_details["green"][:apparent_brightness] == 8
+    end
+
+    test "keeps the canonical color's response when it is the most recent across duplicate hexes" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      duplicate_color = duplicate_hex_color_fixture(color, "Recent Canonical Response Palette")
+
+      assert {:ok, _stale_response} =
+               Persistence.set_illuminant_response(%{
+                 palette_color_id: duplicate_color.id,
+                 printer_profile_id: printer_profile.id,
+                 illuminant: "green",
+                 apparent_brightness: 3
+               })
+
+      assert {:ok, _recent_response} =
+               Persistence.set_illuminant_response(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 illuminant: "green",
+                 apparent_brightness: 8
+               })
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
+      assert profile_color.response_details["green"][:brightness] == 0.8
+      assert profile_color.response_details["green"][:apparent_brightness] == 8
+    end
+
+    test "keeps the canonical color's measurement when it is the most recent across duplicate hexes" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      duplicate_color = duplicate_hex_color_fixture(color, "Recent Canonical Measurement Palette")
+
+      assert {:ok, _stale_measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: duplicate_color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.2,
+                 measured_at: ~U[2026-01-01 08:00:00Z]
+               })
+
+      assert {:ok, _recent_measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.8,
+                 measured_at: ~U[2026-02-01 08:00:00Z]
+               })
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
+      assert profile_color.response_details["white"][:brightness] == 0.8
+    end
+
+    test "breaks measurement recency ties by record creation time" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      duplicate_color = duplicate_hex_color_fixture(color, "Tied Measurement Palette")
+
+      assert {:ok, _earlier_measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: duplicate_color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.2
+               })
+
+      assert {:ok, _later_measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.8
+               })
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
+      assert profile_color.response_details["white"][:brightness] == 0.8
+    end
+
+    test "breaks response recency ties by record creation time" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      duplicate_color = duplicate_hex_color_fixture(color, "Tied Response Palette")
+      tied_updated_at = ~U[2026-03-01 12:00:00.000000Z]
+
+      assert {:ok, _earlier_created} =
+               Repo.insert(%IlluminantResponse{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 illuminant: "green",
+                 apparent_brightness: 3,
+                 inserted_at: DateTime.add(tied_updated_at, -1, :second),
+                 updated_at: tied_updated_at
+               })
+
+      assert {:ok, _later_created} =
+               Repo.insert(%IlluminantResponse{
+                 palette_color_id: duplicate_color.id,
+                 printer_profile_id: printer_profile.id,
+                 illuminant: "green",
+                 apparent_brightness: 8,
+                 inserted_at: tied_updated_at,
+                 updated_at: tied_updated_at
+               })
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
+      assert profile_color.response_details["green"][:brightness] == 0.8
+      assert profile_color.response_details["green"][:apparent_brightness] == 8
+    end
+
+    test "keeps the first color's response when response recency ties completely" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      duplicate_color = duplicate_hex_color_fixture(color, "Fully Tied Response Palette")
+      tie = ~U[2026-03-01 12:00:00.000000Z]
+
+      assert {:ok, _canonical_tied} =
+               Repo.insert(%IlluminantResponse{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 illuminant: "green",
+                 apparent_brightness: 8,
+                 inserted_at: tie,
+                 updated_at: tie
+               })
+
+      assert {:ok, _duplicate_tied} =
+               Repo.insert(%IlluminantResponse{
+                 palette_color_id: duplicate_color.id,
+                 printer_profile_id: printer_profile.id,
+                 illuminant: "green",
+                 apparent_brightness: 3,
+                 inserted_at: tie,
+                 updated_at: tie
+               })
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
       assert profile_color.response_details["green"][:brightness] == 0.8
       assert profile_color.response_details["green"][:apparent_brightness] == 8
     end
@@ -1286,6 +1437,18 @@ defmodule ColorMatching.PersistenceTest do
     color = Persistence.get_palette!(palette.id).colors |> List.first()
 
     %{color: color, printer_profile: printer_profile}
+  end
+
+  defp duplicate_hex_color_fixture(color, palette_name) do
+    assert {:ok, duplicate_palette} =
+             Persistence.create_palette(%{
+               name: palette_name,
+               colors: [
+                 %{hex_color: color.hex_color, sort_order: 0, display_label: "Duplicate"}
+               ]
+             })
+
+    Persistence.get_palette!(duplicate_palette.id).colors |> List.first()
   end
 
   defp printed_pair_classification_fixture do
