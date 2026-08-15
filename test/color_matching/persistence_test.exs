@@ -483,6 +483,42 @@ defmodule ColorMatching.PersistenceTest do
       assert profile_color.response_details["green"][:apparent_brightness] == 8
     end
 
+    test "prefers a human response over an instrument measurement across duplicate hexes" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, duplicate_palette} =
+               Persistence.create_palette(%{
+                 name: "Cross Source Palette",
+                 colors: [
+                   %{hex_color: color.hex_color, sort_order: 0, display_label: "Duplicate"}
+                 ]
+               })
+
+      duplicate_color = Persistence.get_palette!(duplicate_palette.id).colors |> List.first()
+
+      assert {:ok, _measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: duplicate_color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.9
+               })
+
+      assert {:ok, _response} =
+               Persistence.set_illuminant_response(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 illuminant: "white",
+                 apparent_brightness: 2
+               })
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
+      assert profile_color.response_details["white"][:source] == "response"
+      assert profile_color.response_details["white"][:brightness] == 0.2
+      assert profile_color.response_details["white"][:apparent_brightness] == 2
+    end
+
     test "collapses duplicate hexes that differ only by case" do
       %{printer_profile: printer_profile} = persisted_measurement_fixture()
 

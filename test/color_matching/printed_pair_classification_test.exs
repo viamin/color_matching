@@ -22,6 +22,11 @@ defmodule ColorMatching.Persistence.PrintedPairClassificationTest do
              "weak_metamer",
              "contrasting"
            ]
+
+    assert PrintedPairClassification.metamer_classifications() == [
+             "strong_metamer",
+             "weak_metamer"
+           ]
   end
 
   test "schema defaults active classifications to true" do
