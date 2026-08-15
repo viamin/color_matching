@@ -75,45 +75,19 @@ defmodule ColorMatching.Persistence do
   palette membership.
 
   The working set is defined by palette colors that have either measurements or
-  responses for the profile. Colors are deduplicated by hex so clients can
-  compose against a profile-scoped view instead of palette membership.
+  responses for the profile, plus the hex colors of the profile's confirmed
+  metamer pairs, so every hex returned by `list_confirmed_metamer_pairs/1`
+  appears here even when it has no measurements yet. Colors are deduplicated by
+  hex so clients can compose against a profile-scoped view instead of palette
+  membership.
   """
   @spec list_profile_colors(PrinterProfile.t()) :: [map()]
-  def list_profile_colors(%PrinterProfile{id: printer_profile_id})
+  def list_profile_colors(%PrinterProfile{id: printer_profile_id} = printer_profile)
       when is_integer(printer_profile_id) do
-    palette_colors = profile_palette_colors(printer_profile_id)
+    pair_hexes = confirmed_metamer_pair_hexes(printer_profile)
+    {palette_entries, palette_hexes} = palette_color_entries(printer_profile_id, pair_hexes)
 
-    {responses_by_palette_color, measurements_by_palette_color} =
-      grouped_response_records(palette_colors, printer_profile_id)
-
-    palette_colors
-    |> Enum.group_by(&String.upcase(&1.hex_color))
-    |> Enum.map(fn {_hex_color, colors} ->
-      canonical_color = Enum.min_by(colors, &{&1.sort_order, &1.id})
-
-      {responses, measurements} =
-        Enum.reduce(colors, {%{}, %{}}, fn color, {response_acc, measurement_acc} ->
-          {
-            merge_profile_responses(
-              response_acc,
-              Map.get(responses_by_palette_color, color.id, %{})
-            ),
-            merge_profile_measurements(
-              measurement_acc,
-              Map.get(measurements_by_palette_color, color.id, %{})
-            )
-          }
-        end)
-
-      {canonical_color.sort_order, canonical_color.id,
-       %{
-         name: canonical_color.display_label,
-         hex_color: canonical_color.hex_color,
-         response_details: detail_for_color(responses, measurements)
-       }}
-    end)
-    |> Enum.sort_by(fn {sort_order, id, _color} -> {sort_order, id} end)
-    |> Enum.map(fn {_sort_order, _id, color} -> color end)
+    palette_entries ++ pair_only_color_entries(pair_hexes, palette_hexes)
   end
 
   def list_profile_colors(%PrinterProfile{}) do
@@ -782,6 +756,80 @@ defmodule ColorMatching.Persistence do
       end)
 
     {responses_by_palette_color, measurements_by_palette_color}
+  end
+
+  # Returns the palette-color-derived working set entries (deduplicated by hex)
+  # together with the set of upcased hexes they cover. Pair hexes also name
+  # palette colors that lack measurements so those entries reuse the palette
+  # display label instead of a bare hex.
+  defp palette_color_entries(printer_profile_id, pair_hexes) do
+    measured_colors = profile_palette_colors(printer_profile_id)
+
+    {responses_by_palette_color, measurements_by_palette_color} =
+      grouped_response_records(measured_colors, printer_profile_id)
+
+    named_pair_colors = pair_hex_palette_colors(pair_hexes)
+
+    colors = Enum.uniq_by(measured_colors ++ named_pair_colors, & &1.id)
+
+    entries =
+      colors
+      |> Enum.group_by(&String.upcase(&1.hex_color))
+      |> Enum.map(
+        &palette_color_entry(&1, responses_by_palette_color, measurements_by_palette_color)
+      )
+      |> Enum.sort_by(fn {sort_order, id, _entry} -> {sort_order, id} end)
+      |> Enum.map(fn {_sort_order, _id, entry} -> entry end)
+
+    {entries, MapSet.new(colors, &String.upcase(&1.hex_color))}
+  end
+
+  defp palette_color_entry({_hex_color, colors}, responses_by, measurements_by) do
+    canonical_color = Enum.min_by(colors, &{&1.sort_order, &1.id})
+
+    {responses, measurements} =
+      Enum.reduce(colors, {%{}, %{}}, fn color, {response_acc, measurement_acc} ->
+        {
+          merge_profile_responses(response_acc, Map.get(responses_by, color.id, %{})),
+          merge_profile_measurements(measurement_acc, Map.get(measurements_by, color.id, %{}))
+        }
+      end)
+
+    {canonical_color.sort_order, canonical_color.id,
+     %{
+       name: canonical_color.display_label,
+       hex_color: canonical_color.hex_color,
+       response_details: detail_for_color(responses, measurements)
+     }}
+  end
+
+  # Confirmed-pair hexes with no palette color at all still belong in the
+  # working set: they carry the hex itself as their name, contribute no
+  # responses, and sort after every palette-derived entry.
+  defp pair_only_color_entries(pair_hexes, palette_hexes) do
+    pair_hexes
+    |> Enum.reject(&MapSet.member?(palette_hexes, String.upcase(&1)))
+    |> Enum.sort_by(&String.upcase/1)
+    |> Enum.map(&%{name: &1, hex_color: &1, response_details: %{}})
+  end
+
+  # One raw hex per distinct upcased hex among the profile's confirmed metamer
+  # pairs so pair hexes deduplicate case-insensitively like palette colors.
+  defp confirmed_metamer_pair_hexes(printer_profile) do
+    printer_profile
+    |> list_confirmed_metamer_pairs()
+    |> Enum.flat_map(&[&1.test_sheet_pair.color_a_hex, &1.test_sheet_pair.color_b_hex])
+    |> Enum.group_by(&String.upcase/1)
+    |> Enum.map(fn {_upcased_hex, hexes} -> Enum.min(hexes) end)
+  end
+
+  defp pair_hex_palette_colors([]), do: []
+
+  defp pair_hex_palette_colors(pair_hexes) do
+    PaletteColor
+    |> where([color], fragment("upper(?)", color.hex_color) in ^pair_hexes)
+    |> order_by([color], asc: color.sort_order, asc: color.id)
+    |> Repo.all()
   end
 
   defp profile_palette_colors(printer_profile_id) do

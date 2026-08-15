@@ -34,7 +34,7 @@ A persisted human-entered apparent brightness score for one printed palette colo
 The collection of illuminant responses for a palette color, used to compare that color against target brightness values from source images.
 
 ### Working Color Set
-The distinct set of colors available for composition under one printer profile, defined by the colors that have measurements or responses for that profile rather than by palette membership. Duplicated hexes collapse to a single entry.
+The distinct set of colors available for composition under one printer profile, defined by the colors that have measurements or responses for that profile — or that appear in one of the profile's confirmed metamer pairs — rather than by palette membership. Duplicated hexes collapse to a single entry.
 
 ### Mapped Image
 A generated printable image whose pixels are selected palette colors chosen to approximate different source-image brightness targets under different illuminants.

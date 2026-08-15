@@ -730,6 +730,170 @@ defmodule ColorMatching.PersistenceTest do
              ]
     end
 
+    test "includes confirmed metamer pair hexes that have no measurements" do
+      %{pair: pair, printer_profile: printer_profile} = printed_pair_classification_fixture()
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      profile_colors = Persistence.list_profile_colors(printer_profile)
+
+      # The pair's hexes match palette colors with no measurements, so the
+      # working set names them from the palette instead of dropping them.
+      assert Enum.map(profile_colors, & &1.hex_color) == ["#112233", "#445566"]
+      assert Enum.map(profile_colors, & &1.name) == ["Patch 1", "Patch 2"]
+      assert Enum.all?(profile_colors, &(&1.response_details == %{}))
+    end
+
+    test "includes confirmed pair hexes that no palette color has" do
+      %{palette: palette, printer_profile: printer_profile} =
+        printed_pair_classification_fixture()
+
+      assert {:ok, sheet} =
+               Persistence.create_test_sheet(%{
+                 lookup_code: "PWDC-TEST",
+                 palette_id: palette.id,
+                 printer_profile_id: printer_profile.id,
+                 sheet_version: "2026-08-01",
+                 pairs: [%{row: 1, col: 0, color_a_hex: "#ABCDEF", color_b_hex: "#FEDCBA"}]
+               })
+
+      [unmeasured_pair] = sheet.pairs
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: unmeasured_pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      profile_colors = Persistence.list_profile_colors(printer_profile)
+
+      assert Enum.map(profile_colors, & &1.hex_color) == ["#ABCDEF", "#FEDCBA"]
+
+      for profile_color <- profile_colors do
+        assert profile_color.name == profile_color.hex_color
+        assert profile_color.response_details == %{}
+      end
+    end
+
+    test "names pair-only hexes from palette colors that differ only by case" do
+      %{palette: palette, printer_profile: printer_profile} =
+        printed_pair_classification_fixture()
+
+      assert {:ok, _case_palette} =
+               Persistence.create_palette(%{
+                 name: "Lowercase Pair Palette",
+                 colors: [%{hex_color: "#abcdef", sort_order: 0, display_label: "Lower Pair"}]
+               })
+
+      assert {:ok, sheet} =
+               Persistence.create_test_sheet(%{
+                 lookup_code: "PWDE-TEST",
+                 palette_id: palette.id,
+                 printer_profile_id: printer_profile.id,
+                 sheet_version: "2026-08-01",
+                 pairs: [%{row: 1, col: 0, color_a_hex: "#ABCDEF", color_b_hex: "#FEDCBA"}]
+               })
+
+      [case_pair] = sheet.pairs
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: case_pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "weak_metamer"
+               })
+
+      [named_entry, synthetic_entry] = Persistence.list_profile_colors(printer_profile)
+
+      assert named_entry.hex_color == "#abcdef"
+      assert named_entry.name == "Lower Pair"
+      assert synthetic_entry.hex_color == "#FEDCBA"
+      assert synthetic_entry.name == "#FEDCBA"
+    end
+
+    test "merges a confirmed pair hex with measurements on the same hex" do
+      %{palette: palette, pair: pair, printer_profile: printer_profile} =
+        printed_pair_classification_fixture()
+
+      measured_color = Persistence.get_palette!(palette.id).colors |> List.first()
+      assert measured_color.hex_color == "#112233"
+
+      assert {:ok, _measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: measured_color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.3
+               })
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      [measured_entry, pair_only_entry] = Persistence.list_profile_colors(printer_profile)
+
+      assert measured_entry.hex_color == "#112233"
+      assert measured_entry.name == "Patch 1"
+      assert measured_entry.response_details["white"][:brightness] == 0.3
+      assert pair_only_entry.hex_color == "#445566"
+    end
+
+    test "excludes pair hexes from contrasting, superseded, or other-profile classifications" do
+      %{
+        pair: pair,
+        second_pair: second_pair,
+        printer_profile: printer_profile,
+        second_printer_profile: second_printer_profile
+      } = printed_pair_classification_fixture()
+
+      assert {:ok, _contrasting} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "contrasting"
+               })
+
+      assert {:ok, _superseded_metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: second_pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "blue",
+                 classification: "strong_metamer"
+               })
+
+      assert {:ok, _replacement} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: second_pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "blue",
+                 classification: "contrasting"
+               })
+
+      assert {:ok, _other_profile} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: second_printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      assert Persistence.list_profile_colors(printer_profile) == []
+    end
+
     test "raises when listing profile colors for an unpersisted printer profile" do
       assert_raise ArgumentError,
                    "list_profile_colors/1 requires a persisted printer profile",
@@ -1491,6 +1655,7 @@ defmodule ColorMatching.PersistenceTest do
     [pair, second_pair] = sheet.pairs
 
     %{
+      palette: palette,
       pair: pair,
       second_pair: second_pair,
       printer_profile: printer_profile,

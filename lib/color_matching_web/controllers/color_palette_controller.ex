@@ -9,8 +9,8 @@ defmodule ColorMatchingWeb.ColorPaletteController do
 
     * `GET /api/v1/printer_profiles` — available printer/material profiles
     * `GET /api/v1/printer_profiles/:printer_profile_id/colors` — the
-      profile-scoped working color set with measured responses and no palette
-      metadata
+      profile-scoped working color set (measured colors plus confirmed
+      metamer pair hexes) with no palette metadata
     * `GET /api/v1/printer_profiles/:printer_profile_id/metamer_pairs` —
       confirmed metamer pairs for the profile
     * `GET /api/v1/palettes` — available palettes

@@ -270,6 +270,52 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       refute Map.has_key?(dark_color, "sort_order")
       refute Map.has_key?(dark_color, "id")
     end
+
+    test "includes every confirmed metamer pair hex in the working set", %{conn: conn} do
+      %{palette: palette, pair: pair, printer_profile: printer_profile} =
+        printed_pair_classification_fixture()
+
+      measured_color = Persistence.get_palette!(palette.id).colors |> List.first()
+
+      assert {:ok, _} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: measured_color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.3
+               })
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      colors_body =
+        conn
+        |> get(~p"/api/v1/printer_profiles/#{printer_profile.id}/colors")
+        |> json_response(200)
+
+      pairs_body =
+        conn
+        |> get(~p"/api/v1/printer_profiles/#{printer_profile.id}/metamer_pairs")
+        |> json_response(200)
+
+      color_hexes = colors_body["colors"] |> MapSet.new(&String.upcase(&1["hex"]))
+
+      pair_hexes =
+        pairs_body["metamer_pairs"]
+        |> Enum.flat_map(&[&1["color_a_hex"], &1["color_b_hex"]])
+        |> MapSet.new(&String.upcase/1)
+
+      assert MapSet.subset?(pair_hexes, color_hexes)
+
+      unmeasured_color = Enum.find(colors_body["colors"], &(&1["hex"] == "#445566"))
+      assert unmeasured_color["name"] == "Patch 2"
+      assert unmeasured_color["responses"] == %{}
+    end
   end
 
   describe "GET /api/v1/printer_profiles/:printer_profile_id/metamer_pairs" do
@@ -493,6 +539,7 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
     [pair, second_pair] = sheet.pairs
 
     %{
+      palette: palette,
       pair: pair,
       second_pair: second_pair,
       printer_profile: printer_profile,
