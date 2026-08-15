@@ -396,6 +396,9 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert lps_pair["notes"] == "Confirmed under sodium."
       assert lps_pair["color_a_hex"] == pair.color_a_hex
       assert lps_pair["color_b_hex"] == pair.color_b_hex
+
+      assert {:ok, classified_at, 0} = DateTime.from_iso8601(lps_pair["classified_at"])
+      assert DateTime.compare(classified_at, strong_metamer.inserted_at) == :eq
       assert blue_pair["classification"] == weak_metamer.classification
       refute Enum.any?(body["metamer_pairs"], &(&1["classification"] == "contrasting"))
     end
