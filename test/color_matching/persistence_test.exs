@@ -402,6 +402,30 @@ defmodule ColorMatching.PersistenceTest do
       refute Map.has_key?(profile_color.response_details, "red")
     end
 
+    test "includes colors that only have human responses for the profile" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, _response} =
+               Persistence.set_illuminant_response(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 illuminant: "red",
+                 apparent_brightness: 7
+               })
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
+      assert profile_color.hex_color == color.hex_color
+      assert profile_color.response_details["red"][:source] == "response"
+      assert profile_color.response_details["red"][:brightness] == 0.7
+    end
+
+    test "returns an empty working set when no colors have data for the profile" do
+      %{printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert Persistence.list_profile_colors(printer_profile) == []
+    end
+
     test "keeps the most recent record per light source when duplicate hexes overlap" do
       %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
 
