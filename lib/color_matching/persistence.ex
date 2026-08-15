@@ -372,7 +372,9 @@ defmodule ColorMatching.Persistence do
   profile.
 
   Contrasting classifications are excluded because this query is intended for
-  composer-facing retrieval of confirmed metamer pairs only.
+  composer-facing retrieval of confirmed metamer pairs only; the metamer values
+  come from `PrintedPairClassification.metamer_classifications/0` so they stay
+  in sync with the canonical vocabulary.
   """
   @spec list_confirmed_metamer_pairs(PrinterProfile.t()) :: [PrintedPairClassification.t()]
   def list_confirmed_metamer_pairs(%PrinterProfile{id: printer_profile_id})
@@ -381,7 +383,7 @@ defmodule ColorMatching.Persistence do
       reproduction_profile_id: printer_profile_id,
       active: true
     })
-    |> Enum.filter(&(&1.classification in ["strong_metamer", "weak_metamer"]))
+    |> Enum.filter(&(&1.classification in PrintedPairClassification.metamer_classifications()))
   end
 
   def list_confirmed_metamer_pairs(%PrinterProfile{}) do
