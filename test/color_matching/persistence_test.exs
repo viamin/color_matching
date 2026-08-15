@@ -432,6 +432,32 @@ defmodule ColorMatching.PersistenceTest do
       assert Persistence.list_profile_colors(printer_profile) == []
     end
 
+    test "excludes colors whose measurements belong to a different profile" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, other_profile} =
+               Persistence.create_printer_profile(%{
+                 printer_make_model: "Canon imagePROGRAF PRO-1100",
+                 paper_type: "Pro Luster",
+                 ink_type: "OEM Lucia Pro II"
+               })
+
+      assert {:ok, _other_profile_measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: other_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.5
+               })
+
+      assert Persistence.list_profile_colors(printer_profile) == []
+
+      [profile_color] = Persistence.list_profile_colors(other_profile)
+
+      assert profile_color.hex_color == color.hex_color
+      assert profile_color.response_details["white"][:brightness] == 0.5
+    end
+
     test "keeps the most recent record per light source when duplicate hexes overlap" do
       %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
 
