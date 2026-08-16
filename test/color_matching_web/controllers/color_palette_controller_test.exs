@@ -69,7 +69,7 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert body["errors"]["detail"] =~ "printer_profile_id"
     end
 
-    test "returns 404 for an unknown printer profile", %{conn: conn} do
+    test "returns 404 for an unknown printer profile on GET /api/v1/colors", %{conn: conn} do
       body =
         conn
         |> get(~p"/api/v1/colors?#{[printer_profile_id: 999_999]}")
@@ -78,7 +78,8 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert body["errors"]["detail"] =~ "printer profile"
     end
 
-    test "returns 400 for a non-integer printer_profile_id", %{conn: conn} do
+    test "returns 400 for a non-integer printer_profile_id on GET /api/v1/colors",
+         %{conn: conn} do
       body =
         conn
         |> get(~p"/api/v1/colors?#{[printer_profile_id: "abc"]}")
@@ -87,7 +88,8 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert body["errors"]["detail"] =~ "printer_profile_id"
     end
 
-    test "returns 400 for a non-positive printer_profile_id", %{conn: conn} do
+    test "returns 400 for a non-positive printer_profile_id on GET /api/v1/colors",
+         %{conn: conn} do
       body =
         conn
         |> get(~p"/api/v1/colors?#{[printer_profile_id: 0]}")
@@ -105,7 +107,7 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert body["errors"]["detail"] =~ "printer_profile_id"
     end
 
-    test "returns 400 for a non-positive palette_id", %{conn: conn} do
+    test "returns 400 for a non-positive palette_id when querying palette colors", %{conn: conn} do
       {:ok, profile} = profile_fixture("Invalid Palette Id Printer", "Matte", "Pigment")
 
       body =
@@ -116,7 +118,7 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert body["errors"]["detail"] =~ "palette_id"
     end
 
-    test "returns 400 for a blank palette_id", %{conn: conn} do
+    test "returns 400 for a blank palette_id on GET /api/v1/colors", %{conn: conn} do
       {:ok, profile} = profile_fixture("Blank Palette Id Printer", "Matte", "Pigment")
 
       body =
@@ -345,7 +347,9 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert body["errors"]["detail"] =~ "palette_id"
     end
 
-    test "returns 400 for a non-positive palette_id", %{conn: conn} do
+    test "returns 400 for a non-positive palette_id when querying measured color vectors", %{
+      conn: conn
+    } do
       %{printer_profile: profile} = response_fixture()
 
       body =
@@ -356,7 +360,8 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert body["errors"]["detail"] =~ "palette_id"
     end
 
-    test "returns 400 for a blank palette_id", %{conn: conn} do
+    test "returns 400 for a blank palette_id on GET /api/v1/colors measured vectors",
+         %{conn: conn} do
       %{printer_profile: profile} = response_fixture()
 
       body =
@@ -369,7 +374,8 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
   end
 
   describe "GET /api/v1/printer_profiles/:printer_profile_id/colors" do
-    test "returns 404 for an unknown printer profile", %{conn: conn} do
+    test "returns 404 for an unknown printer profile on GET /api/v1/printer_profiles/:printer_profile_id/colors",
+         %{conn: conn} do
       body =
         conn
         |> get(~p"/api/v1/printer_profiles/999999/colors")
@@ -378,7 +384,8 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert body["errors"]["detail"] =~ "printer profile"
     end
 
-    test "returns 400 for a non-integer printer_profile_id", %{conn: conn} do
+    test "returns 400 for a non-integer printer_profile_id on GET /api/v1/printer_profiles/:printer_profile_id/colors",
+         %{conn: conn} do
       body =
         conn
         |> get(~p"/api/v1/printer_profiles/not-an-id/colors")
@@ -387,7 +394,8 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert body["errors"]["detail"] =~ "printer_profile_id"
     end
 
-    test "returns 400 for a non-positive printer_profile_id", %{conn: conn} do
+    test "returns 400 for a non-positive printer_profile_id on GET /api/v1/printer_profiles/:printer_profile_id/colors",
+         %{conn: conn} do
       body =
         conn
         |> get(~p"/api/v1/printer_profiles/0/colors")
@@ -877,7 +885,8 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
   end
 
   describe "GET /api/v1/printer_profiles/:printer_profile_id/metamer_pairs" do
-    test "returns 404 for an unknown printer profile", %{conn: conn} do
+    test "returns 404 for an unknown printer profile on GET /api/v1/printer_profiles/:printer_profile_id/metamer_pairs",
+         %{conn: conn} do
       body =
         conn
         |> get(~p"/api/v1/printer_profiles/999999/metamer_pairs")
@@ -886,7 +895,8 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert body["errors"]["detail"] =~ "printer profile"
     end
 
-    test "returns 400 for a non-integer printer_profile_id", %{conn: conn} do
+    test "returns 400 for a non-integer printer_profile_id on GET /api/v1/printer_profiles/:printer_profile_id/metamer_pairs",
+         %{conn: conn} do
       body =
         conn
         |> get(~p"/api/v1/printer_profiles/not-an-id/metamer_pairs")
@@ -895,7 +905,8 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert body["errors"]["detail"] =~ "printer_profile_id"
     end
 
-    test "returns 400 for a non-positive printer_profile_id", %{conn: conn} do
+    test "returns 400 for a non-positive printer_profile_id on GET /api/v1/printer_profiles/:printer_profile_id/metamer_pairs",
+         %{conn: conn} do
       body =
         conn
         |> get(~p"/api/v1/printer_profiles/-5/metamer_pairs")
