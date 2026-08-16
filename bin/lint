@@ -42,3 +42,8 @@ fi
 
 echo "Verifying mix format on the whole tree..."
 run_mix format --check-formatted
+
+if [ -n "${1:-}" ] && [ "${1}" = "--staged" ]; then
+  echo "Running test suite..."
+  run_mix test
+fi
