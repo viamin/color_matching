@@ -547,6 +547,47 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
                }
              ]
     end
+
+    test "keeps measured colors ahead of pair-only colors with unrelated fallback labels", %{
+      conn: conn
+    } do
+      %{palette: palette, pair: pair, printer_profile: printer_profile} =
+        printed_pair_classification_fixture()
+
+      assert {:ok, _unrelated_palette} =
+               Persistence.create_palette(%{
+                 name: "Early Fallback Pair Labels",
+                 colors: [
+                   %{hex_color: "#445566", sort_order: -1, display_label: "Fallback Pair Label"}
+                 ]
+               })
+
+      measured_color = Persistence.get_palette!(palette.id).colors |> List.first()
+
+      assert {:ok, _measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: measured_color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.3
+               })
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      body =
+        conn
+        |> get(~p"/api/v1/printer_profiles/#{printer_profile.id}/colors")
+        |> json_response(200)
+
+      assert Enum.map(body["colors"], & &1["hex"]) == ["#112233", "#445566"]
+      assert Enum.at(body["colors"], 1)["name"] == "Patch 2"
+    end
   end
 
   describe "GET /api/v1/printer_profiles/:printer_profile_id/metamer_pairs" do

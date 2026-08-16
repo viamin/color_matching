@@ -824,8 +824,8 @@ defmodule ColorMatching.Persistence do
           measurements_by_palette_color
         )
       )
-      |> Enum.sort_by(fn {sort_order, id, _entry} -> {sort_order, id} end)
-      |> Enum.map(fn {_sort_order, _id, entry} -> entry end)
+      |> Enum.sort_by(fn {bucket, sort_order, id, _entry} -> {bucket, sort_order, id} end)
+      |> Enum.map(fn {_bucket, _sort_order, _id, entry} -> entry end)
 
     {entries, MapSet.new(colors, &String.upcase(&1.hex_color))}
   end
@@ -843,6 +843,9 @@ defmodule ColorMatching.Persistence do
     label_color =
       canonical_label_color(colors, measured_color_ids, preferred_pair_color_ids, canonical_color)
 
+    sort_bucket =
+      profile_color_sort_bucket(colors, measured_color_ids, preferred_pair_color_ids)
+
     {responses, measurements} =
       Enum.reduce(colors, {%{}, %{}}, fn color, {response_acc, measurement_acc} ->
         {
@@ -851,7 +854,7 @@ defmodule ColorMatching.Persistence do
         }
       end)
 
-    {canonical_color.sort_order, canonical_color.id,
+    {sort_bucket, canonical_color.sort_order, canonical_color.id,
      %{
        name: palette_color_name(label_color),
        hex_color: canonical_color.hex_color,
@@ -1062,6 +1065,16 @@ defmodule ColorMatching.Persistence do
       prioritize_canonical_colors(colors, measured_color_ids)
     else
       prioritize_canonical_colors(colors, preferred_pair_color_ids)
+    end
+  end
+
+  # Keep colors with profile data ahead of pair-only colors, and keep pair
+  # source colors ahead of unrelated duplicate-hex fallbacks.
+  defp profile_color_sort_bucket(colors, measured_color_ids, preferred_pair_color_ids) do
+    cond do
+      Enum.any?(colors, &MapSet.member?(measured_color_ids, &1.id)) -> 0
+      Enum.any?(colors, &MapSet.member?(preferred_pair_color_ids, &1.id)) -> 1
+      true -> 2
     end
   end
 
