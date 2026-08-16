@@ -76,17 +76,8 @@ defmodule ColorMatchingWeb.ColorPaletteController do
           )
       })
     else
-      {:error, :missing_param, key} ->
-        bad_request(conn, "missing required parameter: #{key}")
-
-      {:error, :invalid_param, key} ->
-        bad_request(conn, "invalid #{key}: expected a positive integer")
-
-      {:error, :printer_profile_not_found} ->
-        not_found(conn, "printer profile not found")
-
-      {:error, :palette_not_found} ->
-        not_found(conn, "palette not found")
+      error ->
+        lookup_error(conn, error)
     end
   end
 
@@ -105,7 +96,7 @@ defmodule ColorMatchingWeb.ColorPaletteController do
         })
 
       error ->
-        profile_lookup_error(conn, error)
+        lookup_error(conn, error)
     end
   end
 
@@ -124,7 +115,7 @@ defmodule ColorMatchingWeb.ColorPaletteController do
         })
 
       error ->
-        profile_lookup_error(conn, error)
+        lookup_error(conn, error)
     end
   end
 
@@ -272,14 +263,17 @@ defmodule ColorMatchingWeb.ColorPaletteController do
 
   defp datetime_to_iso8601(%DateTime{} = datetime), do: DateTime.to_iso8601(datetime)
 
-  defp profile_lookup_error(conn, {:error, :missing_param, key}),
+  defp lookup_error(conn, {:error, :missing_param, key}),
     do: bad_request(conn, "missing required parameter: #{key}")
 
-  defp profile_lookup_error(conn, {:error, :invalid_param, key}),
+  defp lookup_error(conn, {:error, :invalid_param, key}),
     do: bad_request(conn, "invalid #{key}: expected a positive integer")
 
-  defp profile_lookup_error(conn, {:error, :printer_profile_not_found}),
+  defp lookup_error(conn, {:error, :printer_profile_not_found}),
     do: not_found(conn, "printer profile not found")
+
+  defp lookup_error(conn, {:error, :palette_not_found}),
+    do: not_found(conn, "palette not found")
 
   defp bad_request(conn, detail) do
     conn |> put_status(:bad_request) |> json(%{errors: %{detail: detail}})
