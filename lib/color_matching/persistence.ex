@@ -84,8 +84,9 @@ defmodule ColorMatching.Persistence do
   @spec list_profile_colors(PrinterProfile.t()) :: [map()]
   def list_profile_colors(%PrinterProfile{id: printer_profile_id} = printer_profile)
       when is_integer(printer_profile_id) do
-    pair_hexes = confirmed_metamer_pair_hexes(printer_profile)
-    preferred_pair_colors = pair_source_palette_colors(printer_profile)
+    confirmed_pairs = list_confirmed_metamer_pairs(printer_profile)
+    pair_hexes = confirmed_metamer_pair_hexes(confirmed_pairs)
+    preferred_pair_colors = pair_source_palette_colors(confirmed_pairs)
 
     {palette_entries, palette_hexes} =
       palette_color_entries(printer_profile_id, pair_hexes, preferred_pair_colors)
@@ -875,9 +876,8 @@ defmodule ColorMatching.Persistence do
 
   # One raw hex per distinct upcased hex among the profile's confirmed metamer
   # pairs so pair hexes deduplicate case-insensitively like palette colors.
-  defp confirmed_metamer_pair_hexes(printer_profile) do
-    printer_profile
-    |> list_confirmed_metamer_pairs()
+  defp confirmed_metamer_pair_hexes(confirmed_pairs) do
+    confirmed_pairs
     |> Enum.flat_map(&[&1.test_sheet_pair.color_a_hex, &1.test_sheet_pair.color_b_hex])
     |> Enum.group_by(&String.upcase/1)
     |> Enum.map(fn {_upcased_hex, hexes} -> Enum.min(hexes) end)
@@ -894,21 +894,17 @@ defmodule ColorMatching.Persistence do
     |> Repo.all()
   end
 
-  defp pair_source_palette_colors(%PrinterProfile{id: printer_profile_id}) do
+  defp pair_source_palette_colors([]), do: []
+
+  defp pair_source_palette_colors(confirmed_pairs) do
+    pair_ids = Enum.map(confirmed_pairs, & &1.test_sheet_pair_id)
+
     PaletteColor
     |> join(:inner, [color], sheet in TestSheet, on: sheet.palette_id == color.palette_id)
     |> join(:inner, [color, sheet], pair in TestSheetPair, on: pair.test_sheet_id == sheet.id)
-    |> join(:inner, [color, sheet, pair], classification in PrintedPairClassification,
-      on: classification.test_sheet_pair_id == pair.id
-    )
+    |> where([_color, _sheet, pair], pair.id in ^pair_ids)
     |> where(
-      [color, _sheet, _pair, classification],
-      classification.reproduction_profile_id == ^printer_profile_id and
-        classification.active == true and
-        classification.classification in ^PrintedPairClassification.metamer_classifications()
-    )
-    |> where(
-      [color, _sheet, pair, _classification],
+      [color, _sheet, pair],
       fragment(
         "upper(?) = upper(?) or upper(?) = upper(?)",
         color.hex_color,

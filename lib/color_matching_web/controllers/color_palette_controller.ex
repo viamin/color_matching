@@ -263,7 +263,7 @@ defmodule ColorMatchingWeb.ColorPaletteController do
     do: bad_request(conn, "missing required parameter: #{key}")
 
   defp printer_profile_error(conn, {:error, :invalid_param, key}),
-    do: bad_request(conn, "invalid #{key}: expected an integer")
+    do: bad_request(conn, "invalid #{key}: expected a positive integer")
 
   defp printer_profile_error(conn, {:error, :printer_profile_not_found}),
     do: not_found(conn, "printer profile not found")
