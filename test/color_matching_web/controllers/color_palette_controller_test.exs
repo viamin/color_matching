@@ -361,6 +361,39 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert dark_color["responses"]["green"]["source"] == "measurement"
     end
 
+    test "exposes measurement provenance fields when present", %{conn: conn} do
+      {:ok, profile} = profile_fixture("Provenance Fixture Printer", "Matte", "Pigment")
+
+      {:ok, palette} =
+        Persistence.create_palette(%{
+          name: "Provenance Fixture",
+          colors: [%{hex_color: "#111111", sort_order: 0, display_label: "Dark"}]
+        })
+
+      [dark] = Persistence.get_palette!(palette.id).colors
+      measured_at = ~U[2026-07-27 12:34:56.123456Z]
+
+      assert {:ok, _measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: dark.id,
+                 printer_profile_id: profile.id,
+                 light_source: "green",
+                 normalized_brightness: 0.3,
+                 measured_at: measured_at,
+                 test_run_id: "run-2026-07-27-a"
+               })
+
+      body =
+        conn
+        |> get(~p"/api/v1/colors?#{[printer_profile_id: profile.id, palette_id: palette.id]}")
+        |> json_response(200)
+
+      dark_color = Enum.find(body["colors"], &(&1["id"] == dark.id))
+
+      assert dark_color["responses"]["green"]["measured_at"] == DateTime.to_iso8601(measured_at)
+      assert dark_color["responses"]["green"]["test_run_id"] == "run-2026-07-27-a"
+    end
+
     test "returns 404 for an unknown palette", %{conn: conn} do
       %{printer_profile: profile} = response_fixture()
 

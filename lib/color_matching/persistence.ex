@@ -57,7 +57,7 @@ defmodule ColorMatching.Persistence do
           raw_value: number() | nil,
           raw_unit: String.t() | nil,
           measured_at: DateTime.t() | nil,
-          test_run_id: integer() | nil
+          test_run_id: String.t() | nil
         }
   @type response_details_by_source :: %{optional(String.t()) => response_detail()}
   @type profile_color_entry :: %{
