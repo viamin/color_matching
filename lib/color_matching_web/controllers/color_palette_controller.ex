@@ -256,7 +256,7 @@ defmodule ColorMatchingWeb.ColorPaletteController do
   defp datetime_to_iso8601(%DateTime{} = datetime), do: DateTime.to_iso8601(datetime)
 
   defp printer_profile_error(conn, {:error, :missing_param, key}),
-    do: bad_request(conn, "missing required query parameter: #{key}")
+    do: bad_request(conn, "missing required parameter: #{key}")
 
   defp printer_profile_error(conn, {:error, :invalid_param, key}),
     do: bad_request(conn, "invalid #{key}: expected an integer")

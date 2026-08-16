@@ -65,6 +65,7 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
         |> get(~p"/api/v1/colors")
         |> json_response(400)
 
+      assert body["errors"]["detail"] == "missing required parameter: printer_profile_id"
       assert body["errors"]["detail"] =~ "printer_profile_id"
     end
 
