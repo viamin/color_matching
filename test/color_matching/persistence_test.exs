@@ -2,6 +2,7 @@ defmodule ColorMatching.PersistenceTest do
   use ColorMatching.DataCase, async: false
 
   alias ColorMatching.{Palette, Persistence}
+  alias ColorMatching.Repo
 
   alias ColorMatching.Persistence.{
     IlluminantResponse,
