@@ -317,6 +317,36 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert unmeasured_color["responses"] == %{}
     end
 
+    test "prefers the confirmed pair's source palette label for pair-only colors", %{conn: conn} do
+      %{pair: pair, printer_profile: printer_profile} = printed_pair_classification_fixture()
+
+      assert {:ok, _unrelated_palette} =
+               Persistence.create_palette(%{
+                 name: "Unrelated Pair Labels",
+                 colors: [
+                   %{hex_color: "#445566", sort_order: -1, display_label: "Wrong Pair Label"}
+                 ]
+               })
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      body =
+        conn
+        |> get(~p"/api/v1/printer_profiles/#{printer_profile.id}/colors")
+        |> json_response(200)
+
+      pair_only_color = Enum.find(body["colors"], &(&1["hex"] == "#445566"))
+
+      assert pair_only_color["name"] == "Patch 2"
+      assert pair_only_color["responses"] == %{}
+    end
+
     test "names pair hexes that match no palette color after the hex itself", %{conn: conn} do
       %{palette: palette, printer_profile: printer_profile} =
         printed_pair_classification_fixture()

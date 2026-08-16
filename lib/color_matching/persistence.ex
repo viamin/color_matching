@@ -85,7 +85,10 @@ defmodule ColorMatching.Persistence do
   def list_profile_colors(%PrinterProfile{id: printer_profile_id} = printer_profile)
       when is_integer(printer_profile_id) do
     pair_hexes = confirmed_metamer_pair_hexes(printer_profile)
-    {palette_entries, palette_hexes} = palette_color_entries(printer_profile_id, pair_hexes)
+    preferred_pair_colors = pair_source_palette_colors(printer_profile_id, pair_hexes)
+
+    {palette_entries, palette_hexes} =
+      palette_color_entries(printer_profile_id, pair_hexes, preferred_pair_colors)
 
     palette_entries ++ pair_only_color_entries(pair_hexes, palette_hexes)
   end
@@ -788,14 +791,19 @@ defmodule ColorMatching.Persistence do
   # together with the set of upcased hexes they cover. Pair hexes also name
   # palette colors that lack measurements so those entries reuse the palette
   # display label instead of a bare hex.
-  defp palette_color_entries(printer_profile_id, pair_hexes) do
+  defp palette_color_entries(printer_profile_id, pair_hexes, preferred_pair_colors) do
     measured_colors = profile_palette_colors(printer_profile_id)
     measured_color_ids = MapSet.new(measured_colors, & &1.id)
+    preferred_pair_color_ids = MapSet.new(preferred_pair_colors, & &1.id)
 
     {responses_by_palette_color, measurements_by_palette_color} =
       grouped_response_records(measured_colors, printer_profile_id)
 
-    named_pair_colors = pair_hex_palette_colors(pair_hexes)
+    named_pair_colors =
+      preferred_pair_colors ++
+        Enum.reject(pair_hex_palette_colors(pair_hexes), fn color ->
+          MapSet.member?(preferred_pair_color_ids, color.id)
+        end)
 
     colors = Enum.uniq_by(measured_colors ++ named_pair_colors, & &1.id)
 
@@ -806,6 +814,7 @@ defmodule ColorMatching.Persistence do
         &profile_color_entry(
           &1,
           measured_color_ids,
+          preferred_pair_color_ids,
           responses_by_palette_color,
           measurements_by_palette_color
         )
@@ -819,10 +828,12 @@ defmodule ColorMatching.Persistence do
   defp profile_color_entry(
          {_hex_color, colors},
          measured_color_ids,
+         preferred_pair_color_ids,
          responses_by,
          measurements_by
        ) do
-    canonical_color = canonical_profile_color(colors, measured_color_ids)
+    canonical_color =
+      canonical_profile_color(colors, measured_color_ids, preferred_pair_color_ids)
 
     {responses, measurements} =
       Enum.reduce(colors, {%{}, %{}}, fn color, {response_acc, measurement_acc} ->
@@ -843,13 +854,12 @@ defmodule ColorMatching.Persistence do
   # When a confirmed pair hex matches an unrelated palette color, keep the
   # profile-backed color as canonical so labels and ordering come from the
   # actual working-set member rather than an incidental duplicate elsewhere.
-  defp canonical_profile_color(colors, measured_color_ids) do
+  # Pair-only colors use the confirmed pair's source palette before falling
+  # back to unrelated palette matches, preserving the sheet's intended label.
+  defp canonical_profile_color(colors, measured_color_ids, preferred_pair_color_ids) do
     colors
-    |> Enum.filter(&MapSet.member?(measured_color_ids, &1.id))
-    |> case do
-      [] -> colors
-      measured_colors -> measured_colors
-    end
+    |> prioritize_canonical_colors(measured_color_ids)
+    |> prioritize_canonical_colors(preferred_pair_color_ids)
     |> Enum.min_by(&{&1.sort_order, &1.id})
   end
 
@@ -880,6 +890,29 @@ defmodule ColorMatching.Persistence do
 
     PaletteColor
     |> where([color], fragment("upper(?)", color.hex_color) in ^upcased_hexes)
+    |> order_by([color], asc: color.sort_order, asc: color.id)
+    |> Repo.all()
+  end
+
+  defp pair_source_palette_colors(_printer_profile_id, []), do: []
+
+  defp pair_source_palette_colors(printer_profile_id, pair_hexes) do
+    upcased_hexes = Enum.map(pair_hexes, &String.upcase/1)
+
+    PaletteColor
+    |> join(:inner, [color], sheet in TestSheet, on: sheet.palette_id == color.palette_id)
+    |> join(:inner, [color, sheet], pair in TestSheetPair, on: pair.test_sheet_id == sheet.id)
+    |> join(:inner, [color, sheet, pair], classification in PrintedPairClassification,
+      on: classification.test_sheet_pair_id == pair.id
+    )
+    |> where(
+      [color, _sheet, _pair, classification],
+      classification.reproduction_profile_id == ^printer_profile_id and
+        classification.active == true and
+        classification.classification in ^PrintedPairClassification.metamer_classifications() and
+        fragment("upper(?)", color.hex_color) in ^upcased_hexes
+    )
+    |> distinct(true)
     |> order_by([color], asc: color.sort_order, asc: color.id)
     |> Repo.all()
   end
@@ -972,6 +1005,11 @@ defmodule ColorMatching.Persistence do
 
   defp compare_datetimes(%DateTime{} = left, %DateTime{} = right) do
     DateTime.compare(left, right)
+  end
+
+  defp prioritize_canonical_colors(colors, prioritized_ids) do
+    prioritized_colors = Enum.filter(colors, &MapSet.member?(prioritized_ids, &1.id))
+    if prioritized_colors == [], do: colors, else: prioritized_colors
   end
 
   defp detail_for_color(responses, measurements) do
