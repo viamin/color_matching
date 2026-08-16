@@ -348,6 +348,59 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert pair_only_color["responses"] == %{}
     end
 
+    test "ignores duplicate hex labels from other classified sheets that never used the pair hex", %{
+      conn: conn
+    } do
+      %{pair: pair, printer_profile: printer_profile} = printed_pair_classification_fixture()
+
+      assert {:ok, wrong_palette} =
+               Persistence.create_palette(%{
+                 name: "Wrong Classified Labels",
+                 colors: [
+                   %{hex_color: "#445566", sort_order: -1, display_label: "Wrong Classified Label"},
+                   %{hex_color: "#ABC123", sort_order: 0, display_label: "Other Patch"},
+                   %{hex_color: "#DEF456", sort_order: 1, display_label: "Another Patch"}
+                 ]
+               })
+
+      assert {:ok, wrong_sheet} =
+               Persistence.create_test_sheet(%{
+                 lookup_code: "PWDH-TEST",
+                 palette_id: wrong_palette.id,
+                 printer_profile_id: printer_profile.id,
+                 sheet_version: "2026-08-02",
+                 pairs: [%{row: 0, col: 0, color_a_hex: "#ABC123", color_b_hex: "#DEF456"}]
+               })
+
+      [wrong_pair] = wrong_sheet.pairs
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      assert {:ok, _other_metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: wrong_pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "blue",
+                 classification: "weak_metamer"
+               })
+
+      body =
+        conn
+        |> get(~p"/api/v1/printer_profiles/#{printer_profile.id}/colors")
+        |> json_response(200)
+
+      pair_only_color = Enum.find(body["colors"], &(&1["hex"] == "#445566"))
+
+      assert pair_only_color["name"] == "Patch 2"
+      assert pair_only_color["responses"] == %{}
+    end
+
     test "names pair hexes that match no palette color after the hex itself", %{conn: conn} do
       %{palette: palette, printer_profile: printer_profile} =
         printed_pair_classification_fixture()

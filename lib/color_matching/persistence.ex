@@ -85,7 +85,7 @@ defmodule ColorMatching.Persistence do
   def list_profile_colors(%PrinterProfile{id: printer_profile_id} = printer_profile)
       when is_integer(printer_profile_id) do
     pair_hexes = confirmed_metamer_pair_hexes(printer_profile)
-    preferred_pair_colors = pair_source_palette_colors(printer_profile_id, pair_hexes)
+    preferred_pair_colors = pair_source_palette_colors(printer_profile)
 
     {palette_entries, palette_hexes} =
       palette_color_entries(printer_profile_id, pair_hexes, preferred_pair_colors)
@@ -894,11 +894,7 @@ defmodule ColorMatching.Persistence do
     |> Repo.all()
   end
 
-  defp pair_source_palette_colors(_printer_profile_id, []), do: []
-
-  defp pair_source_palette_colors(printer_profile_id, pair_hexes) do
-    upcased_hexes = Enum.map(pair_hexes, &String.upcase/1)
-
+  defp pair_source_palette_colors(%PrinterProfile{id: printer_profile_id}) do
     PaletteColor
     |> join(:inner, [color], sheet in TestSheet, on: sheet.palette_id == color.palette_id)
     |> join(:inner, [color, sheet], pair in TestSheetPair, on: pair.test_sheet_id == sheet.id)
@@ -909,8 +905,17 @@ defmodule ColorMatching.Persistence do
       [color, _sheet, _pair, classification],
       classification.reproduction_profile_id == ^printer_profile_id and
         classification.active == true and
-        classification.classification in ^PrintedPairClassification.metamer_classifications() and
-        fragment("upper(?)", color.hex_color) in ^upcased_hexes
+        classification.classification in ^PrintedPairClassification.metamer_classifications()
+    )
+    |> where(
+      [color, _sheet, pair, _classification],
+      fragment(
+        "upper(?) = upper(?) or upper(?) = upper(?)",
+        color.hex_color,
+        pair.color_a_hex,
+        color.hex_color,
+        pair.color_b_hex
+      )
     )
     |> distinct(true)
     |> order_by([color], asc: color.sort_order, asc: color.id)
