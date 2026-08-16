@@ -207,6 +207,17 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert body["errors"]["detail"] =~ "palette"
     end
 
+    test "returns 400 for a non-integer palette_id", %{conn: conn} do
+      %{printer_profile: profile} = response_fixture()
+
+      body =
+        conn
+        |> get(~p"/api/v1/colors?#{[printer_profile_id: profile.id, palette_id: "abc"]}")
+        |> json_response(400)
+
+      assert body["errors"]["detail"] =~ "palette_id"
+    end
+
     test "returns 400 for a non-positive palette_id", %{conn: conn} do
       %{printer_profile: profile} = response_fixture()
 
