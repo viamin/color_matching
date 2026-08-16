@@ -1198,6 +1198,8 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
                ]
              })
 
+    palette = Persistence.get_palette!(palette.id)
+
     assert {:ok, printer_profile} =
              Persistence.create_printer_profile(%{
                printer_make_model: "Epson SureColor P900",
