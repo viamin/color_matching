@@ -212,7 +212,9 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
 
       body =
         conn
-        |> get(~p"/api/v1/colors?#{[printer_profile_id: printer_profile.id, palette_id: palette.id]}")
+        |> get(
+          ~p"/api/v1/colors?#{[printer_profile_id: printer_profile.id, palette_id: palette.id]}"
+        )
         |> json_response(200)
 
       assert Enum.map(body["colors"], & &1["hex"]) == ["#112233", "#445566", "#778899"]
