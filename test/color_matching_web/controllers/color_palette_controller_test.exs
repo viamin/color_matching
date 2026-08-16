@@ -87,6 +87,15 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert body["errors"]["detail"] =~ "printer_profile_id"
     end
 
+    test "returns 400 for a non-positive printer_profile_id", %{conn: conn} do
+      body =
+        conn
+        |> get(~p"/api/v1/colors?#{[printer_profile_id: 0]}")
+        |> json_response(400)
+
+      assert body["errors"]["detail"] =~ "printer_profile_id"
+    end
+
     test "returns colors with response vectors for a palette and profile", %{conn: conn} do
       %{palette: palette, printer_profile: profile, dark: dark} = response_fixture()
 
@@ -197,6 +206,17 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
 
       assert body["errors"]["detail"] =~ "palette"
     end
+
+    test "returns 400 for a non-positive palette_id", %{conn: conn} do
+      %{printer_profile: profile} = response_fixture()
+
+      body =
+        conn
+        |> get(~p"/api/v1/colors?#{[printer_profile_id: profile.id, palette_id: -1]}")
+        |> json_response(400)
+
+      assert body["errors"]["detail"] =~ "palette_id"
+    end
   end
 
   describe "GET /api/v1/printer_profiles/:printer_profile_id/colors" do
@@ -213,6 +233,15 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       body =
         conn
         |> get(~p"/api/v1/printer_profiles/not-an-id/colors")
+        |> json_response(400)
+
+      assert body["errors"]["detail"] =~ "printer_profile_id"
+    end
+
+    test "returns 400 for a non-positive printer_profile_id", %{conn: conn} do
+      body =
+        conn
+        |> get(~p"/api/v1/printer_profiles/0/colors")
         |> json_response(400)
 
       assert body["errors"]["detail"] =~ "printer_profile_id"
@@ -503,6 +532,15 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       body =
         conn
         |> get(~p"/api/v1/printer_profiles/not-an-id/metamer_pairs")
+        |> json_response(400)
+
+      assert body["errors"]["detail"] =~ "printer_profile_id"
+    end
+
+    test "returns 400 for a non-positive printer_profile_id", %{conn: conn} do
+      body =
+        conn
+        |> get(~p"/api/v1/printer_profiles/-5/metamer_pairs")
         |> json_response(400)
 
       assert body["errors"]["detail"] =~ "printer_profile_id"

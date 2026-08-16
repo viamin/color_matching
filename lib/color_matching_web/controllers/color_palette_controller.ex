@@ -159,16 +159,20 @@ defmodule ColorMatchingWeb.ColorPaletteController do
     end
   end
 
-  defp parse_integer(value, _key) when is_integer(value), do: {:ok, value}
+  defp parse_integer(value, key) when is_integer(value) do
+    if positive_integer?(value), do: {:ok, value}, else: {:error, :invalid_param, key}
+  end
 
   defp parse_integer(value, key) when is_binary(value) do
     case Integer.parse(String.trim(value)) do
-      {parsed, ""} -> {:ok, parsed}
+      {parsed, ""} when parsed > 0 -> {:ok, parsed}
       _ -> {:error, :invalid_param, key}
     end
   end
 
   defp parse_integer(_value, key), do: {:error, :invalid_param, key}
+
+  defp positive_integer?(value), do: value > 0
 
   # ---------------------------------------------------------------------------
   # JSON rendering
