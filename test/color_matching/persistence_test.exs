@@ -1030,7 +1030,11 @@ defmodule ColorMatching.PersistenceTest do
                Persistence.create_palette(%{
                  name: "Wrong Classified Labels",
                  colors: [
-                   %{hex_color: "#445566", sort_order: -1, display_label: "Wrong Classified Label"},
+                   %{
+                     hex_color: "#445566",
+                     sort_order: -1,
+                     display_label: "Wrong Classified Label"
+                   },
                    %{hex_color: "#ABC123", sort_order: 0, display_label: "Other Patch"},
                    %{hex_color: "#DEF456", sort_order: 1, display_label: "Another Patch"}
                  ]
