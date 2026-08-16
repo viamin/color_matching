@@ -654,6 +654,58 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
              ]
     end
 
+    test "names pair-only colors from lowercase palette matches in the profile color API", %{
+      conn: conn
+    } do
+      %{palette: palette, printer_profile: printer_profile} =
+        printed_pair_classification_fixture()
+
+      assert {:ok, _case_palette} =
+               Persistence.create_palette(%{
+                 name: "Lowercase Pair API Palette",
+                 colors: [%{hex_color: "#abcdef", sort_order: 0, display_label: "Lower Pair"}]
+               })
+
+      assert {:ok, sheet} =
+               Persistence.create_test_sheet(%{
+                 lookup_code: "PWDJ-TEST",
+                 palette_id: palette.id,
+                 printer_profile_id: printer_profile.id,
+                 sheet_version: "2026-08-01",
+                 pairs: [%{row: 1, col: 0, color_a_hex: "#ABCDEF", color_b_hex: "#FEDCBA"}]
+               })
+
+      [case_pair] = sheet.pairs
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: case_pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "weak_metamer"
+               })
+
+      body =
+        conn
+        |> get(~p"/api/v1/printer_profiles/#{printer_profile.id}/colors")
+        |> json_response(200)
+
+      assert body["colors"] == [
+               %{
+                 "hex" => "#abcdef",
+                 "name" => "Lower Pair",
+                 "responses" => %{},
+                 "rgb" => %{"b" => 239, "g" => 205, "r" => 171}
+               },
+               %{
+                 "hex" => "#FEDCBA",
+                 "name" => "#FEDCBA",
+                 "responses" => %{},
+                 "rgb" => %{"b" => 186, "g" => 220, "r" => 254}
+               }
+             ]
+    end
+
     test "prefers the confirmed pair's source palette label for pair-only colors", %{conn: conn} do
       %{pair: pair, printer_profile: printer_profile} = printed_pair_classification_fixture()
 
