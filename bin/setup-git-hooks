@@ -39,7 +39,7 @@ else
     fi
 
     echo "Running test suite fallback..."
-    if ! run_mix test; then
+    if ! MIX_ENV=test run_mix test; then
         echo "Error: test suite failed."
         exit 1
     fi

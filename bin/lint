@@ -23,6 +23,10 @@ run_mix() {
   "${mix_cmd[@]}" "$@"
 }
 
+run_mix_test() {
+  MIX_ENV=test "${mix_cmd[@]}" test
+}
+
 ensure_mix_bootstrap() {
   archives="$(run_mix archive 2>/dev/null || true)"
 
@@ -62,5 +66,5 @@ run_mix format --check-formatted
 
 if [ -n "${1:-}" ] && [ "${1}" = "--staged" ]; then
   echo "Running test suite..."
-  run_mix test
+  run_mix_test
 fi
