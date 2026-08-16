@@ -198,7 +198,7 @@ defmodule ColorMatchingWeb.ColorPaletteController do
 
     %{
       id: color.id,
-      name: color.display_label,
+      name: palette_color_name(color),
       hex: color.hex_color,
       rgb: rgb_json(color.hex_color),
       palette_id: color.palette_id,
@@ -230,6 +230,13 @@ defmodule ColorMatchingWeb.ColorPaletteController do
       classified_at: datetime_to_iso8601(classification.inserted_at)
     }
   end
+
+  defp palette_color_name(%PaletteColor{display_label: display_label, hex_color: hex_color})
+       when is_binary(display_label) do
+    if String.trim(display_label) == "", do: hex_color, else: display_label
+  end
+
+  defp palette_color_name(%PaletteColor{hex_color: hex_color}), do: hex_color
 
   defp palette_name(%ColorMatching.Persistence.Palette{name: name}), do: name
   defp palette_name(_palette), do: nil

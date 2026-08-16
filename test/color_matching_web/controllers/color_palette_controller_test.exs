@@ -162,6 +162,54 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert length(body["colors"]) == length(palette_a.colors) + 1
     end
 
+    test "falls back to the hex when a palette color has no display label", %{conn: conn} do
+      {:ok, profile} = profile_fixture("Unnamed Palette API Printer", "Matte", "Pigment")
+
+      {:ok, palette} =
+        Persistence.create_palette(%{
+          name: "Unnamed Palette API",
+          colors: [%{hex_color: "#ABCDEF", sort_order: 0}]
+        })
+
+      [color] = Persistence.get_palette!(palette.id).colors
+
+      assert {:ok, _measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.5
+               })
+
+      body =
+        conn
+        |> get(~p"/api/v1/colors?#{[printer_profile_id: profile.id, palette_id: palette.id]}")
+        |> json_response(200)
+
+      assert body["colors"] == [
+               %{
+                 "hex" => "#ABCDEF",
+                 "id" => color.id,
+                 "name" => "#ABCDEF",
+                 "palette_id" => palette.id,
+                 "palette_name" => palette.name,
+                 "responses" => %{
+                   "white" => %{
+                     "apparent_brightness" => nil,
+                     "brightness" => 0.5,
+                     "measured_at" => nil,
+                     "raw_unit" => nil,
+                     "raw_value" => nil,
+                     "source" => "measurement",
+                     "test_run_id" => nil
+                   }
+                 },
+                 "rgb" => %{"b" => 239, "g" => 205, "r" => 171},
+                 "sort_order" => 0
+               }
+             ]
+    end
+
     test "human-entered response wins over instrument measurement for a light source", %{
       conn: conn
     } do
