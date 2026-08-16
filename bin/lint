@@ -15,8 +15,8 @@ if command -v mix >/dev/null 2>&1; then
 elif command -v mise >/dev/null 2>&1; then
   mix_cmd=(mise exec -- mix)
 else
-  echo "Warning: mix not available, skipping Elixir formatting checks"
-  exit 0
+  echo "Error: neither mix nor mise is available. Install the Elixir toolchain before linting."
+  exit 1
 fi
 
 run_mix() {
