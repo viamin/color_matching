@@ -840,6 +840,9 @@ defmodule ColorMatching.Persistence do
     canonical_color =
       canonical_profile_color(colors, measured_color_ids, preferred_pair_color_ids)
 
+    label_color =
+      canonical_label_color(colors, measured_color_ids, preferred_pair_color_ids, canonical_color)
+
     {responses, measurements} =
       Enum.reduce(colors, {%{}, %{}}, fn color, {response_acc, measurement_acc} ->
         {
@@ -850,7 +853,7 @@ defmodule ColorMatching.Persistence do
 
     {canonical_color.sort_order, canonical_color.id,
      %{
-       name: palette_color_name(canonical_color),
+       name: palette_color_name(label_color),
        hex_color: canonical_color.hex_color,
        response_details: detail_for_color(responses, measurements)
      }}
@@ -866,6 +869,34 @@ defmodule ColorMatching.Persistence do
     |> prioritize_canonical_colors(measured_color_ids)
     |> prioritize_canonical_colors(preferred_pair_color_ids)
     |> Enum.min_by(&{blank_display_label?(&1.display_label), &1.sort_order, &1.id})
+  end
+
+  # Preserve ordering and hex ownership from the profile-backed/source-backed
+  # canonical color, but avoid degrading to a bare hex when an equivalent
+  # duplicate elsewhere supplies the only usable display label.
+  defp canonical_label_color(colors, measured_color_ids, preferred_pair_color_ids, fallback_color) do
+    colors
+    |> prioritize_canonical_colors(measured_color_ids)
+    |> prioritize_canonical_colors(preferred_pair_color_ids)
+    |> preferred_label_candidate()
+    |> case do
+      nil ->
+        colors
+        |> preferred_label_candidate()
+        |> Kernel.||(fallback_color)
+
+      color ->
+        color
+    end
+  end
+
+  defp preferred_label_candidate(colors) do
+    colors
+    |> Enum.reject(&blank_display_label?(&1.display_label))
+    |> case do
+      [] -> nil
+      labeled_colors -> Enum.min_by(labeled_colors, &{&1.sort_order, &1.id})
+    end
   end
 
   # Confirmed-pair hexes with no palette color at all still belong in the

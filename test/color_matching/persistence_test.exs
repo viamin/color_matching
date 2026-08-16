@@ -1053,6 +1053,51 @@ defmodule ColorMatching.PersistenceTest do
       assert pair_only_entry.name == "Patch 2"
     end
 
+    test "falls back to another duplicate label when the confirmed pair source label is blank" do
+      %{palette: palette, pair: pair, printer_profile: printer_profile} =
+        printed_pair_classification_fixture()
+
+      source_pair_color =
+        Enum.find(palette.colors, &(&1.hex_color == "#445566"))
+
+      assert {:ok, _} =
+               Persistence.create_palette(%{
+                 name: "Fallback Pair Labels",
+                 colors: [
+                   %{hex_color: "#445566", sort_order: -1, display_label: "Fallback Pair Label"}
+                 ]
+               })
+
+      assert {:ok, _} =
+               source_pair_color
+               |> Ecto.Changeset.change(display_label: "   ")
+               |> Repo.update()
+
+      measured_color = Persistence.get_palette!(palette.id).colors |> List.first()
+
+      assert {:ok, _measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: measured_color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.3
+               })
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      [measured_entry, pair_only_entry] = Persistence.list_profile_colors(printer_profile)
+
+      assert measured_entry.hex_color == "#112233"
+      assert pair_only_entry.hex_color == "#445566"
+      assert pair_only_entry.name == "Fallback Pair Label"
+    end
+
     test "keeps the confirmed pair label when other classified sheets contain duplicate hexes" do
       %{palette: palette, pair: pair, printer_profile: printer_profile} =
         printed_pair_classification_fixture()
