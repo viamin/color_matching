@@ -186,6 +186,40 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert length(body["colors"]) == length(palette_a.colors) + 1
     end
 
+    test "keeps the palette route scoped to palette membership even when the profile has pair-only colors",
+         %{conn: conn} do
+      %{palette: palette, printer_profile: printer_profile} =
+        printed_pair_classification_fixture()
+
+      assert {:ok, sheet} =
+               Persistence.create_test_sheet(%{
+                 lookup_code: "PWDZ-TEST",
+                 palette_id: palette.id,
+                 printer_profile_id: printer_profile.id,
+                 sheet_version: "2026-08-03",
+                 pairs: [%{row: 1, col: 0, color_a_hex: "#ABCDEF", color_b_hex: "#FEDCBA"}]
+               })
+
+      [pair] = sheet.pairs
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      body =
+        conn
+        |> get(~p"/api/v1/colors?#{[printer_profile_id: printer_profile.id, palette_id: palette.id]}")
+        |> json_response(200)
+
+      assert Enum.map(body["colors"], & &1["hex"]) == ["#112233", "#445566", "#778899"]
+      refute Enum.any?(body["colors"], &(&1["hex"] == "#ABCDEF"))
+      refute Enum.any?(body["colors"], &(&1["hex"] == "#FEDCBA"))
+    end
+
     test "falls back to the hex when a palette color has no display label", %{conn: conn} do
       {:ok, profile} = profile_fixture("Unnamed Palette API Printer", "Matte", "Pigment")
 
@@ -1077,19 +1111,21 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
     [dark, light] = palette.colors
 
     Enum.each(palette.colors, fn color ->
-      Persistence.create_illuminant_measurement(%{
-        palette_color_id: color.id,
-        printer_profile_id: profile.id,
-        light_source: "white",
-        normalized_brightness: if(color.hex_color == "#111111", do: 0.1, else: 0.9)
-      })
+      assert {:ok, _measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: profile.id,
+                 light_source: "white",
+                 normalized_brightness: if(color.hex_color == "#111111", do: 0.1, else: 0.9)
+               })
 
-      Persistence.create_illuminant_measurement(%{
-        palette_color_id: color.id,
-        printer_profile_id: profile.id,
-        light_source: "red",
-        normalized_brightness: if(color.hex_color == "#111111", do: 0.9, else: 0.1)
-      })
+      assert {:ok, _measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: profile.id,
+                 light_source: "red",
+                 normalized_brightness: if(color.hex_color == "#111111", do: 0.9, else: 0.1)
+               })
     end)
 
     %{palette: palette, printer_profile: profile, dark: dark, light: light}
