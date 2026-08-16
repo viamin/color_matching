@@ -1199,6 +1199,19 @@ defmodule ColorMatching.PersistenceTest do
                    end
     end
 
+    test "raises when any response vector color is unpersisted" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert_raise ArgumentError,
+                   "response_vectors/2 requires persisted palette colors with hex colors",
+                   fn ->
+                     Persistence.response_vectors(
+                       [color, %PaletteColor{hex_color: "#445566", sort_order: 1}],
+                       printer_profile
+                     )
+                   end
+    end
+
     test "raises when building response details for an unpersisted printer profile" do
       %{color: color} = persisted_measurement_fixture()
 

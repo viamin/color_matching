@@ -687,18 +687,22 @@ defmodule ColorMatching.Persistence do
   @spec response_vectors([PaletteColor.t()], PrinterProfile.t()) :: [ResponseVector.t()]
   def response_vectors(palette_colors, %PrinterProfile{id: printer_profile_id})
       when is_list(palette_colors) and is_integer(printer_profile_id) do
-    {responses_by_palette_color, measurements_by_palette_color} =
-      grouped_response_records(palette_colors, printer_profile_id)
+    if Enum.all?(palette_colors, &persisted_palette_color?/1) do
+      {responses_by_palette_color, measurements_by_palette_color} =
+        grouped_response_records(palette_colors, printer_profile_id)
 
-    Enum.map(
-      palette_colors,
-      &response_vector_from_records(
-        &1,
-        printer_profile_id,
-        Map.get(responses_by_palette_color, &1.id, %{}),
-        Map.get(measurements_by_palette_color, &1.id, %{})
+      Enum.map(
+        palette_colors,
+        &response_vector_from_records(
+          &1,
+          printer_profile_id,
+          Map.get(responses_by_palette_color, &1.id, %{}),
+          Map.get(measurements_by_palette_color, &1.id, %{})
+        )
       )
-    )
+    else
+      raise ArgumentError, "response_vectors/2 requires persisted palette colors with hex colors"
+    end
   end
 
   def response_vectors(_palette_colors, %PrinterProfile{}) do
@@ -930,6 +934,12 @@ defmodule ColorMatching.Persistence do
   end
 
   defp blank_display_label?(_display_label), do: true
+
+  defp persisted_palette_color?(%PaletteColor{id: id, hex_color: hex_color}) do
+    is_integer(id) and is_binary(hex_color)
+  end
+
+  defp persisted_palette_color?(_palette_color), do: false
 
   defp profile_palette_colors(printer_profile_id) do
     PaletteColor
