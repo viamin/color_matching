@@ -819,6 +819,46 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       end
     end
 
+    test "does not borrow an unrelated palette label for a pair-only color", %{conn: conn} do
+      %{palette: palette, printer_profile: printer_profile} =
+        printed_pair_classification_fixture()
+
+      assert {:ok, _unrelated_palette} =
+               Persistence.create_palette(%{
+                 name: "Unrelated Pair-Only Label",
+                 colors: [%{hex_color: "#FEDCBA", sort_order: -1, display_label: "Wrong Label"}]
+               })
+
+      assert {:ok, sheet} =
+               Persistence.create_test_sheet(%{
+                 lookup_code: "PWDB-TEST",
+                 palette_id: palette.id,
+                 printer_profile_id: printer_profile.id,
+                 sheet_version: "2026-08-01",
+                 pairs: [%{row: 1, col: 0, color_a_hex: "#ABCDEF", color_b_hex: "#FEDCBA"}]
+               })
+
+      [pair] = sheet.pairs
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      body =
+        conn
+        |> get(~p"/api/v1/printer_profiles/#{printer_profile.id}/colors")
+        |> json_response(200)
+
+      pair_only_color = Enum.find(body["colors"], &(&1["hex"] == "#FEDCBA"))
+
+      assert pair_only_color["name"] == "#FEDCBA"
+      assert pair_only_color["responses"] == %{}
+    end
+
     test "falls back to the hex when a profile color has no display label", %{conn: conn} do
       {:ok, profile} = profile_fixture("Unnamed API Printer", "Matte", "Pigment")
 

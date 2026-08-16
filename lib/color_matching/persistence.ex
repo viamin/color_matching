@@ -847,13 +847,12 @@ defmodule ColorMatching.Persistence do
     {responses_by_palette_color, measurements_by_palette_color} =
       grouped_response_records(measured_colors, printer_profile_id)
 
-    named_pair_colors =
-      preferred_pair_colors ++
-        Enum.reject(pair_hex_palette_colors(pair_hexes), fn color ->
-          MapSet.member?(preferred_pair_color_ids, color.id)
-        end)
+    case_variant_pair_colors =
+      pair_hex_case_variant_palette_colors(pair_hexes)
+      |> Enum.reject(&MapSet.member?(preferred_pair_color_ids, &1.id))
 
-    colors = Enum.uniq_by(measured_colors ++ named_pair_colors, & &1.id)
+    colors =
+      Enum.uniq_by(measured_colors ++ preferred_pair_colors ++ case_variant_pair_colors, & &1.id)
 
     entries =
       colors
@@ -965,16 +964,15 @@ defmodule ColorMatching.Persistence do
     |> Enum.map(fn {_upcased_hex, hexes} -> Enum.min(hexes) end)
   end
 
-  defp pair_hex_palette_colors([]), do: []
+  defp pair_hex_case_variant_palette_colors([]), do: []
 
-  defp pair_hex_palette_colors(pair_hexes) do
-    upcased_hexes =
-      pair_hexes
-      |> Enum.map(&String.upcase/1)
-      |> Enum.uniq()
+  defp pair_hex_case_variant_palette_colors(pair_hexes) do
+    exact_hexes = MapSet.new(pair_hexes)
+    upcased_hexes = MapSet.new(pair_hexes, &String.upcase/1)
 
     PaletteColor
-    |> where([color], fragment("upper(?)", color.hex_color) in ^upcased_hexes)
+    |> where([color], fragment("upper(?)", color.hex_color) in ^MapSet.to_list(upcased_hexes))
+    |> where([color], color.hex_color not in ^MapSet.to_list(exact_hexes))
     |> order_by([color], asc: color.sort_order, asc: color.id)
     |> Repo.all()
   end
