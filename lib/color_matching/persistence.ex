@@ -353,11 +353,25 @@ defmodule ColorMatching.Persistence do
   @spec list_confirmed_metamer_pairs(PrinterProfile.t()) :: [PrintedPairClassification.t()]
   def list_confirmed_metamer_pairs(%PrinterProfile{id: printer_profile_id})
       when is_integer(printer_profile_id) do
-    list_printed_pair_classifications(%{
-      reproduction_profile_id: printer_profile_id,
-      active: true
-    })
-    |> Enum.filter(&(&1.classification in PrintedPairClassification.metamer_classifications()))
+    PrintedPairClassification
+    |> join(:inner, [classification], pair in TestSheetPair,
+      on: pair.id == classification.test_sheet_pair_id
+    )
+    |> where(
+      [classification, _pair],
+      classification.reproduction_profile_id == ^printer_profile_id and
+        classification.active == true and
+        classification.classification in ^PrintedPairClassification.metamer_classifications()
+    )
+    |> order_by([classification, pair],
+      asc: pair.pair_id,
+      asc: classification.illuminant,
+      desc: classification.inserted_at,
+      desc: classification.id
+    )
+    |> select([classification, _pair], classification)
+    |> Repo.all()
+    |> Repo.preload([:reproduction_profile, :test_sheet_pair])
   end
 
   def list_confirmed_metamer_pairs(%PrinterProfile{}) do
@@ -730,6 +744,8 @@ defmodule ColorMatching.Persistence do
   @spec grouped_response_records([PaletteColor.t()], integer()) ::
           {%{optional(integer()) => %{String.t() => IlluminantResponse.t()}},
            %{optional(integer()) => %{String.t() => IlluminantMeasurement.t()}}}
+  defp grouped_response_records([], _printer_profile_id), do: {%{}, %{}}
+
   defp grouped_response_records(palette_colors, printer_profile_id) do
     palette_color_ids = Enum.map(palette_colors, & &1.id)
 
