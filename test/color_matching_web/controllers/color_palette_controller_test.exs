@@ -810,6 +810,46 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
 
       assert body["metamer_pairs"] == []
     end
+
+    test "returns the latest active metamer classification after metamer-to-metamer reclassification",
+         %{conn: conn} do
+      %{pair: pair, printer_profile: printer_profile} = printed_pair_classification_fixture()
+
+      assert {:ok, _first_metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer",
+                 notes: "Initial review"
+               })
+
+      assert {:ok, latest_metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "weak_metamer",
+                 notes: "Refined after second review"
+               })
+
+      body =
+        conn
+        |> get(~p"/api/v1/printer_profiles/#{printer_profile.id}/metamer_pairs")
+        |> json_response(200)
+
+      assert body["metamer_pairs"] == [
+               %{
+                 "pair_id" => pair.pair_id,
+                 "color_a_hex" => pair.color_a_hex,
+                 "color_b_hex" => pair.color_b_hex,
+                 "illuminant" => "lps",
+                 "classification" => "weak_metamer",
+                 "notes" => "Refined after second review",
+                 "classified_at" => DateTime.to_iso8601(latest_metamer.inserted_at)
+               }
+             ]
+    end
   end
 
   # ---------------------------------------------------------------------------
