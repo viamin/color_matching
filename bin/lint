@@ -85,6 +85,9 @@ fi
 echo "Verifying mix format on the whole tree..."
 run_mix format --check-formatted
 
+echo "Running Credo..."
+run_mix credo
+
 if [ -n "${1:-}" ] && [ "${1}" = "--staged" ]; then
   echo "Running test suite..."
   run_mix_test

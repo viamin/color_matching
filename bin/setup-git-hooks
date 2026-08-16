@@ -76,6 +76,12 @@ else
         exit 1
     fi
 
+    echo "Running Credo fallback..."
+    if ! run_mix credo; then
+        echo "Error: Credo failed."
+        exit 1
+    fi
+
     echo "Running test suite fallback..."
     if ! MIX_ENV=test run_mix test; then
         echo "Error: test suite failed."
