@@ -96,6 +96,15 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert body["errors"]["detail"] =~ "printer_profile_id"
     end
 
+    test "returns 400 for a blank printer_profile_id", %{conn: conn} do
+      body =
+        conn
+        |> get(~p"/api/v1/colors?#{[printer_profile_id: "   "]}")
+        |> json_response(400)
+
+      assert body["errors"]["detail"] =~ "printer_profile_id"
+    end
+
     test "returns colors with response vectors for a palette and profile", %{conn: conn} do
       %{palette: palette, printer_profile: profile, dark: dark} = response_fixture()
 
@@ -224,6 +233,17 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       body =
         conn
         |> get(~p"/api/v1/colors?#{[printer_profile_id: profile.id, palette_id: -1]}")
+        |> json_response(400)
+
+      assert body["errors"]["detail"] =~ "palette_id"
+    end
+
+    test "returns 400 for a blank palette_id", %{conn: conn} do
+      %{printer_profile: profile} = response_fixture()
+
+      body =
+        conn
+        |> get(~p"/api/v1/colors?#{[printer_profile_id: profile.id, palette_id: "   "]}")
         |> json_response(400)
 
       assert body["errors"]["detail"] =~ "palette_id"
