@@ -840,19 +840,22 @@ defmodule ColorMatching.Persistence do
   # palette colors that lack measurements so those entries reuse the palette
   # display label instead of a bare hex.
   defp palette_color_entries(printer_profile_id, pair_hexes, preferred_pair_colors) do
-    measured_colors = profile_palette_colors(printer_profile_id)
-    measured_color_ids = MapSet.new(measured_colors, & &1.id)
+    profile_backed_colors = profile_palette_colors(printer_profile_id)
+    profile_backed_color_ids = MapSet.new(profile_backed_colors, & &1.id)
     preferred_pair_color_ids = MapSet.new(preferred_pair_colors, & &1.id)
 
     {responses_by_palette_color, measurements_by_palette_color} =
-      grouped_response_records(measured_colors, printer_profile_id)
+      grouped_response_records(profile_backed_colors, printer_profile_id)
 
     case_variant_pair_colors =
       pair_hex_case_variant_palette_colors(pair_hexes)
       |> Enum.reject(&MapSet.member?(preferred_pair_color_ids, &1.id))
 
     colors =
-      Enum.uniq_by(measured_colors ++ preferred_pair_colors ++ case_variant_pair_colors, & &1.id)
+      Enum.uniq_by(
+        profile_backed_colors ++ preferred_pair_colors ++ case_variant_pair_colors,
+        & &1.id
+      )
 
     entries =
       colors
@@ -860,7 +863,7 @@ defmodule ColorMatching.Persistence do
       |> Enum.map(
         &profile_color_entry(
           &1,
-          measured_color_ids,
+          profile_backed_color_ids,
           preferred_pair_color_ids,
           responses_by_palette_color,
           measurements_by_palette_color
@@ -874,19 +877,24 @@ defmodule ColorMatching.Persistence do
 
   defp profile_color_entry(
          {_hex_color, colors},
-         measured_color_ids,
+         profile_backed_color_ids,
          preferred_pair_color_ids,
          responses_by,
          measurements_by
        ) do
     canonical_color =
-      canonical_profile_color(colors, measured_color_ids, preferred_pair_color_ids)
+      canonical_profile_color(colors, profile_backed_color_ids, preferred_pair_color_ids)
 
     label_color =
-      canonical_label_color(colors, measured_color_ids, preferred_pair_color_ids, canonical_color)
+      canonical_label_color(
+        colors,
+        profile_backed_color_ids,
+        preferred_pair_color_ids,
+        canonical_color
+      )
 
     sort_bucket =
-      profile_color_sort_bucket(colors, measured_color_ids, preferred_pair_color_ids)
+      profile_color_sort_bucket(colors, profile_backed_color_ids, preferred_pair_color_ids)
 
     {responses, measurements} =
       Enum.reduce(colors, {%{}, %{}}, fn color, {response_acc, measurement_acc} ->
@@ -909,9 +917,9 @@ defmodule ColorMatching.Persistence do
   # actual working-set member rather than an incidental duplicate elsewhere.
   # Pair-only colors use the confirmed pair's source palette before falling
   # back to unrelated palette matches, preserving the sheet's intended label.
-  defp canonical_profile_color(colors, measured_color_ids, preferred_pair_color_ids) do
+  defp canonical_profile_color(colors, profile_backed_color_ids, preferred_pair_color_ids) do
     colors
-    |> canonical_candidate_colors(measured_color_ids, preferred_pair_color_ids)
+    |> canonical_candidate_colors(profile_backed_color_ids, preferred_pair_color_ids)
     |> Enum.min_by(&{&1.sort_order, &1.id})
   end
 
@@ -919,13 +927,18 @@ defmodule ColorMatching.Persistence do
   # backed colors may borrow a duplicate label when their own representative is
   # blank, but pair-only colors should fall back to the hex rather than an
   # unrelated palette label.
-  defp canonical_label_color(colors, measured_color_ids, preferred_pair_color_ids, fallback_color) do
+  defp canonical_label_color(
+         colors,
+         profile_backed_color_ids,
+         preferred_pair_color_ids,
+         fallback_color
+       ) do
     candidate_colors =
-      canonical_candidate_colors(colors, measured_color_ids, preferred_pair_color_ids)
+      canonical_candidate_colors(colors, profile_backed_color_ids, preferred_pair_color_ids)
 
     case preferred_label_candidate(candidate_colors) do
       nil ->
-        if Enum.any?(candidate_colors, &MapSet.member?(measured_color_ids, &1.id)) do
+        if Enum.any?(candidate_colors, &MapSet.member?(profile_backed_color_ids, &1.id)) do
           preferred_label_candidate(colors) || fallback_color
         else
           fallback_color
@@ -1112,9 +1125,9 @@ defmodule ColorMatching.Persistence do
   # primary representatives for a duplicated hex. When a duplicated hex exists
   # only because of a confirmed pair, prefer the pair's source palette color
   # before falling back to unrelated palette duplicates.
-  defp canonical_candidate_colors(colors, measured_color_ids, preferred_pair_color_ids) do
-    if Enum.any?(colors, &MapSet.member?(measured_color_ids, &1.id)) do
-      prioritize_canonical_colors(colors, measured_color_ids)
+  defp canonical_candidate_colors(colors, profile_backed_color_ids, preferred_pair_color_ids) do
+    if Enum.any?(colors, &MapSet.member?(profile_backed_color_ids, &1.id)) do
+      prioritize_canonical_colors(colors, profile_backed_color_ids)
     else
       prioritize_canonical_colors(colors, preferred_pair_color_ids)
     end
@@ -1122,9 +1135,9 @@ defmodule ColorMatching.Persistence do
 
   # Keep colors with profile data ahead of pair-only colors, and keep pair
   # source colors ahead of unrelated duplicate-hex fallbacks.
-  defp profile_color_sort_bucket(colors, measured_color_ids, preferred_pair_color_ids) do
+  defp profile_color_sort_bucket(colors, profile_backed_color_ids, preferred_pair_color_ids) do
     cond do
-      Enum.any?(colors, &MapSet.member?(measured_color_ids, &1.id)) -> 0
+      Enum.any?(colors, &MapSet.member?(profile_backed_color_ids, &1.id)) -> 0
       Enum.any?(colors, &MapSet.member?(preferred_pair_color_ids, &1.id)) -> 1
       true -> 2
     end
