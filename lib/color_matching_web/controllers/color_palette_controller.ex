@@ -201,7 +201,7 @@ defmodule ColorMatchingWeb.ColorPaletteController do
 
   defp profile_color_json(color) do
     %{
-      name: color.name,
+      name: profile_color_name(color),
       hex: color.hex_color,
       rgb: rgb_json(color.hex_color),
       responses: responses_json(color.response_details)
@@ -228,6 +228,12 @@ defmodule ColorMatchingWeb.ColorPaletteController do
   end
 
   defp palette_color_name(%PaletteColor{hex_color: hex_color}), do: hex_color
+
+  defp profile_color_name(%{name: name, hex_color: hex_color}) when is_binary(name) do
+    if String.trim(name) == "", do: hex_color, else: name
+  end
+
+  defp profile_color_name(%{hex_color: hex_color}), do: hex_color
 
   defp palette_name(%ColorMatching.Persistence.Palette{name: name}), do: name
   defp palette_name(_palette), do: nil
