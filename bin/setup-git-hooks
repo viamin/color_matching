@@ -70,6 +70,21 @@ else
 
     ensure_mix_bootstrap
 
+    staged_files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ex|exs)$' || true)
+
+    if [ -n "${staged_files}" ]; then
+        echo "Formatting staged Elixir files in fallback..."
+        while IFS= read -r file; do
+            [ -n "${file}" ] || continue
+            run_mix format "${file}"
+            git add "${file}"
+        done <<STAGED_FILES
+${staged_files}
+STAGED_FILES
+    else
+        echo "No staged Elixir files to format in fallback."
+    fi
+
     echo "Running formatter fallback..."
     if ! run_mix format --check-formatted; then
         echo "Error: formatting check failed."
