@@ -1454,7 +1454,7 @@ defmodule ColorMatching.PersistenceTest do
       %{color: color} = persisted_measurement_fixture()
 
       assert_raise ArgumentError,
-                   "response_details/2 requires persisted palette colors and printer profile",
+                   "response_details/2 requires a persisted printer profile",
                    fn ->
                      Persistence.response_details([color], %PrinterProfile{
                        printer_make_model: "Fixture Printer",
