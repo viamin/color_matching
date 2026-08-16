@@ -210,6 +210,54 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
              ]
     end
 
+    test "trims surrounding whitespace from palette color labels", %{conn: conn} do
+      {:ok, profile} = profile_fixture("Trimmed Palette API Printer", "Matte", "Pigment")
+
+      {:ok, palette} =
+        Persistence.create_palette(%{
+          name: "Trimmed Palette API",
+          colors: [%{hex_color: "#ABCDEF", sort_order: 0, display_label: "  Soft Gray  "}]
+        })
+
+      [color] = Persistence.get_palette!(palette.id).colors
+
+      assert {:ok, _measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.5
+               })
+
+      body =
+        conn
+        |> get(~p"/api/v1/colors?#{[printer_profile_id: profile.id, palette_id: palette.id]}")
+        |> json_response(200)
+
+      assert body["colors"] == [
+               %{
+                 "hex" => "#ABCDEF",
+                 "id" => color.id,
+                 "name" => "Soft Gray",
+                 "palette_id" => palette.id,
+                 "palette_name" => palette.name,
+                 "responses" => %{
+                   "white" => %{
+                     "apparent_brightness" => nil,
+                     "brightness" => 0.5,
+                     "measured_at" => nil,
+                     "raw_unit" => nil,
+                     "raw_value" => nil,
+                     "source" => "measurement",
+                     "test_run_id" => nil
+                   }
+                 },
+                 "rgb" => %{"b" => 239, "g" => 205, "r" => 171},
+                 "sort_order" => 0
+               }
+             ]
+    end
+
     test "human-entered response wins over instrument measurement for a light source", %{
       conn: conn
     } do
@@ -704,6 +752,50 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
                %{
                  "hex" => "#ABCDEF",
                  "name" => "#ABCDEF",
+                 "responses" => %{
+                   "white" => %{
+                     "apparent_brightness" => nil,
+                     "brightness" => 0.5,
+                     "measured_at" => nil,
+                     "raw_unit" => nil,
+                     "raw_value" => nil,
+                     "source" => "measurement",
+                     "test_run_id" => nil
+                   }
+                 },
+                 "rgb" => %{"b" => 239, "g" => 205, "r" => 171}
+               }
+             ]
+    end
+
+    test "trims surrounding whitespace from profile color labels", %{conn: conn} do
+      {:ok, profile} = profile_fixture("Trimmed API Printer", "Matte", "Pigment")
+
+      {:ok, palette} =
+        Persistence.create_palette(%{
+          name: "Trimmed API Palette",
+          colors: [%{hex_color: "#ABCDEF", sort_order: 0, display_label: "  Soft Gray  "}]
+        })
+
+      [color] = Persistence.get_palette!(palette.id).colors
+
+      assert {:ok, _measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.5
+               })
+
+      body =
+        conn
+        |> get(~p"/api/v1/printer_profiles/#{profile.id}/colors")
+        |> json_response(200)
+
+      assert body["colors"] == [
+               %{
+                 "hex" => "#ABCDEF",
+                 "name" => "Soft Gray",
                  "responses" => %{
                    "white" => %{
                      "apparent_brightness" => nil,

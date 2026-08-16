@@ -942,6 +942,31 @@ defmodule ColorMatching.PersistenceTest do
       assert profile_color.name == "#ABCDEF"
     end
 
+    test "trims surrounding whitespace from profile color labels" do
+      %{printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, palette} =
+               Persistence.create_palette(%{
+                 name: "Whitespace Profile Color Palette",
+                 colors: [%{hex_color: "#ABCDEF", sort_order: 0, display_label: "  Soft Gray  "}]
+               })
+
+      [color] = Persistence.get_palette!(palette.id).colors
+
+      assert {:ok, _measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.5
+               })
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
+      assert profile_color.hex_color == "#ABCDEF"
+      assert profile_color.name == "Soft Gray"
+    end
+
     test "prefers a labeled duplicate hex over an unlabeled canonical candidate" do
       %{printer_profile: printer_profile} = persisted_measurement_fixture()
 

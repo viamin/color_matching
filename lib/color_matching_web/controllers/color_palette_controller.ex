@@ -224,13 +224,17 @@ defmodule ColorMatchingWeb.ColorPaletteController do
 
   defp palette_color_name(%PaletteColor{display_label: display_label, hex_color: hex_color})
        when is_binary(display_label) do
-    if String.trim(display_label) == "", do: hex_color, else: display_label
+    normalized_label = String.trim(display_label)
+
+    if normalized_label == "", do: hex_color, else: normalized_label
   end
 
   defp palette_color_name(%PaletteColor{hex_color: hex_color}), do: hex_color
 
   defp profile_color_name(%{name: name, hex_color: hex_color}) when is_binary(name) do
-    if String.trim(name) == "", do: hex_color, else: name
+    normalized_name = String.trim(name)
+
+    if normalized_name == "", do: hex_color, else: normalized_name
   end
 
   defp profile_color_name(%{hex_color: hex_color}), do: hex_color

@@ -970,7 +970,9 @@ defmodule ColorMatching.Persistence do
 
   defp palette_color_name(%PaletteColor{display_label: display_label, hex_color: hex_color})
        when is_binary(display_label) do
-    if String.trim(display_label) == "", do: hex_color, else: display_label
+    normalized_label = String.trim(display_label)
+
+    if normalized_label == "", do: hex_color, else: normalized_label
   end
 
   defp palette_color_name(%PaletteColor{hex_color: hex_color}), do: hex_color
