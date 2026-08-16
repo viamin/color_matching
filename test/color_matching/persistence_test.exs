@@ -908,6 +908,37 @@ defmodule ColorMatching.PersistenceTest do
       assert profile_color.name == "#ABCDEF"
     end
 
+    test "prefers a labeled duplicate hex over an unlabeled canonical candidate" do
+      %{printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, palette} =
+               Persistence.create_palette(%{
+                 name: "Unlabeled Canonical Fixture",
+                 colors: [
+                   %{hex_color: "#ABCDEF", sort_order: 0},
+                   %{hex_color: "#ABCDEF", sort_order: 1, display_label: "Named Duplicate"}
+                 ]
+               })
+
+      [unlabeled_color, labeled_color] = Persistence.get_palette!(palette.id).colors
+
+      for color <- [unlabeled_color, labeled_color] do
+        assert {:ok, _measurement} =
+                 Persistence.create_illuminant_measurement(%{
+                   palette_color_id: color.id,
+                   printer_profile_id: printer_profile.id,
+                   light_source: "white",
+                   normalized_brightness: 0.5
+                 })
+      end
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
+      assert profile_color.hex_color == "#ABCDEF"
+      assert profile_color.name == "Named Duplicate"
+      assert profile_color.response_details["white"][:brightness] == 0.5
+    end
+
     test "merges a confirmed pair hex with measurements on the same hex" do
       %{palette: palette, pair: pair, printer_profile: printer_profile} =
         printed_pair_classification_fixture()

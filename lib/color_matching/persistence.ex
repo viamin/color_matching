@@ -861,7 +861,7 @@ defmodule ColorMatching.Persistence do
     colors
     |> prioritize_canonical_colors(measured_color_ids)
     |> prioritize_canonical_colors(preferred_pair_color_ids)
-    |> Enum.min_by(&{&1.sort_order, &1.id})
+    |> Enum.min_by(&{blank_display_label?(&1.display_label), &1.sort_order, &1.id})
   end
 
   # Confirmed-pair hexes with no palette color at all still belong in the
@@ -924,6 +924,12 @@ defmodule ColorMatching.Persistence do
   end
 
   defp palette_color_name(%PaletteColor{hex_color: hex_color}), do: hex_color
+
+  defp blank_display_label?(display_label) when is_binary(display_label) do
+    String.trim(display_label) == ""
+  end
+
+  defp blank_display_label?(_display_label), do: true
 
   defp profile_palette_colors(printer_profile_id) do
     PaletteColor
