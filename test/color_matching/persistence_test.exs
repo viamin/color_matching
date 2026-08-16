@@ -1075,6 +1075,51 @@ defmodule ColorMatching.PersistenceTest do
       assert pair_only_entry.hex_color == "#445566"
     end
 
+    test "keeps the measured profile-backed label when a confirmed pair source shares the hex" do
+      %{palette: palette, pair: pair, printer_profile: printer_profile} =
+        printed_pair_classification_fixture()
+
+      measured_color = Persistence.get_palette!(palette.id).colors |> List.first()
+
+      assert {:ok, unrelated_palette} =
+               Persistence.create_palette(%{
+                 name: "Measured Duplicate Labels",
+                 colors: [
+                   %{
+                     hex_color: measured_color.hex_color,
+                     sort_order: -1,
+                     display_label: "Measured Duplicate"
+                   }
+                 ]
+               })
+
+      [measured_duplicate] = Persistence.get_palette!(unrelated_palette.id).colors
+
+      assert {:ok, _measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: measured_duplicate.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.6
+               })
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      [measured_entry, pair_only_entry] = Persistence.list_profile_colors(printer_profile)
+
+      assert measured_entry.hex_color == "#112233"
+      assert measured_entry.name == "Measured Duplicate"
+      assert measured_entry.response_details["white"][:brightness] == 0.6
+      assert pair_only_entry.hex_color == "#445566"
+      assert pair_only_entry.name == "Patch 2"
+    end
+
     test "prefers the confirmed pair's source palette label for pair-only colors" do
       %{palette: palette, pair: pair, printer_profile: printer_profile} =
         printed_pair_classification_fixture()

@@ -866,8 +866,7 @@ defmodule ColorMatching.Persistence do
   # back to unrelated palette matches, preserving the sheet's intended label.
   defp canonical_profile_color(colors, measured_color_ids, preferred_pair_color_ids) do
     colors
-    |> prioritize_canonical_colors(measured_color_ids)
-    |> prioritize_canonical_colors(preferred_pair_color_ids)
+    |> canonical_candidate_colors(measured_color_ids, preferred_pair_color_ids)
     |> Enum.min_by(&{&1.sort_order, &1.id})
   end
 
@@ -876,8 +875,7 @@ defmodule ColorMatching.Persistence do
   # duplicate elsewhere supplies the only usable display label.
   defp canonical_label_color(colors, measured_color_ids, preferred_pair_color_ids, fallback_color) do
     colors
-    |> prioritize_canonical_colors(measured_color_ids)
-    |> prioritize_canonical_colors(preferred_pair_color_ids)
+    |> canonical_candidate_colors(measured_color_ids, preferred_pair_color_ids)
     |> preferred_label_candidate()
     |> case do
       nil ->
@@ -1052,6 +1050,18 @@ defmodule ColorMatching.Persistence do
       :lt -> right
       :gt -> left
       :eq -> if left.id >= right.id, do: left, else: right
+    end
+  end
+
+  # The working set is profile-centric first: measured/responded colors are the
+  # primary representatives for a duplicated hex. When a duplicated hex exists
+  # only because of a confirmed pair, prefer the pair's source palette color
+  # before falling back to unrelated palette duplicates.
+  defp canonical_candidate_colors(colors, measured_color_ids, preferred_pair_color_ids) do
+    if Enum.any?(colors, &MapSet.member?(measured_color_ids, &1.id)) do
+      prioritize_canonical_colors(colors, measured_color_ids)
+    else
+      prioritize_canonical_colors(colors, preferred_pair_color_ids)
     end
   end
 
