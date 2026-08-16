@@ -452,6 +452,35 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert body["colors"] == []
     end
 
+    test "includes colors that only have human responses for the profile", %{conn: conn} do
+      %{printer_profile: profile, dark: dark} = response_fixture()
+
+      assert {:ok, _response} =
+               Persistence.set_illuminant_response(%{
+                 palette_color_id: dark.id,
+                 printer_profile_id: profile.id,
+                 illuminant: "blue",
+                 apparent_brightness: 6
+               })
+
+      body =
+        conn
+        |> get(~p"/api/v1/printer_profiles/#{profile.id}/colors")
+        |> json_response(200)
+
+      dark_color = Enum.find(body["colors"], &(&1["hex"] == dark.hex_color))
+
+      assert dark_color["responses"]["blue"] == %{
+               "apparent_brightness" => 6,
+               "brightness" => 0.6,
+               "measured_at" => nil,
+               "raw_unit" => nil,
+               "raw_value" => nil,
+               "source" => "response",
+               "test_run_id" => nil
+             }
+    end
+
     test "returns a profile-scoped working color set without palette fields", %{conn: conn} do
       %{printer_profile: profile, dark: dark, light: light} = response_fixture()
 
