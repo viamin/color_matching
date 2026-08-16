@@ -50,6 +50,21 @@ defmodule ColorMatching.Persistence do
           identifier: term(),
           errors: judgment_error_map()
         }
+  @type response_detail :: %{
+          brightness: float(),
+          source: String.t(),
+          apparent_brightness: integer() | nil,
+          raw_value: number() | nil,
+          raw_unit: String.t() | nil,
+          measured_at: DateTime.t() | nil,
+          test_run_id: integer() | nil
+        }
+  @type response_details_by_source :: %{optional(String.t()) => response_detail()}
+  @type profile_color_entry :: %{
+          name: String.t(),
+          hex_color: String.t(),
+          response_details: response_details_by_source()
+        }
   @spec list_palettes() :: [Palette.t()]
   def list_palettes do
     Palette
@@ -81,7 +96,7 @@ defmodule ColorMatching.Persistence do
   hex so clients can compose against a profile-scoped view instead of palette
   membership.
   """
-  @spec list_profile_colors(PrinterProfile.t()) :: [map()]
+  @spec list_profile_colors(PrinterProfile.t()) :: [profile_color_entry()]
   def list_profile_colors(%PrinterProfile{id: printer_profile_id} = printer_profile)
       when is_integer(printer_profile_id) do
     confirmed_pairs = list_confirmed_metamer_pairs(printer_profile)
@@ -750,7 +765,7 @@ defmodule ColorMatching.Persistence do
     * `:measured_at` / `:test_run_id` — measurement provenance, `nil` otherwise
   """
   @spec response_details([PaletteColor.t()], PrinterProfile.t()) ::
-          %{optional(integer()) => %{String.t() => map()}}
+          %{optional(integer()) => response_details_by_source()}
   def response_details(palette_colors, %PrinterProfile{id: printer_profile_id})
       when is_list(palette_colors) and is_integer(printer_profile_id) do
     if Enum.all?(palette_colors, &persisted_palette_color?/1) do
