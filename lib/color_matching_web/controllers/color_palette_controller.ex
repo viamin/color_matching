@@ -77,7 +77,7 @@ defmodule ColorMatchingWeb.ColorPaletteController do
       })
     else
       {:error, :missing_param, key} ->
-        bad_request(conn, "missing required query parameter: #{key}")
+        bad_request(conn, "missing required parameter: #{key}")
 
       {:error, :invalid_param, key} ->
         bad_request(conn, "invalid #{key}: expected a positive integer")
