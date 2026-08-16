@@ -1481,7 +1481,7 @@ defmodule ColorMatching.PersistenceTest do
       %{color: color} = persisted_measurement_fixture()
 
       assert_raise ArgumentError,
-                   "response_vector/2 requires persisted palette color and printer profile",
+                   "response_vector/2 requires a persisted printer profile",
                    fn ->
                      Persistence.response_vector(color, %PrinterProfile{
                        printer_make_model: "Fixture Printer",
@@ -1567,6 +1567,20 @@ defmodule ColorMatching.PersistenceTest do
                    "response_vectors/2 requires a printer profile",
                    fn ->
                      Persistence.response_vectors([color], "not a profile")
+                   end
+    end
+
+    test "raises when building response vectors for an unpersisted printer profile" do
+      %{color: color} = persisted_measurement_fixture()
+
+      assert_raise ArgumentError,
+                   "response_vectors/2 requires a persisted printer profile",
+                   fn ->
+                     Persistence.response_vectors([color], %PrinterProfile{
+                       printer_make_model: "Fixture Printer",
+                       paper_type: "Fixture Paper",
+                       ink_type: "Fixture Ink"
+                     })
                    end
     end
 
