@@ -628,7 +628,7 @@ defmodule ColorMatching.PersistenceTest do
       assert profile_color.response_details["green"][:apparent_brightness] == 8
     end
 
-    test "keeps the first color's response when response recency ties completely" do
+    test "breaks fully tied responses by record id" do
       %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
 
       duplicate_color = duplicate_hex_color_fixture(color, "Fully Tied Response Palette")
@@ -656,8 +656,41 @@ defmodule ColorMatching.PersistenceTest do
 
       [profile_color] = Persistence.list_profile_colors(printer_profile)
 
-      assert profile_color.response_details["green"][:brightness] == 0.8
-      assert profile_color.response_details["green"][:apparent_brightness] == 8
+      assert profile_color.response_details["green"][:brightness] == 0.3
+      assert profile_color.response_details["green"][:apparent_brightness] == 3
+    end
+
+    test "breaks fully tied measurements by record id" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      duplicate_color = duplicate_hex_color_fixture(color, "Fully Tied Measurement Palette")
+      tie = ~U[2026-03-01 12:00:00.000000Z]
+
+      assert {:ok, _canonical_tied} =
+               Repo.insert(%ColorMatching.Persistence.IlluminantMeasurement{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.8,
+                 measured_at: tie,
+                 inserted_at: tie,
+                 updated_at: tie
+               })
+
+      assert {:ok, _duplicate_tied} =
+               Repo.insert(%ColorMatching.Persistence.IlluminantMeasurement{
+                 palette_color_id: duplicate_color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.3,
+                 measured_at: tie,
+                 inserted_at: tie,
+                 updated_at: tie
+               })
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
+      assert profile_color.response_details["white"][:brightness] == 0.3
     end
 
     test "prefers a human response over an instrument measurement across duplicate hexes" do

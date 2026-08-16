@@ -1017,11 +1017,7 @@ defmodule ColorMatching.Persistence do
         left
 
       :eq ->
-        if compare_datetimes(left.inserted_at, right.inserted_at) == :lt do
-          right
-        else
-          left
-        end
+        choose_latest_by_inserted_at(left, right)
     end
   end
 
@@ -1040,11 +1036,7 @@ defmodule ColorMatching.Persistence do
         left
 
       :eq ->
-        if compare_datetimes(left.inserted_at, right.inserted_at) == :lt do
-          right
-        else
-          left
-        end
+        choose_latest_by_inserted_at(left, right)
     end
   end
 
@@ -1053,6 +1045,14 @@ defmodule ColorMatching.Persistence do
 
   defp compare_datetimes(%DateTime{} = left, %DateTime{} = right) do
     DateTime.compare(left, right)
+  end
+
+  defp choose_latest_by_inserted_at(left, right) do
+    case compare_datetimes(left.inserted_at, right.inserted_at) do
+      :lt -> right
+      :gt -> left
+      :eq -> if left.id >= right.id, do: left, else: right
+    end
   end
 
   defp prioritize_canonical_colors(colors, prioritized_ids) do
