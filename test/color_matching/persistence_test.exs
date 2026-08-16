@@ -1162,7 +1162,7 @@ defmodule ColorMatching.PersistenceTest do
       assert pair_only_entry.name == "Patch 2"
     end
 
-    test "falls back to another duplicate label when the confirmed pair source label is blank" do
+    test "falls back to the hex when the confirmed pair source label is blank, even with duplicate labels elsewhere" do
       %{palette: palette, pair: pair, printer_profile: printer_profile} =
         printed_pair_classification_fixture()
 
@@ -1204,7 +1204,7 @@ defmodule ColorMatching.PersistenceTest do
 
       assert measured_entry.hex_color == "#112233"
       assert pair_only_entry.hex_color == "#445566"
-      assert pair_only_entry.name == "Fallback Pair Label"
+      assert pair_only_entry.name == "#445566"
     end
 
     test "falls back to the hex when a confirmed pair source label is blank and no fallback exists" do

@@ -884,18 +884,21 @@ defmodule ColorMatching.Persistence do
     |> Enum.min_by(&{&1.sort_order, &1.id})
   end
 
-  # Preserve ordering and hex ownership from the profile-backed/source-backed
-  # canonical color, but avoid degrading to a bare hex when an equivalent
-  # duplicate elsewhere supplies the only usable display label.
+  # Preserve ordering and hex ownership from the canonical color. Profile-
+  # backed colors may borrow a duplicate label when their own representative is
+  # blank, but pair-only colors should fall back to the hex rather than an
+  # unrelated palette label.
   defp canonical_label_color(colors, measured_color_ids, preferred_pair_color_ids, fallback_color) do
-    colors
-    |> canonical_candidate_colors(measured_color_ids, preferred_pair_color_ids)
-    |> preferred_label_candidate()
-    |> case do
+    candidate_colors =
+      canonical_candidate_colors(colors, measured_color_ids, preferred_pair_color_ids)
+
+    case preferred_label_candidate(candidate_colors) do
       nil ->
-        colors
-        |> preferred_label_candidate()
-        |> Kernel.||(fallback_color)
+        if Enum.any?(candidate_colors, &MapSet.member?(measured_color_ids, &1.id)) do
+          preferred_label_candidate(colors) || fallback_color
+        else
+          fallback_color
+        end
 
       color ->
         color

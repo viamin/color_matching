@@ -539,6 +539,47 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert pair_only_color["responses"] == %{}
     end
 
+    test "ignores unrelated duplicate labels when a confirmed pair source label is blank", %{
+      conn: conn
+    } do
+      %{palette: palette, pair: pair, printer_profile: printer_profile} =
+        printed_pair_classification_fixture()
+
+      source_pair_color =
+        Enum.find(palette.colors, &(&1.hex_color == "#445566"))
+
+      assert {:ok, _} =
+               source_pair_color
+               |> Ecto.Changeset.change(display_label: "   ")
+               |> ColorMatching.Repo.update()
+
+      assert {:ok, _unrelated_palette} =
+               Persistence.create_palette(%{
+                 name: "Unrelated Duplicate Labels",
+                 colors: [
+                   %{hex_color: "#445566", sort_order: -1, display_label: "Wrong Pair Label"}
+                 ]
+               })
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      body =
+        conn
+        |> get(~p"/api/v1/printer_profiles/#{printer_profile.id}/colors")
+        |> json_response(200)
+
+      pair_only_color = Enum.find(body["colors"], &(&1["hex"] == "#445566"))
+
+      assert pair_only_color["name"] == "#445566"
+      assert pair_only_color["responses"] == %{}
+    end
+
     test "keeps the confirmed pair label when other classified sheets contain duplicate hexes", %{
       conn: conn
     } do
