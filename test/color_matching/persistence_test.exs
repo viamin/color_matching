@@ -1284,6 +1284,19 @@ defmodule ColorMatching.PersistenceTest do
                    end
     end
 
+    test "raises when any response detail color is unpersisted" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert_raise ArgumentError,
+                   "response_details/2 requires persisted palette colors and printer profile",
+                   fn ->
+                     Persistence.response_details(
+                       [color, %PaletteColor{hex_color: "#445566", sort_order: 1}],
+                       printer_profile
+                     )
+                   end
+    end
+
     test "returns validation errors for uncastable measurement reference ids" do
       invalid_ids = ["abc", %{"id" => 1}]
 

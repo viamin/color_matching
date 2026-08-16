@@ -736,7 +736,7 @@ defmodule ColorMatching.Persistence do
           %{optional(integer()) => %{String.t() => map()}}
   def response_details(palette_colors, %PrinterProfile{id: printer_profile_id})
       when is_list(palette_colors) and is_integer(printer_profile_id) do
-    if Enum.all?(palette_colors, &is_integer(&1.id)) do
+    if Enum.all?(palette_colors, &persisted_palette_color?/1) do
       {responses_by_palette_color, measurements_by_palette_color} =
         grouped_response_records(palette_colors, printer_profile_id)
 
