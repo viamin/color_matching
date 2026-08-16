@@ -953,7 +953,10 @@ defmodule ColorMatching.Persistence do
   defp pair_hex_palette_colors([]), do: []
 
   defp pair_hex_palette_colors(pair_hexes) do
-    upcased_hexes = Enum.map(pair_hexes, &String.upcase/1)
+    upcased_hexes =
+      pair_hexes
+      |> Enum.map(&String.upcase/1)
+      |> Enum.uniq()
 
     PaletteColor
     |> where([color], fragment("upper(?)", color.hex_color) in ^upcased_hexes)
@@ -964,7 +967,10 @@ defmodule ColorMatching.Persistence do
   defp pair_source_palette_colors([]), do: []
 
   defp pair_source_palette_colors(confirmed_pairs) do
-    pair_ids = Enum.map(confirmed_pairs, & &1.test_sheet_pair_id)
+    pair_ids =
+      confirmed_pairs
+      |> Enum.map(& &1.test_sheet_pair_id)
+      |> Enum.uniq()
 
     PaletteColor
     |> join(:inner, [color], sheet in TestSheet, on: sheet.palette_id == color.palette_id)
