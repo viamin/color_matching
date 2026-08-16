@@ -1179,7 +1179,20 @@ defmodule ColorMatching.Persistence do
     raise ArgumentError, "response_vector/2 requires persisted palette color and printer profile"
   end
 
+  def response_vector(_palette_color, %PrinterProfile{id: printer_profile_id})
+      when is_integer(printer_profile_id) do
+    raise ArgumentError, "response_vector/2 requires persisted palette color and printer profile"
+  end
+
+  def response_vector(_palette_color, %PrinterProfile{}) do
+    raise ArgumentError, "response_vector/2 requires persisted palette color and printer profile"
+  end
+
   def response_vector(%PaletteColor{}, _printer_profile) do
+    raise ArgumentError, "response_vector/2 requires a printer profile"
+  end
+
+  def response_vector(_palette_color, _printer_profile) do
     raise ArgumentError, "response_vector/2 requires a printer profile"
   end
 
