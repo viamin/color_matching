@@ -34,10 +34,8 @@ ensure_mix_bootstrap() {
   echo "Installing Rebar..."
   run_mix local.rebar --force >/dev/null
 
-  if [ ! -d deps ]; then
-    echo "Fetching Mix dependencies..."
-    run_mix deps.get
-  fi
+  echo "Fetching Mix dependencies..."
+  run_mix deps.get >/dev/null
 }
 
 ensure_mix_bootstrap
