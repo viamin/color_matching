@@ -2228,6 +2228,7 @@ defmodule ColorMatching.PersistenceTest do
 
       assert Enum.all?(confirmed_pairs, &(&1.active == true))
       assert Enum.all?(confirmed_pairs, &(&1.reproduction_profile_id == printer_profile.id))
+      assert Enum.all?(confirmed_pairs, &Ecto.assoc_loaded?(&1.test_sheet_pair))
 
       assert Enum.map(confirmed_pairs, & &1.classification) |> Enum.sort() == [
                "strong_metamer",
