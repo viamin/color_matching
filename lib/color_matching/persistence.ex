@@ -764,6 +764,7 @@ defmodule ColorMatching.Persistence do
   # display label instead of a bare hex.
   defp palette_color_entries(printer_profile_id, pair_hexes) do
     measured_colors = profile_palette_colors(printer_profile_id)
+    measured_color_ids = MapSet.new(measured_colors, & &1.id)
 
     {responses_by_palette_color, measurements_by_palette_color} =
       grouped_response_records(measured_colors, printer_profile_id)
@@ -776,7 +777,12 @@ defmodule ColorMatching.Persistence do
       colors
       |> Enum.group_by(&String.upcase(&1.hex_color))
       |> Enum.map(
-        &palette_color_entry(&1, responses_by_palette_color, measurements_by_palette_color)
+        &profile_color_entry(
+          &1,
+          measured_color_ids,
+          responses_by_palette_color,
+          measurements_by_palette_color
+        )
       )
       |> Enum.sort_by(fn {sort_order, id, _entry} -> {sort_order, id} end)
       |> Enum.map(fn {_sort_order, _id, entry} -> entry end)
@@ -784,8 +790,13 @@ defmodule ColorMatching.Persistence do
     {entries, MapSet.new(colors, &String.upcase(&1.hex_color))}
   end
 
-  defp palette_color_entry({_hex_color, colors}, responses_by, measurements_by) do
-    canonical_color = Enum.min_by(colors, &{&1.sort_order, &1.id})
+  defp profile_color_entry(
+         {_hex_color, colors},
+         measured_color_ids,
+         responses_by,
+         measurements_by
+       ) do
+    canonical_color = canonical_profile_color(colors, measured_color_ids)
 
     {responses, measurements} =
       Enum.reduce(colors, {%{}, %{}}, fn color, {response_acc, measurement_acc} ->
@@ -801,6 +812,19 @@ defmodule ColorMatching.Persistence do
        hex_color: canonical_color.hex_color,
        response_details: detail_for_color(responses, measurements)
      }}
+  end
+
+  # When a confirmed pair hex matches an unrelated palette color, keep the
+  # profile-backed color as canonical so labels and ordering come from the
+  # actual working-set member rather than an incidental duplicate elsewhere.
+  defp canonical_profile_color(colors, measured_color_ids) do
+    colors
+    |> Enum.filter(&MapSet.member?(measured_color_ids, &1.id))
+    |> case do
+      [] -> colors
+      measured_colors -> measured_colors
+    end
+    |> Enum.min_by(&{&1.sort_order, &1.id})
   end
 
   # Confirmed-pair hexes with no palette color at all still belong in the

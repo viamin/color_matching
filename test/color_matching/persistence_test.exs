@@ -939,6 +939,48 @@ defmodule ColorMatching.PersistenceTest do
       assert pair_only_entry.hex_color == "#445566"
     end
 
+    test "keeps the profile-backed label when a confirmed pair hex matches an unrelated palette color" do
+      %{palette: palette, pair: pair, printer_profile: printer_profile} =
+        printed_pair_classification_fixture()
+
+      measured_color = Persistence.get_palette!(palette.id).colors |> List.first()
+
+      assert {:ok, _unrelated_palette} =
+               Persistence.create_palette(%{
+                 name: "Unrelated Duplicate Labels",
+                 colors: [
+                   %{
+                     hex_color: measured_color.hex_color,
+                     sort_order: -1,
+                     display_label: "Wrong Label"
+                   }
+                 ]
+               })
+
+      assert {:ok, _measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: measured_color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.3
+               })
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      [measured_entry, pair_only_entry] = Persistence.list_profile_colors(printer_profile)
+
+      assert measured_entry.hex_color == "#112233"
+      assert measured_entry.name == "Patch 1"
+      assert measured_entry.response_details["white"][:brightness] == 0.3
+      assert pair_only_entry.hex_color == "#445566"
+    end
+
     test "excludes pair hexes from contrasting, superseded, or other-profile classifications" do
       %{
         pair: pair,
