@@ -348,7 +348,7 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert pair_only_color["responses"] == %{}
     end
 
-    test "ignores duplicate hex labels from other classified sheets that never used the pair hex", %{
+    test "keeps the confirmed pair label when other classified sheets contain duplicate hexes", %{
       conn: conn
     } do
       %{pair: pair, printer_profile: printer_profile} = printed_pair_classification_fixture()
@@ -395,10 +395,12 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
         |> get(~p"/api/v1/printer_profiles/#{printer_profile.id}/colors")
         |> json_response(200)
 
-      pair_only_color = Enum.find(body["colors"], &(&1["hex"] == "#445566"))
+      colors_by_hex = Map.new(body["colors"], &{&1["hex"], &1})
 
-      assert pair_only_color["name"] == "Patch 2"
-      assert pair_only_color["responses"] == %{}
+      assert colors_by_hex["#445566"]["name"] == "Patch 2"
+      assert colors_by_hex["#445566"]["responses"] == %{}
+      assert colors_by_hex["#ABC123"]["name"] == "Other Patch"
+      assert colors_by_hex["#DEF456"]["name"] == "Another Patch"
     end
 
     test "names pair hexes that match no palette color after the hex itself", %{conn: conn} do

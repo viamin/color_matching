@@ -1022,7 +1022,7 @@ defmodule ColorMatching.PersistenceTest do
       assert pair_only_entry.name == "Patch 2"
     end
 
-    test "ignores duplicate hex labels from other classified sheets that never used the pair hex" do
+    test "keeps the confirmed pair label when other classified sheets contain duplicate hexes" do
       %{palette: palette, pair: pair, printer_profile: printer_profile} =
         printed_pair_classification_fixture()
 
@@ -1072,11 +1072,14 @@ defmodule ColorMatching.PersistenceTest do
                  classification: "weak_metamer"
                })
 
-      [measured_entry, pair_only_entry] = Persistence.list_profile_colors(printer_profile)
+      profile_colors =
+        Persistence.list_profile_colors(printer_profile)
+        |> Map.new(&{&1.hex_color, &1})
 
-      assert measured_entry.hex_color == "#112233"
-      assert pair_only_entry.hex_color == "#445566"
-      assert pair_only_entry.name == "Patch 2"
+      assert profile_colors["#112233"].response_details["white"][:brightness] == 0.3
+      assert profile_colors["#445566"].name == "Patch 2"
+      assert profile_colors["#ABC123"].name == "Other Patch"
+      assert profile_colors["#DEF456"].name == "Another Patch"
     end
 
     test "excludes pair hexes from contrasting, superseded, or other-profile classifications" do
