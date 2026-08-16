@@ -728,17 +728,27 @@ defmodule ColorMatching.Persistence do
           %{optional(integer()) => %{String.t() => map()}}
   def response_details(palette_colors, %PrinterProfile{id: printer_profile_id})
       when is_list(palette_colors) and is_integer(printer_profile_id) do
-    {responses_by_palette_color, measurements_by_palette_color} =
-      grouped_response_records(palette_colors, printer_profile_id)
+    if Enum.all?(palette_colors, &is_integer(&1.id)) do
+      {responses_by_palette_color, measurements_by_palette_color} =
+        grouped_response_records(palette_colors, printer_profile_id)
 
-    palette_color_ids = Enum.map(palette_colors, & &1.id)
+      palette_color_ids = Enum.map(palette_colors, & &1.id)
 
-    Map.new(palette_color_ids, fn palette_color_id ->
-      responses = Map.get(responses_by_palette_color, palette_color_id, %{})
-      measurements = Map.get(measurements_by_palette_color, palette_color_id, %{})
+      Map.new(palette_color_ids, fn palette_color_id ->
+        responses = Map.get(responses_by_palette_color, palette_color_id, %{})
+        measurements = Map.get(measurements_by_palette_color, palette_color_id, %{})
 
-      {palette_color_id, detail_for_color(responses, measurements)}
-    end)
+        {palette_color_id, detail_for_color(responses, measurements)}
+      end)
+    else
+      raise ArgumentError,
+            "response_details/2 requires persisted palette colors and printer profile"
+    end
+  end
+
+  def response_details(_palette_colors, %PrinterProfile{}) do
+    raise ArgumentError,
+          "response_details/2 requires persisted palette colors and printer profile"
   end
 
   @spec grouped_response_records([PaletteColor.t()], integer()) ::
