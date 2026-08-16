@@ -13,7 +13,7 @@ cat > .git/hooks/pre-commit << 'EOF'
 #
 # Pre-commit hook to enforce lint and tests before commit.
 
-if [ -f bin/lint ]; then
+if [ -x bin/lint ]; then
     echo "Running bin/lint --staged..."
     bin/lint --staged || exit 1
 else
@@ -53,6 +53,23 @@ else
         exit 1
     fi
 
+    ensure_mix_bootstrap() {
+        archives="$(run_mix archive 2>/dev/null || true)"
+
+        if ! printf '%s\n' "${archives}" | grep -q 'hex-'; then
+            echo "Installing Hex..."
+            run_mix local.hex --force
+        fi
+
+        echo "Installing Rebar..."
+        run_mix local.rebar --force >/dev/null
+
+        echo "Fetching Mix dependencies..."
+        run_mix deps.get >/dev/null
+    }
+
+    ensure_mix_bootstrap
+
     echo "Running formatter fallback..."
     if ! run_mix format --check-formatted; then
         echo "Error: formatting check failed."
@@ -76,7 +93,7 @@ echo "✅ Git hooks installed successfully!"
 echo ""
 echo "The pre-commit hook will now:"
 echo "  • Run 'bin/lint --staged' before each commit when available"
-echo "  • Fall back to Elixir formatting checks when bin/lint is unavailable"
+echo "  • Fall back to bootstrapped Elixir formatting/tests when bin/lint is unavailable"
 echo "  • Reuse mise when mix is not on PATH"
 echo ""
 echo "Fix hook failures before committing; do not bypass the checks."
