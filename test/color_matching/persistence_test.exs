@@ -1425,6 +1425,14 @@ defmodule ColorMatching.PersistenceTest do
                    end
     end
 
+    test "raises when listing profile colors without a printer profile struct" do
+      assert_raise ArgumentError,
+                   "list_profile_colors/1 requires a printer profile",
+                   fn ->
+                     Persistence.list_profile_colors("not a profile")
+                   end
+    end
+
     test "raises when building a response vector for an unpersisted printer profile" do
       %{color: color} = persisted_measurement_fixture()
 
@@ -1436,6 +1444,16 @@ defmodule ColorMatching.PersistenceTest do
                        paper_type: "Fixture Paper",
                        ink_type: "Fixture Ink"
                      })
+                   end
+    end
+
+    test "raises when building a response vector without a printer profile struct" do
+      %{color: color} = persisted_measurement_fixture()
+
+      assert_raise ArgumentError,
+                   "response_vector/2 requires a printer profile",
+                   fn ->
+                     Persistence.response_vector(color, "not a profile")
                    end
     end
 
@@ -1472,6 +1490,16 @@ defmodule ColorMatching.PersistenceTest do
                    "response_vectors/2 requires persisted palette colors with hex colors",
                    fn ->
                      Persistence.response_vectors(color, printer_profile)
+                   end
+    end
+
+    test "raises when building response vectors without a printer profile struct" do
+      %{color: color} = persisted_measurement_fixture()
+
+      assert_raise ArgumentError,
+                   "response_vectors/2 requires a printer profile",
+                   fn ->
+                     Persistence.response_vectors([color], "not a profile")
                    end
     end
 
@@ -1522,6 +1550,16 @@ defmodule ColorMatching.PersistenceTest do
                    "response_details/2 requires persisted palette colors and printer profile",
                    fn ->
                      Persistence.response_details(color, printer_profile)
+                   end
+    end
+
+    test "raises when building response details without a printer profile struct" do
+      %{color: color} = persisted_measurement_fixture()
+
+      assert_raise ArgumentError,
+                   "response_details/2 requires a printer profile",
+                   fn ->
+                     Persistence.response_details([color], "not a profile")
                    end
     end
 
@@ -2168,6 +2206,14 @@ defmodule ColorMatching.PersistenceTest do
                        paper_type: "Fixture Paper",
                        ink_type: "Fixture Ink"
                      })
+                   end
+    end
+
+    test "raises when listing confirmed metamer pairs without a printer profile struct" do
+      assert_raise ArgumentError,
+                   "list_confirmed_metamer_pairs/1 requires a printer profile",
+                   fn ->
+                     Persistence.list_confirmed_metamer_pairs("not a profile")
                    end
     end
   end

@@ -98,6 +98,10 @@ defmodule ColorMatching.Persistence do
     raise ArgumentError, "list_profile_colors/1 requires a persisted printer profile"
   end
 
+  def list_profile_colors(_printer_profile) do
+    raise ArgumentError, "list_profile_colors/1 requires a printer profile"
+  end
+
   @spec get_palette!(integer()) :: Palette.t()
   def get_palette!(id) do
     Palette
@@ -380,6 +384,10 @@ defmodule ColorMatching.Persistence do
 
   def list_confirmed_metamer_pairs(%PrinterProfile{}) do
     raise ArgumentError, "list_confirmed_metamer_pairs/1 requires a persisted printer profile"
+  end
+
+  def list_confirmed_metamer_pairs(_printer_profile) do
+    raise ArgumentError, "list_confirmed_metamer_pairs/1 requires a printer profile"
   end
 
   @doc """
@@ -714,6 +722,10 @@ defmodule ColorMatching.Persistence do
     raise ArgumentError, "response_vectors/2 requires a persisted printer profile"
   end
 
+  def response_vectors(_palette_colors, _printer_profile) do
+    raise ArgumentError, "response_vectors/2 requires a printer profile"
+  end
+
   @doc """
   Returns per-palette-color, per-light-source response detail for a printer
   profile.
@@ -768,6 +780,11 @@ defmodule ColorMatching.Persistence do
   def response_details(_palette_colors, %PrinterProfile{}) do
     raise ArgumentError,
           "response_details/2 requires a persisted printer profile"
+  end
+
+  def response_details(_palette_colors, _printer_profile) do
+    raise ArgumentError,
+          "response_details/2 requires a printer profile"
   end
 
   @spec grouped_response_records([PaletteColor.t()], integer()) ::
@@ -1160,6 +1177,10 @@ defmodule ColorMatching.Persistence do
 
   def response_vector(%PaletteColor{}, %PrinterProfile{}) do
     raise ArgumentError, "response_vector/2 requires persisted palette color and printer profile"
+  end
+
+  def response_vector(%PaletteColor{}, _printer_profile) do
+    raise ArgumentError, "response_vector/2 requires a printer profile"
   end
 
   @spec latest_illuminant_measurements_query(
