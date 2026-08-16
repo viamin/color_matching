@@ -375,7 +375,7 @@ defmodule ColorMatching.Persistence do
     )
     |> select([classification, _pair], classification)
     |> Repo.all()
-    |> Repo.preload([:reproduction_profile, :test_sheet_pair])
+    |> Repo.preload(:test_sheet_pair)
   end
 
   def list_confirmed_metamer_pairs(%PrinterProfile{}) do
@@ -468,7 +468,7 @@ defmodule ColorMatching.Persistence do
     )
     |> select([classification, _pair], classification)
     |> Repo.all()
-    |> Repo.preload([:reproduction_profile, :test_sheet_pair])
+    |> Repo.preload(:test_sheet_pair)
   end
 
   @spec list_printed_pair_classification_history(integer(), integer(), String.t()) ::
