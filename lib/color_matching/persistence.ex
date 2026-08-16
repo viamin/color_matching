@@ -797,7 +797,7 @@ defmodule ColorMatching.Persistence do
 
     {canonical_color.sort_order, canonical_color.id,
      %{
-       name: canonical_color.display_label,
+       name: palette_color_name(canonical_color),
        hex_color: canonical_color.hex_color,
        response_details: detail_for_color(responses, measurements)
      }}
@@ -833,6 +833,13 @@ defmodule ColorMatching.Persistence do
     |> order_by([color], asc: color.sort_order, asc: color.id)
     |> Repo.all()
   end
+
+  defp palette_color_name(%PaletteColor{display_label: display_label, hex_color: hex_color})
+       when is_binary(display_label) do
+    if String.trim(display_label) == "", do: hex_color, else: display_label
+  end
+
+  defp palette_color_name(%PaletteColor{hex_color: hex_color}), do: hex_color
 
   defp profile_palette_colors(printer_profile_id) do
     PaletteColor

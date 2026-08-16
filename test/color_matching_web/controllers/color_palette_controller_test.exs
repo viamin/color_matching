@@ -353,6 +353,50 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
         assert match?(%{"r" => _, "g" => _, "b" => _}, color["rgb"])
       end
     end
+
+    test "falls back to the hex when a profile color has no display label", %{conn: conn} do
+      {:ok, profile} = profile_fixture("Unnamed API Printer", "Matte", "Pigment")
+
+      {:ok, palette} =
+        Persistence.create_palette(%{
+          name: "Unnamed API Palette",
+          colors: [%{hex_color: "#ABCDEF", sort_order: 0}]
+        })
+
+      [color] = Persistence.get_palette!(palette.id).colors
+
+      assert {:ok, _measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.5
+               })
+
+      body =
+        conn
+        |> get(~p"/api/v1/printer_profiles/#{profile.id}/colors")
+        |> json_response(200)
+
+      assert body["colors"] == [
+               %{
+                 "hex" => "#ABCDEF",
+                 "name" => "#ABCDEF",
+                 "responses" => %{
+                   "white" => %{
+                     "apparent_brightness" => nil,
+                     "brightness" => 0.5,
+                     "measured_at" => nil,
+                     "raw_unit" => nil,
+                     "raw_value" => nil,
+                     "source" => "measurement",
+                     "test_run_id" => nil
+                   }
+                 },
+                 "rgb" => %{"b" => 239, "g" => 205, "r" => 171}
+               }
+             ]
+    end
   end
 
   describe "GET /api/v1/printer_profiles/:printer_profile_id/metamer_pairs" do
