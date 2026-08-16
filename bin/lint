@@ -10,6 +10,27 @@ set -euo pipefail
 
 export PATH="${HOME}/.local/bin:${PATH}"
 
+prepend_elixir_install_bins() {
+  local otp_root="${HOME}/.elixir-install/installs/otp"
+  local elixir_root="${HOME}/.elixir-install/installs/elixir"
+  local otp_bin=""
+  local elixir_bin=""
+
+  if [ -d "${otp_root}" ]; then
+    otp_bin="$(find "${otp_root}" -mindepth 2 -maxdepth 2 -type d -name bin | sort -V | tail -n 1)"
+  fi
+
+  if [ -d "${elixir_root}" ]; then
+    elixir_bin="$(find "${elixir_root}" -mindepth 2 -maxdepth 2 -type d -name bin | sort -V | tail -n 1)"
+  fi
+
+  if [ -n "${otp_bin}" ] && [ -n "${elixir_bin}" ]; then
+    export PATH="${otp_bin}:${elixir_bin}:${PATH}"
+  fi
+}
+
+prepend_elixir_install_bins
+
 if command -v mix >/dev/null 2>&1; then
   mix_cmd=(mix)
 elif command -v mise >/dev/null 2>&1; then
