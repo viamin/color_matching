@@ -341,6 +341,13 @@ defmodule ColorMatching.PersistenceTest do
       assert second_vector.red == :missing
     end
 
+    test "returns empty response batches for an empty palette color list" do
+      %{printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert Persistence.response_vectors([], printer_profile) == []
+      assert Persistence.response_details([], printer_profile) == %{}
+    end
+
     test "prefers stored illuminant responses over instrument measurements" do
       %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
 
