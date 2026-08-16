@@ -939,6 +939,36 @@ defmodule ColorMatching.PersistenceTest do
       assert profile_color.response_details["white"][:brightness] == 0.5
     end
 
+    test "keeps canonical ordering and hex casing when borrowing a duplicate label" do
+      %{printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, palette} =
+               Persistence.create_palette(%{
+                 name: "Canonical Hex Ownership Fixture",
+                 colors: [
+                   %{hex_color: "#ABCDEF", sort_order: 0},
+                   %{hex_color: "#abcdef", sort_order: 1, display_label: "Named Duplicate"}
+                 ]
+               })
+
+      [canonical_color, labeled_duplicate] = Persistence.get_palette!(palette.id).colors
+
+      for color <- [canonical_color, labeled_duplicate] do
+        assert {:ok, _measurement} =
+                 Persistence.create_illuminant_measurement(%{
+                   palette_color_id: color.id,
+                   printer_profile_id: printer_profile.id,
+                   light_source: "white",
+                   normalized_brightness: 0.5
+                 })
+      end
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
+      assert profile_color.hex_color == "#ABCDEF"
+      assert profile_color.name == "Named Duplicate"
+    end
+
     test "merges a confirmed pair hex with measurements on the same hex" do
       %{palette: palette, pair: pair, printer_profile: printer_profile} =
         printed_pair_classification_fixture()

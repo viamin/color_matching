@@ -868,7 +868,7 @@ defmodule ColorMatching.Persistence do
     colors
     |> prioritize_canonical_colors(measured_color_ids)
     |> prioritize_canonical_colors(preferred_pair_color_ids)
-    |> Enum.min_by(&{blank_display_label?(&1.display_label), &1.sort_order, &1.id})
+    |> Enum.min_by(&{&1.sort_order, &1.id})
   end
 
   # Preserve ordering and hex ownership from the profile-backed/source-backed
