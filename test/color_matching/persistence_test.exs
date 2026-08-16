@@ -2257,6 +2257,44 @@ defmodule ColorMatching.PersistenceTest do
       assert Persistence.list_confirmed_metamer_pairs(printer_profile) == []
     end
 
+    test "orders confirmed metamer pairs by pair id and illuminant" do
+      %{
+        pair: pair,
+        second_pair: second_pair,
+        printer_profile: printer_profile
+      } = printed_pair_classification_fixture()
+
+      assert {:ok, pair_lps} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      assert {:ok, pair_blue} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "blue",
+                 classification: "weak_metamer"
+               })
+
+      assert {:ok, second_pair_green} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: second_pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "green",
+                 classification: "strong_metamer"
+               })
+
+      assert Enum.map(Persistence.list_confirmed_metamer_pairs(printer_profile), & &1.id) == [
+               pair_blue.id,
+               pair_lps.id,
+               second_pair_green.id
+             ]
+    end
+
     test "raises when listing confirmed metamer pairs for an unpersisted printer profile" do
       assert_raise ArgumentError,
                    "list_confirmed_metamer_pairs/1 requires a persisted printer profile",
