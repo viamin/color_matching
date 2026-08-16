@@ -23,6 +23,25 @@ run_mix() {
   "${mix_cmd[@]}" "$@"
 }
 
+ensure_mix_bootstrap() {
+  archives="$(run_mix archive 2>/dev/null || true)"
+
+  if ! printf '%s\n' "${archives}" | grep -q 'hex-'; then
+    echo "Installing Hex..."
+    run_mix local.hex --force
+  fi
+
+  echo "Installing Rebar..."
+  run_mix local.rebar --force >/dev/null
+
+  if [ ! -d deps ]; then
+    echo "Fetching Mix dependencies..."
+    run_mix deps.get
+  fi
+}
+
+ensure_mix_bootstrap
+
 staged_files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ex|exs)$' || true)
 
 if [ -n "${1:-}" ] && [ "${1}" = "--staged" ]; then
