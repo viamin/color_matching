@@ -31,10 +31,10 @@ prepend_elixir_install_bins() {
 
 prepend_elixir_install_bins
 
-if command -v mix >/dev/null 2>&1; then
-  mix_cmd=(mix)
-elif command -v mise >/dev/null 2>&1; then
+if command -v mise >/dev/null 2>&1; then
   mix_cmd=(mise exec -- mix)
+elif command -v mix >/dev/null 2>&1; then
+  mix_cmd=(mix)
 else
   echo "Error: neither mix nor mise is available. Install the Elixir toolchain before linting."
   exit 1
