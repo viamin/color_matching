@@ -91,8 +91,8 @@ STAGED_FILES
         exit 1
     fi
 
-    echo "Running Credo fallback..."
-    if ! run_mix credo; then
+    echo "Running Credo fallback in strict mode..."
+    if ! run_mix credo --strict; then
         echo "Error: Credo failed."
         exit 1
     fi
@@ -115,6 +115,7 @@ echo ""
 echo "The pre-commit hook will now:"
 echo "  • Run 'bin/lint --staged' before each commit when available"
 echo "  • Fall back to bootstrapped Elixir formatting/tests when bin/lint is unavailable"
+echo "  • Enforce the same strict Credo level used by CI"
 echo "  • Reuse mise when mix is not on PATH"
 echo ""
 echo "Fix hook failures before committing; do not bypass the checks."
