@@ -14,6 +14,7 @@ defmodule ColorMatching.Persistence.PrintedPairClassification do
 
   @illuminants ~w[lps red green blue]
   @classifications ~w[strong_metamer weak_metamer contrasting]
+  @metamer_classifications @classifications -- ~w[contrasting]
 
   @type illuminant :: String.t()
   @type classification :: String.t()
@@ -49,6 +50,13 @@ defmodule ColorMatching.Persistence.PrintedPairClassification do
 
   @spec classifications() :: [classification()]
   def classifications, do: @classifications
+
+  @doc """
+  The classification values that confirm a metamer pair, derived from the
+  canonical vocabulary by excluding `contrasting`.
+  """
+  @spec metamer_classifications() :: [classification()]
+  def metamer_classifications, do: @metamer_classifications
 
   @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(classification, attrs) do

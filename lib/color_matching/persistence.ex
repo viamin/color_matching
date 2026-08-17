@@ -6,7 +6,7 @@ defmodule ColorMatching.Persistence do
   import Ecto.Query, warn: false
   import Ecto.Changeset, only: [add_error: 3]
 
-  alias ColorMatching.PaletteStorage
+  alias ColorMatching.{ColorLabel, PaletteStorage}
 
   alias ColorMatching.Persistence.{
     Capture,
@@ -50,6 +50,21 @@ defmodule ColorMatching.Persistence do
           identifier: term(),
           errors: judgment_error_map()
         }
+  @type response_detail :: %{
+          brightness: float(),
+          source: String.t(),
+          apparent_brightness: integer() | nil,
+          raw_value: number() | nil,
+          raw_unit: String.t() | nil,
+          measured_at: DateTime.t() | nil,
+          test_run_id: String.t() | nil
+        }
+  @type response_details_by_source :: %{optional(String.t()) => response_detail()}
+  @type profile_color_entry :: %{
+          name: String.t(),
+          hex_color: String.t(),
+          response_details: response_details_by_source()
+        }
   @spec list_palettes() :: [Palette.t()]
   def list_palettes do
     Palette
@@ -68,6 +83,38 @@ defmodule ColorMatching.Persistence do
     |> order_by([color], asc: color.sort_order, asc: color.id)
     |> preload(:palette)
     |> Repo.all()
+  end
+
+  @doc """
+  Returns the distinct working color set for a printer profile, independent of
+  palette membership.
+
+  The working set is defined by palette colors that have either measurements or
+  responses for the profile, plus the hex colors of the profile's confirmed
+  metamer pairs, so every hex returned by `list_confirmed_metamer_pairs/1`
+  appears here even when it has no measurements yet. Colors are deduplicated by
+  hex so clients can compose against a profile-scoped view instead of palette
+  membership.
+  """
+  @spec list_profile_colors(PrinterProfile.t()) :: [profile_color_entry()]
+  def list_profile_colors(%PrinterProfile{id: printer_profile_id} = printer_profile)
+      when is_integer(printer_profile_id) do
+    confirmed_pairs = list_confirmed_metamer_pairs(printer_profile)
+    pair_hexes = confirmed_metamer_pair_hexes(confirmed_pairs)
+    preferred_pair_colors = pair_source_palette_colors(confirmed_pairs)
+
+    {palette_entries, palette_hexes} =
+      palette_color_entries(printer_profile_id, pair_hexes, preferred_pair_colors)
+
+    palette_entries ++ pair_only_color_entries(pair_hexes, palette_hexes)
+  end
+
+  def list_profile_colors(%PrinterProfile{}) do
+    raise ArgumentError, "list_profile_colors/1 requires a persisted printer profile"
+  end
+
+  def list_profile_colors(_printer_profile) do
+    raise ArgumentError, "list_profile_colors/1 requires a printer profile"
   end
 
   @spec get_palette!(integer()) :: Palette.t()
@@ -315,6 +362,47 @@ defmodule ColorMatching.Persistence do
     PairFinding
     |> where([finding], finding.test_sheet_id == ^test_sheet_id)
     |> Repo.all()
+  end
+
+  @doc """
+  Returns the active human-confirmed metamer pair classifications for a printer
+  profile.
+
+  Contrasting classifications are excluded because this query is intended for
+  composer-facing retrieval of confirmed metamer pairs only; the metamer values
+  come from `PrintedPairClassification.metamer_classifications/0` so they stay
+  in sync with the canonical vocabulary.
+  """
+  @spec list_confirmed_metamer_pairs(PrinterProfile.t()) :: [PrintedPairClassification.t()]
+  def list_confirmed_metamer_pairs(%PrinterProfile{id: printer_profile_id})
+      when is_integer(printer_profile_id) do
+    PrintedPairClassification
+    |> join(:inner, [classification], pair in TestSheetPair,
+      on: pair.id == classification.test_sheet_pair_id
+    )
+    |> where(
+      [classification, _pair],
+      classification.reproduction_profile_id == ^printer_profile_id and
+        classification.active == true and
+        classification.classification in ^PrintedPairClassification.metamer_classifications()
+    )
+    |> order_by([classification, pair],
+      asc: pair.pair_id,
+      asc: classification.illuminant,
+      desc: classification.inserted_at,
+      desc: classification.id
+    )
+    |> select([classification, _pair], classification)
+    |> Repo.all()
+    |> Repo.preload(:test_sheet_pair)
+  end
+
+  def list_confirmed_metamer_pairs(%PrinterProfile{}) do
+    raise ArgumentError, "list_confirmed_metamer_pairs/1 requires a persisted printer profile"
+  end
+
+  def list_confirmed_metamer_pairs(_printer_profile) do
+    raise ArgumentError, "list_confirmed_metamer_pairs/1 requires a printer profile"
   end
 
   @doc """
@@ -622,22 +710,35 @@ defmodule ColorMatching.Persistence do
   @spec response_vectors([PaletteColor.t()], PrinterProfile.t()) :: [ResponseVector.t()]
   def response_vectors(palette_colors, %PrinterProfile{id: printer_profile_id})
       when is_list(palette_colors) and is_integer(printer_profile_id) do
-    {responses_by_palette_color, measurements_by_palette_color} =
-      grouped_response_records(palette_colors, printer_profile_id)
+    if Enum.all?(palette_colors, &persisted_palette_color?/1) do
+      {responses_by_palette_color, measurements_by_palette_color} =
+        grouped_response_records(palette_colors, printer_profile_id)
 
-    Enum.map(
-      palette_colors,
-      &response_vector_from_records(
-        &1,
-        printer_profile_id,
-        Map.get(responses_by_palette_color, &1.id, %{}),
-        Map.get(measurements_by_palette_color, &1.id, %{})
+      Enum.map(
+        palette_colors,
+        &response_vector_from_records(
+          &1,
+          printer_profile_id,
+          Map.get(responses_by_palette_color, &1.id, %{}),
+          Map.get(measurements_by_palette_color, &1.id, %{})
+        )
       )
-    )
+    else
+      raise ArgumentError, "response_vectors/2 requires persisted palette colors with hex colors"
+    end
+  end
+
+  def response_vectors(_palette_colors, %PrinterProfile{id: printer_profile_id})
+      when is_integer(printer_profile_id) do
+    raise ArgumentError, "response_vectors/2 requires persisted palette colors with hex colors"
   end
 
   def response_vectors(_palette_colors, %PrinterProfile{}) do
     raise ArgumentError, "response_vectors/2 requires a persisted printer profile"
+  end
+
+  def response_vectors(_palette_colors, _printer_profile) do
+    raise ArgumentError, "response_vectors/2 requires a printer profile"
   end
 
   @doc """
@@ -664,25 +765,48 @@ defmodule ColorMatching.Persistence do
     * `:measured_at` / `:test_run_id` — measurement provenance, `nil` otherwise
   """
   @spec response_details([PaletteColor.t()], PrinterProfile.t()) ::
-          %{optional(integer()) => %{String.t() => map()}}
+          %{optional(integer()) => response_details_by_source()}
   def response_details(palette_colors, %PrinterProfile{id: printer_profile_id})
       when is_list(palette_colors) and is_integer(printer_profile_id) do
-    {responses_by_palette_color, measurements_by_palette_color} =
-      grouped_response_records(palette_colors, printer_profile_id)
+    if Enum.all?(palette_colors, &persisted_palette_color?/1) do
+      {responses_by_palette_color, measurements_by_palette_color} =
+        grouped_response_records(palette_colors, printer_profile_id)
 
-    palette_color_ids = Enum.map(palette_colors, & &1.id)
+      palette_color_ids = Enum.map(palette_colors, & &1.id)
 
-    Map.new(palette_color_ids, fn palette_color_id ->
-      responses = Map.get(responses_by_palette_color, palette_color_id, %{})
-      measurements = Map.get(measurements_by_palette_color, palette_color_id, %{})
+      Map.new(palette_color_ids, fn palette_color_id ->
+        responses = Map.get(responses_by_palette_color, palette_color_id, %{})
+        measurements = Map.get(measurements_by_palette_color, palette_color_id, %{})
 
-      {palette_color_id, detail_for_color(responses, measurements)}
-    end)
+        {palette_color_id, detail_for_color(responses, measurements)}
+      end)
+    else
+      raise ArgumentError,
+            "response_details/2 requires persisted palette colors and printer profile"
+    end
+  end
+
+  def response_details(_palette_colors, %PrinterProfile{id: printer_profile_id})
+      when is_integer(printer_profile_id) do
+    raise ArgumentError,
+          "response_details/2 requires persisted palette colors and printer profile"
+  end
+
+  def response_details(_palette_colors, %PrinterProfile{}) do
+    raise ArgumentError,
+          "response_details/2 requires a persisted printer profile"
+  end
+
+  def response_details(_palette_colors, _printer_profile) do
+    raise ArgumentError,
+          "response_details/2 requires a printer profile"
   end
 
   @spec grouped_response_records([PaletteColor.t()], integer()) ::
           {%{optional(integer()) => %{String.t() => IlluminantResponse.t()}},
            %{optional(integer()) => %{String.t() => IlluminantMeasurement.t()}}}
+  defp grouped_response_records([], _printer_profile_id), do: {%{}, %{}}
+
   defp grouped_response_records(palette_colors, printer_profile_id) do
     palette_color_ids = Enum.map(palette_colors, & &1.id)
 
@@ -709,6 +833,317 @@ defmodule ColorMatching.Persistence do
       end)
 
     {responses_by_palette_color, measurements_by_palette_color}
+  end
+
+  # Returns the palette-color-derived working set entries (deduplicated by hex)
+  # together with the set of upcased hexes they cover. Pair hexes also name
+  # palette colors that lack measurements so those entries reuse the palette
+  # display label instead of a bare hex.
+  defp palette_color_entries(printer_profile_id, pair_hexes, preferred_pair_colors) do
+    profile_backed_colors = profile_palette_colors(printer_profile_id)
+    profile_backed_color_ids = MapSet.new(profile_backed_colors, & &1.id)
+    preferred_pair_color_ids = MapSet.new(preferred_pair_colors, & &1.id)
+
+    {responses_by_palette_color, measurements_by_palette_color} =
+      grouped_response_records(profile_backed_colors, printer_profile_id)
+
+    case_variant_pair_colors =
+      pair_hex_case_variant_palette_colors(pair_hexes)
+      |> Enum.reject(&MapSet.member?(preferred_pair_color_ids, &1.id))
+
+    colors =
+      Enum.uniq_by(
+        profile_backed_colors ++ preferred_pair_colors ++ case_variant_pair_colors,
+        & &1.id
+      )
+
+    entries =
+      colors
+      |> Enum.group_by(&String.upcase(&1.hex_color))
+      |> Enum.map(
+        &profile_color_entry(
+          &1,
+          profile_backed_color_ids,
+          preferred_pair_color_ids,
+          responses_by_palette_color,
+          measurements_by_palette_color
+        )
+      )
+      |> Enum.sort_by(fn {bucket, sort_order, id, _entry} -> {bucket, sort_order, id} end)
+      |> Enum.map(fn {_bucket, _sort_order, _id, entry} -> entry end)
+
+    {entries, MapSet.new(colors, &String.upcase(&1.hex_color))}
+  end
+
+  defp profile_color_entry(
+         {_hex_color, colors},
+         profile_backed_color_ids,
+         preferred_pair_color_ids,
+         responses_by,
+         measurements_by
+       ) do
+    canonical_color =
+      canonical_profile_color(colors, profile_backed_color_ids, preferred_pair_color_ids)
+
+    label_color =
+      canonical_label_color(
+        colors,
+        profile_backed_color_ids,
+        preferred_pair_color_ids,
+        canonical_color
+      )
+
+    sort_bucket =
+      profile_color_sort_bucket(colors, profile_backed_color_ids, preferred_pair_color_ids)
+
+    {responses, measurements} =
+      Enum.reduce(colors, {%{}, %{}}, fn color, {response_acc, measurement_acc} ->
+        {
+          merge_profile_responses(response_acc, Map.get(responses_by, color.id, %{})),
+          merge_profile_measurements(measurement_acc, Map.get(measurements_by, color.id, %{}))
+        }
+      end)
+
+    {sort_bucket, canonical_color.sort_order, canonical_color.id,
+     %{
+       name: palette_color_name(label_color),
+       hex_color: canonical_color.hex_color,
+       response_details: detail_for_color(responses, measurements)
+     }}
+  end
+
+  # When a confirmed pair hex matches an unrelated palette color, keep the
+  # profile-backed color as canonical so labels and ordering come from the
+  # actual working-set member rather than an incidental duplicate elsewhere.
+  # Pair-only colors use the confirmed pair's source palette before falling
+  # back to unrelated palette matches, preserving the sheet's intended label.
+  defp canonical_profile_color(colors, profile_backed_color_ids, preferred_pair_color_ids) do
+    colors
+    |> canonical_candidate_colors(profile_backed_color_ids, preferred_pair_color_ids)
+    |> Enum.min_by(&{&1.sort_order, &1.id})
+  end
+
+  # Preserve ordering and hex ownership from the canonical color. Profile-
+  # backed colors may borrow a duplicate label when their own representative is
+  # blank, but pair-only colors should fall back to the hex rather than an
+  # unrelated palette label.
+  defp canonical_label_color(
+         colors,
+         profile_backed_color_ids,
+         preferred_pair_color_ids,
+         fallback_color
+       ) do
+    candidate_colors =
+      canonical_candidate_colors(colors, profile_backed_color_ids, preferred_pair_color_ids)
+
+    case preferred_label_candidate(candidate_colors) do
+      nil ->
+        if Enum.any?(candidate_colors, &MapSet.member?(profile_backed_color_ids, &1.id)) do
+          preferred_label_candidate(colors) || fallback_color
+        else
+          fallback_color
+        end
+
+      color ->
+        color
+    end
+  end
+
+  defp preferred_label_candidate(colors) do
+    colors
+    |> Enum.reject(&blank_display_label?(&1.display_label))
+    |> case do
+      [] -> nil
+      labeled_colors -> Enum.min_by(labeled_colors, &{&1.sort_order, &1.id})
+    end
+  end
+
+  # Confirmed-pair hexes with no palette color at all still belong in the
+  # working set: they carry the hex itself as their name, contribute no
+  # responses, and sort after every palette-derived entry.
+  defp pair_only_color_entries(pair_hexes, palette_hexes) do
+    pair_hexes
+    |> Enum.reject(&MapSet.member?(palette_hexes, String.upcase(&1)))
+    |> Enum.sort_by(&String.upcase/1)
+    |> Enum.map(&%{name: &1, hex_color: &1, response_details: %{}})
+  end
+
+  # One raw hex per distinct upcased hex among the profile's confirmed metamer
+  # pairs so pair hexes deduplicate case-insensitively like palette colors.
+  defp confirmed_metamer_pair_hexes(confirmed_pairs) do
+    confirmed_pairs
+    |> Enum.flat_map(&[&1.test_sheet_pair.color_a_hex, &1.test_sheet_pair.color_b_hex])
+    |> Enum.group_by(&String.upcase/1)
+    |> Enum.map(fn {_upcased_hex, hexes} -> Enum.min(hexes) end)
+  end
+
+  defp pair_hex_case_variant_palette_colors([]), do: []
+
+  defp pair_hex_case_variant_palette_colors(pair_hexes) do
+    exact_hexes = MapSet.new(pair_hexes)
+    upcased_hexes = MapSet.new(pair_hexes, &String.upcase/1)
+
+    PaletteColor
+    |> where([color], fragment("upper(?)", color.hex_color) in ^MapSet.to_list(upcased_hexes))
+    |> where([color], color.hex_color not in ^MapSet.to_list(exact_hexes))
+    |> order_by([color], asc: color.sort_order, asc: color.id)
+    |> Repo.all()
+  end
+
+  defp pair_source_palette_colors([]), do: []
+
+  defp pair_source_palette_colors(confirmed_pairs) do
+    pair_ids =
+      confirmed_pairs
+      |> Enum.map(& &1.test_sheet_pair_id)
+      |> Enum.uniq()
+
+    PaletteColor
+    |> join(:inner, [color], sheet in TestSheet, on: sheet.palette_id == color.palette_id)
+    |> join(:inner, [color, sheet], pair in TestSheetPair, on: pair.test_sheet_id == sheet.id)
+    |> where([_color, _sheet, pair], pair.id in ^pair_ids)
+    |> where(
+      [color, _sheet, pair],
+      fragment(
+        "upper(?) = upper(?) or upper(?) = upper(?)",
+        color.hex_color,
+        pair.color_a_hex,
+        color.hex_color,
+        pair.color_b_hex
+      )
+    )
+    |> distinct(true)
+    |> order_by([color], asc: color.sort_order, asc: color.id)
+    |> Repo.all()
+  end
+
+  defp palette_color_name(%PaletteColor{display_label: display_label, hex_color: hex_color})
+       when is_binary(display_label) do
+    ColorLabel.normalize_or_hex(display_label, hex_color)
+  end
+
+  defp palette_color_name(%PaletteColor{hex_color: hex_color}), do: hex_color
+
+  defp blank_display_label?(display_label) when is_binary(display_label) do
+    String.trim(display_label) == ""
+  end
+
+  defp blank_display_label?(_display_label), do: true
+
+  defp persisted_palette_color?(%PaletteColor{id: id, hex_color: hex_color}) do
+    is_integer(id) and is_binary(hex_color)
+  end
+
+  defp persisted_palette_color?(_palette_color), do: false
+
+  defp profile_palette_colors(printer_profile_id) do
+    PaletteColor
+    |> join(:left, [color], response in IlluminantResponse,
+      on:
+        response.palette_color_id == color.id and
+          response.printer_profile_id == ^printer_profile_id
+    )
+    |> join(:left, [color, response], measurement in IlluminantMeasurement,
+      on:
+        measurement.palette_color_id == color.id and
+          measurement.printer_profile_id == ^printer_profile_id
+    )
+    |> where(
+      [color, response, measurement],
+      not is_nil(response.id) or not is_nil(measurement.id)
+    )
+    |> distinct(true)
+    |> order_by([color], asc: color.sort_order, asc: color.id)
+    |> Repo.all()
+  end
+
+  defp merge_profile_responses(existing, additions) do
+    Map.merge(existing, additions, fn _source, left, right ->
+      most_recent_response(left, right)
+    end)
+  end
+
+  defp merge_profile_measurements(existing, additions) do
+    Map.merge(existing, additions, fn _source, left, right ->
+      most_recent_measurement(left, right)
+    end)
+  end
+
+  defp most_recent_response(
+         %IlluminantResponse{} = left,
+         %IlluminantResponse{} = right
+       ) do
+    case compare_datetimes(left.updated_at, right.updated_at) do
+      :lt ->
+        right
+
+      :gt ->
+        left
+
+      :eq ->
+        choose_latest_by_inserted_at(left, right)
+    end
+  end
+
+  defp most_recent_measurement(
+         %IlluminantMeasurement{} = left,
+         %IlluminantMeasurement{} = right
+       ) do
+    case compare_datetimes(
+           measurement_sort_datetime(left.measured_at),
+           measurement_sort_datetime(right.measured_at)
+         ) do
+      :lt ->
+        right
+
+      :gt ->
+        left
+
+      :eq ->
+        choose_latest_by_inserted_at(left, right)
+    end
+  end
+
+  defp measurement_sort_datetime(nil), do: ~U[0000-01-01 00:00:00Z]
+  defp measurement_sort_datetime(%DateTime{} = measured_at), do: measured_at
+
+  defp compare_datetimes(%DateTime{} = left, %DateTime{} = right) do
+    DateTime.compare(left, right)
+  end
+
+  defp choose_latest_by_inserted_at(left, right) do
+    case compare_datetimes(left.inserted_at, right.inserted_at) do
+      :lt -> right
+      :gt -> left
+      :eq -> if left.id >= right.id, do: left, else: right
+    end
+  end
+
+  # The working set is profile-centric first: measured/responded colors are the
+  # primary representatives for a duplicated hex. When a duplicated hex exists
+  # only because of a confirmed pair, prefer the pair's source palette color
+  # before falling back to unrelated palette duplicates.
+  defp canonical_candidate_colors(colors, profile_backed_color_ids, preferred_pair_color_ids) do
+    if Enum.any?(colors, &MapSet.member?(profile_backed_color_ids, &1.id)) do
+      prioritize_canonical_colors(colors, profile_backed_color_ids)
+    else
+      prioritize_canonical_colors(colors, preferred_pair_color_ids)
+    end
+  end
+
+  # Keep colors with profile data ahead of pair-only colors, and keep pair
+  # source colors ahead of unrelated duplicate-hex fallbacks.
+  defp profile_color_sort_bucket(colors, profile_backed_color_ids, preferred_pair_color_ids) do
+    cond do
+      Enum.any?(colors, &MapSet.member?(profile_backed_color_ids, &1.id)) -> 0
+      Enum.any?(colors, &MapSet.member?(preferred_pair_color_ids, &1.id)) -> 1
+      true -> 2
+    end
+  end
+
+  defp prioritize_canonical_colors(colors, prioritized_ids) do
+    prioritized_colors = Enum.filter(colors, &MapSet.member?(prioritized_ids, &1.id))
+    if prioritized_colors == [], do: colors, else: prioritized_colors
   end
 
   defp detail_for_color(responses, measurements) do
@@ -770,8 +1205,30 @@ defmodule ColorMatching.Persistence do
     ResponseVector.new(hex_color, printer_profile_id, records)
   end
 
+  def response_vector(%PaletteColor{id: id, hex_color: hex_color}, %PrinterProfile{})
+      when is_integer(id) and is_binary(hex_color) do
+    raise ArgumentError, "response_vector/2 requires a persisted printer profile"
+  end
+
+  def response_vector(_palette_color, %PrinterProfile{id: printer_profile_id})
+      when is_integer(printer_profile_id) do
+    raise ArgumentError, "response_vector/2 requires persisted palette color and printer profile"
+  end
+
   def response_vector(%PaletteColor{}, %PrinterProfile{}) do
     raise ArgumentError, "response_vector/2 requires persisted palette color and printer profile"
+  end
+
+  def response_vector(_palette_color, %PrinterProfile{}) do
+    raise ArgumentError, "response_vector/2 requires a persisted printer profile"
+  end
+
+  def response_vector(%PaletteColor{}, _printer_profile) do
+    raise ArgumentError, "response_vector/2 requires a printer profile"
+  end
+
+  def response_vector(_palette_color, _printer_profile) do
+    raise ArgumentError, "response_vector/2 requires a printer profile"
   end
 
   @spec latest_illuminant_measurements_query(

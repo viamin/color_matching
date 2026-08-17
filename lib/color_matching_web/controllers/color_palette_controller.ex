@@ -8,6 +8,11 @@ defmodule ColorMatchingWeb.ColorPaletteController do
   `color_matching` data model:
 
     * `GET /api/v1/printer_profiles` — available printer/material profiles
+    * `GET /api/v1/printer_profiles/:printer_profile_id/colors` — the
+      profile-scoped working color set (measured colors plus confirmed
+      metamer pair hexes) with no palette metadata
+    * `GET /api/v1/printer_profiles/:printer_profile_id/metamer_pairs` —
+      confirmed metamer pairs for the profile
     * `GET /api/v1/palettes` — available palettes
     * `GET /api/v1/colors?printer_profile_id=N&palette_id=M` — palette colors
       with their measured illuminant response vectors
@@ -17,11 +22,15 @@ defmodule ColorMatchingWeb.ColorPaletteController do
   across all palettes is returned. Light sources without a measurement are
   omitted from a color's `responses` so clients can distinguish "missing" from
   "measured as zero brightness".
+
+  Palettes remain a search construct used to assemble candidate colors and
+  printed test sheets. Composer-facing retrieval should prefer the profile
+  routes, which are intentionally decoupled from palette membership.
   """
 
   use ColorMatchingWeb, :controller
 
-  alias ColorMatching.{ColorFormat, Persistence}
+  alias ColorMatching.{ColorFormat, ColorLabel, Persistence}
   alias ColorMatching.Persistence.{PaletteColor, PrinterProfile}
 
   @doc """
@@ -67,17 +76,46 @@ defmodule ColorMatchingWeb.ColorPaletteController do
           )
       })
     else
-      {:error, :missing_param, key} ->
-        bad_request(conn, "missing required query parameter: #{key}")
+      error ->
+        lookup_error(conn, error)
+    end
+  end
 
-      {:error, :invalid_param, key} ->
-        bad_request(conn, "invalid #{key}: expected an integer")
+  @doc """
+  `GET /api/v1/printer_profiles/:printer_profile_id/colors`
+  """
+  def profile_colors(conn, params) do
+    case fetch_printer_profile(params) do
+      {:ok, printer_profile} ->
+        json(conn, %{
+          printer_profile: profile_json(printer_profile),
+          colors:
+            printer_profile
+            |> Persistence.list_profile_colors()
+            |> Enum.map(&profile_color_json/1)
+        })
 
-      {:error, :printer_profile_not_found} ->
-        not_found(conn, "printer profile not found")
+      error ->
+        lookup_error(conn, error)
+    end
+  end
 
-      {:error, :palette_not_found} ->
-        not_found(conn, "palette not found")
+  @doc """
+  `GET /api/v1/printer_profiles/:printer_profile_id/metamer_pairs`
+  """
+  def metamer_pairs(conn, params) do
+    case fetch_printer_profile(params) do
+      {:ok, printer_profile} ->
+        json(conn, %{
+          printer_profile: profile_json(printer_profile),
+          metamer_pairs:
+            printer_profile
+            |> Persistence.list_confirmed_metamer_pairs()
+            |> Enum.map(&metamer_pair_json/1)
+        })
+
+      error ->
+        lookup_error(conn, error)
     end
   end
 
@@ -118,16 +156,20 @@ defmodule ColorMatchingWeb.ColorPaletteController do
     end
   end
 
-  defp parse_integer(value, _key) when is_integer(value), do: {:ok, value}
+  defp parse_integer(value, key) when is_integer(value) do
+    if positive_integer?(value), do: {:ok, value}, else: {:error, :invalid_param, key}
+  end
 
   defp parse_integer(value, key) when is_binary(value) do
     case Integer.parse(String.trim(value)) do
-      {parsed, ""} -> {:ok, parsed}
+      {parsed, ""} when parsed > 0 -> {:ok, parsed}
       _ -> {:error, :invalid_param, key}
     end
   end
 
   defp parse_integer(_value, key), do: {:error, :invalid_param, key}
+
+  defp positive_integer?(value), do: value > 0
 
   # ---------------------------------------------------------------------------
   # JSON rendering
@@ -147,15 +189,51 @@ defmodule ColorMatchingWeb.ColorPaletteController do
 
     %{
       id: color.id,
-      name: color.display_label,
+      name: palette_color_name(color),
       hex: color.hex_color,
       rgb: rgb_json(color.hex_color),
       palette_id: color.palette_id,
       palette_name: palette_name(resolved_palette),
       sort_order: color.sort_order,
-      responses: Map.new(details, fn {source, detail} -> {source, response_json(detail)} end)
+      responses: responses_json(details)
     }
   end
+
+  defp profile_color_json(color) do
+    %{
+      name: profile_color_name(color),
+      hex: color.hex_color,
+      rgb: rgb_json(color.hex_color),
+      responses: responses_json(color.response_details)
+    }
+  end
+
+  defp metamer_pair_json(classification) do
+    pair = classification.test_sheet_pair
+
+    %{
+      pair_id: pair.pair_id,
+      color_a_hex: pair.color_a_hex,
+      color_b_hex: pair.color_b_hex,
+      illuminant: classification.illuminant,
+      classification: classification.classification,
+      notes: classification.notes,
+      classified_at: datetime_to_iso8601(classification.inserted_at)
+    }
+  end
+
+  defp palette_color_name(%PaletteColor{display_label: display_label, hex_color: hex_color})
+       when is_binary(display_label) do
+    ColorLabel.normalize_or_hex(display_label, hex_color)
+  end
+
+  defp palette_color_name(%PaletteColor{hex_color: hex_color}), do: hex_color
+
+  defp profile_color_name(%{name: name, hex_color: hex_color}) when is_binary(name) do
+    ColorLabel.normalize_or_hex(name, hex_color)
+  end
+
+  defp profile_color_name(%{hex_color: hex_color}), do: hex_color
 
   defp palette_name(%ColorMatching.Persistence.Palette{name: name}), do: name
   defp palette_name(_palette), do: nil
@@ -165,6 +243,10 @@ defmodule ColorMatchingWeb.ColorPaletteController do
       {:ok, {r, g, b}} -> %{r: r, g: g, b: b}
       {:error, _message} -> nil
     end
+  end
+
+  defp responses_json(response_details) do
+    Map.new(response_details, fn {source, detail} -> {source, response_json(detail)} end)
   end
 
   defp response_json(detail) do
@@ -186,6 +268,18 @@ defmodule ColorMatchingWeb.ColorPaletteController do
   end
 
   defp datetime_to_iso8601(%DateTime{} = datetime), do: DateTime.to_iso8601(datetime)
+
+  defp lookup_error(conn, {:error, :missing_param, key}),
+    do: bad_request(conn, "missing required parameter: #{key}")
+
+  defp lookup_error(conn, {:error, :invalid_param, key}),
+    do: bad_request(conn, "invalid #{key}: expected a positive integer")
+
+  defp lookup_error(conn, {:error, :printer_profile_not_found}),
+    do: not_found(conn, "printer profile not found")
+
+  defp lookup_error(conn, {:error, :palette_not_found}),
+    do: not_found(conn, "palette not found")
 
   defp bad_request(conn, detail) do
     conn |> put_status(:bad_request) |> json(%{errors: %{detail: detail}})

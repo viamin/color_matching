@@ -45,6 +45,12 @@ defmodule ColorMatchingWeb.Router do
     pipe_through [:api, :api_auth]
 
     get "/printer_profiles", ColorPaletteController, :printer_profiles
+    get "/printer_profiles/:printer_profile_id/colors", ColorPaletteController, :profile_colors
+
+    get "/printer_profiles/:printer_profile_id/metamer_pairs",
+        ColorPaletteController,
+        :metamer_pairs
+
     get "/palettes", ColorPaletteController, :palettes
     get "/colors", ColorPaletteController, :colors
 

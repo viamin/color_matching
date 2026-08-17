@@ -2,7 +2,14 @@ defmodule ColorMatching.PersistenceTest do
   use ColorMatching.DataCase, async: false
 
   alias ColorMatching.{Palette, Persistence}
-  alias ColorMatching.Persistence.{PaletteColor, PrintedPairClassification, PrinterProfile}
+  alias ColorMatching.Repo
+
+  alias ColorMatching.Persistence.{
+    IlluminantResponse,
+    PaletteColor,
+    PrintedPairClassification,
+    PrinterProfile
+  }
 
   describe "palettes" do
     test "creates and reads a palette with persisted colors" do
@@ -334,6 +341,13 @@ defmodule ColorMatching.PersistenceTest do
       assert second_vector.red == :missing
     end
 
+    test "returns empty response batches for an empty palette color list" do
+      %{printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert Persistence.response_vectors([], printer_profile) == []
+      assert Persistence.response_details([], printer_profile) == %{}
+    end
+
     test "prefers stored illuminant responses over instrument measurements" do
       %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
 
@@ -364,17 +378,1149 @@ defmodule ColorMatching.PersistenceTest do
       assert batched_vector.white == 0.7
     end
 
+    test "builds a profile-scoped working color set without palette duplicates" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, duplicate_palette} =
+               Persistence.create_palette(%{
+                 name: "Duplicate Hex Palette",
+                 colors: [
+                   %{hex_color: color.hex_color, sort_order: 0, display_label: "Duplicate"}
+                 ]
+               })
+
+      duplicate_color = Persistence.get_palette!(duplicate_palette.id).colors |> List.first()
+
+      assert {:ok, _white_measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.25
+               })
+
+      assert {:ok, _green_measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: duplicate_color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "green",
+                 normalized_brightness: 0.6
+               })
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
+      assert profile_color.hex_color == color.hex_color
+      assert profile_color.name == color.display_label
+      assert profile_color.response_details["white"][:brightness] == 0.25
+      assert profile_color.response_details["green"][:brightness] == 0.6
+      refute Map.has_key?(profile_color.response_details, "red")
+    end
+
+    test "includes colors that only have human responses for the profile" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, _response} =
+               Persistence.set_illuminant_response(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 illuminant: "red",
+                 apparent_brightness: 7
+               })
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
+      assert profile_color.hex_color == color.hex_color
+      assert profile_color.response_details["red"][:source] == "response"
+      assert profile_color.response_details["red"][:brightness] == 0.7
+    end
+
+    test "returns an empty working set when no colors have data for the profile" do
+      %{printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert Persistence.list_profile_colors(printer_profile) == []
+    end
+
+    test "excludes colors whose measurements belong to a different profile" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, other_profile} =
+               Persistence.create_printer_profile(%{
+                 printer_make_model: "Canon imagePROGRAF PRO-1100",
+                 paper_type: "Pro Luster",
+                 ink_type: "OEM Lucia Pro II"
+               })
+
+      assert {:ok, _other_profile_measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: other_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.5
+               })
+
+      assert Persistence.list_profile_colors(printer_profile) == []
+
+      [profile_color] = Persistence.list_profile_colors(other_profile)
+
+      assert profile_color.hex_color == color.hex_color
+      assert profile_color.response_details["white"][:brightness] == 0.5
+    end
+
+    test "keeps the most recent record per light source when duplicate hexes overlap" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, duplicate_palette} =
+               Persistence.create_palette(%{
+                 name: "Overlapping Hex Palette",
+                 colors: [
+                   %{hex_color: color.hex_color, sort_order: 0, display_label: "Duplicate"}
+                 ]
+               })
+
+      duplicate_color = Persistence.get_palette!(duplicate_palette.id).colors |> List.first()
+
+      assert {:ok, _older_measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.2,
+                 measured_at: ~U[2026-01-01 08:00:00Z]
+               })
+
+      assert {:ok, _newer_measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: duplicate_color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.8,
+                 measured_at: ~U[2026-02-01 08:00:00Z]
+               })
+
+      assert {:ok, _earlier_response} =
+               Persistence.set_illuminant_response(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 illuminant: "green",
+                 apparent_brightness: 3
+               })
+
+      assert {:ok, _later_response} =
+               Persistence.set_illuminant_response(%{
+                 palette_color_id: duplicate_color.id,
+                 printer_profile_id: printer_profile.id,
+                 illuminant: "green",
+                 apparent_brightness: 8
+               })
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
+      assert profile_color.response_details["white"][:source] == "measurement"
+      assert profile_color.response_details["white"][:brightness] == 0.8
+
+      assert profile_color.response_details["green"][:source] == "response"
+      assert profile_color.response_details["green"][:brightness] == 0.8
+      assert profile_color.response_details["green"][:apparent_brightness] == 8
+    end
+
+    test "keeps the canonical color's response when it is the most recent across duplicate hexes" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      duplicate_color = duplicate_hex_color_fixture(color, "Recent Canonical Response Palette")
+
+      assert {:ok, _stale_response} =
+               Persistence.set_illuminant_response(%{
+                 palette_color_id: duplicate_color.id,
+                 printer_profile_id: printer_profile.id,
+                 illuminant: "green",
+                 apparent_brightness: 3
+               })
+
+      assert {:ok, _recent_response} =
+               Persistence.set_illuminant_response(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 illuminant: "green",
+                 apparent_brightness: 8
+               })
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
+      assert profile_color.response_details["green"][:brightness] == 0.8
+      assert profile_color.response_details["green"][:apparent_brightness] == 8
+    end
+
+    test "keeps the canonical color's measurement when it is the most recent across duplicate hexes" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      duplicate_color = duplicate_hex_color_fixture(color, "Recent Canonical Measurement Palette")
+
+      assert {:ok, _stale_measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: duplicate_color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.2,
+                 measured_at: ~U[2026-01-01 08:00:00Z]
+               })
+
+      assert {:ok, _recent_measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.8,
+                 measured_at: ~U[2026-02-01 08:00:00Z]
+               })
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
+      assert profile_color.response_details["white"][:brightness] == 0.8
+    end
+
+    test "breaks measurement recency ties by record creation time" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      duplicate_color = duplicate_hex_color_fixture(color, "Tied Measurement Palette")
+
+      assert {:ok, _earlier_measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: duplicate_color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.2
+               })
+
+      assert {:ok, _later_measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.8
+               })
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
+      assert profile_color.response_details["white"][:brightness] == 0.8
+    end
+
+    test "breaks response recency ties by record creation time" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      duplicate_color = duplicate_hex_color_fixture(color, "Tied Response Palette")
+      tied_updated_at = ~U[2026-03-01 12:00:00.000000Z]
+
+      assert {:ok, _earlier_created} =
+               Repo.insert(%IlluminantResponse{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 illuminant: "green",
+                 apparent_brightness: 3,
+                 inserted_at: DateTime.add(tied_updated_at, -1, :second),
+                 updated_at: tied_updated_at
+               })
+
+      assert {:ok, _later_created} =
+               Repo.insert(%IlluminantResponse{
+                 palette_color_id: duplicate_color.id,
+                 printer_profile_id: printer_profile.id,
+                 illuminant: "green",
+                 apparent_brightness: 8,
+                 inserted_at: tied_updated_at,
+                 updated_at: tied_updated_at
+               })
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
+      assert profile_color.response_details["green"][:brightness] == 0.8
+      assert profile_color.response_details["green"][:apparent_brightness] == 8
+    end
+
+    test "breaks fully tied responses by record id" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      duplicate_color = duplicate_hex_color_fixture(color, "Fully Tied Response Palette")
+      tie = ~U[2026-03-01 12:00:00.000000Z]
+
+      assert {:ok, _canonical_tied} =
+               Repo.insert(%IlluminantResponse{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 illuminant: "green",
+                 apparent_brightness: 8,
+                 inserted_at: tie,
+                 updated_at: tie
+               })
+
+      assert {:ok, _duplicate_tied} =
+               Repo.insert(%IlluminantResponse{
+                 palette_color_id: duplicate_color.id,
+                 printer_profile_id: printer_profile.id,
+                 illuminant: "green",
+                 apparent_brightness: 3,
+                 inserted_at: tie,
+                 updated_at: tie
+               })
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
+      assert profile_color.response_details["green"][:brightness] == 0.3
+      assert profile_color.response_details["green"][:apparent_brightness] == 3
+    end
+
+    test "breaks fully tied measurements by record id" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      duplicate_color = duplicate_hex_color_fixture(color, "Fully Tied Measurement Palette")
+      tie = ~U[2026-03-01 12:00:00.000000Z]
+
+      assert {:ok, _canonical_tied} =
+               Repo.insert(%ColorMatching.Persistence.IlluminantMeasurement{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.8,
+                 measured_at: tie,
+                 inserted_at: tie,
+                 updated_at: tie
+               })
+
+      assert {:ok, _duplicate_tied} =
+               Repo.insert(%ColorMatching.Persistence.IlluminantMeasurement{
+                 palette_color_id: duplicate_color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.3,
+                 measured_at: tie,
+                 inserted_at: tie,
+                 updated_at: tie
+               })
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
+      assert profile_color.response_details["white"][:brightness] == 0.3
+    end
+
+    test "prefers a human response over an instrument measurement across duplicate hexes" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, duplicate_palette} =
+               Persistence.create_palette(%{
+                 name: "Cross Source Palette",
+                 colors: [
+                   %{hex_color: color.hex_color, sort_order: 0, display_label: "Duplicate"}
+                 ]
+               })
+
+      duplicate_color = Persistence.get_palette!(duplicate_palette.id).colors |> List.first()
+
+      assert {:ok, _measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: duplicate_color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.9
+               })
+
+      assert {:ok, _response} =
+               Persistence.set_illuminant_response(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 illuminant: "white",
+                 apparent_brightness: 2
+               })
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
+      assert profile_color.response_details["white"][:source] == "response"
+      assert profile_color.response_details["white"][:brightness] == 0.2
+      assert profile_color.response_details["white"][:apparent_brightness] == 2
+    end
+
+    test "collapses duplicate hexes that differ only by case" do
+      %{printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, palette} =
+               Persistence.create_palette(%{
+                 name: "Case Duplicate Palette",
+                 colors: [
+                   %{hex_color: "#AABBCC", sort_order: 0, display_label: "Upper"},
+                   %{hex_color: "#aabbcc", sort_order: 1, display_label: "Lower"}
+                 ]
+               })
+
+      [upper, lower] = Persistence.get_palette!(palette.id).colors
+
+      for color <- [upper, lower] do
+        assert {:ok, _measurement} =
+                 Persistence.create_illuminant_measurement(%{
+                   palette_color_id: color.id,
+                   printer_profile_id: printer_profile.id,
+                   light_source: "white",
+                   normalized_brightness: 0.5
+                 })
+      end
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
+      assert profile_color.hex_color == "#AABBCC"
+      assert profile_color.name == "Upper"
+    end
+
+    test "orders profile-scoped colors by canonical sort order" do
+      %{printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, palette} =
+               Persistence.create_palette(%{
+                 name: "Ordering Fixture",
+                 colors: [
+                   %{hex_color: "#FF0000", sort_order: 0, display_label: "First"},
+                   %{hex_color: "#0000FF", sort_order: 1, display_label: "Second"}
+                 ]
+               })
+
+      [first, second] = Persistence.get_palette!(palette.id).colors
+
+      for color <- [first, second] do
+        assert {:ok, _measurement} =
+                 Persistence.create_illuminant_measurement(%{
+                   palette_color_id: color.id,
+                   printer_profile_id: printer_profile.id,
+                   light_source: "white",
+                   normalized_brightness: 0.5
+                 })
+      end
+
+      assert Enum.map(Persistence.list_profile_colors(printer_profile), & &1.hex_color) == [
+               "#FF0000",
+               "#0000FF"
+             ]
+    end
+
+    test "includes confirmed metamer pair hexes that have no measurements" do
+      %{pair: pair, printer_profile: printer_profile} = printed_pair_classification_fixture()
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      profile_colors = Persistence.list_profile_colors(printer_profile)
+
+      # The pair's hexes match palette colors with no measurements, so the
+      # working set names them from the palette instead of dropping them.
+      assert Enum.map(profile_colors, & &1.hex_color) == ["#112233", "#445566"]
+      assert Enum.map(profile_colors, & &1.name) == ["Patch 1", "Patch 2"]
+      assert Enum.all?(profile_colors, &(&1.response_details == %{}))
+    end
+
+    test "includes confirmed pair hexes that no palette color has" do
+      %{palette: palette, printer_profile: printer_profile} =
+        printed_pair_classification_fixture()
+
+      assert {:ok, sheet} =
+               Persistence.create_test_sheet(%{
+                 lookup_code: "PWDC-TEST",
+                 palette_id: palette.id,
+                 printer_profile_id: printer_profile.id,
+                 sheet_version: "2026-08-01",
+                 pairs: [%{row: 1, col: 0, color_a_hex: "#ABCDEF", color_b_hex: "#FEDCBA"}]
+               })
+
+      [unmeasured_pair] = sheet.pairs
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: unmeasured_pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      profile_colors = Persistence.list_profile_colors(printer_profile)
+
+      assert Enum.map(profile_colors, & &1.hex_color) == ["#ABCDEF", "#FEDCBA"]
+
+      for profile_color <- profile_colors do
+        assert profile_color.name == profile_color.hex_color
+        assert profile_color.response_details == %{}
+      end
+    end
+
+    test "names pair-only hexes from palette colors that differ only by case" do
+      %{palette: palette, printer_profile: printer_profile} =
+        printed_pair_classification_fixture()
+
+      assert {:ok, _case_palette} =
+               Persistence.create_palette(%{
+                 name: "Lowercase Pair Palette",
+                 colors: [%{hex_color: "#abcdef", sort_order: 0, display_label: "Lower Pair"}]
+               })
+
+      assert {:ok, sheet} =
+               Persistence.create_test_sheet(%{
+                 lookup_code: "PWDE-TEST",
+                 palette_id: palette.id,
+                 printer_profile_id: printer_profile.id,
+                 sheet_version: "2026-08-01",
+                 pairs: [%{row: 1, col: 0, color_a_hex: "#ABCDEF", color_b_hex: "#FEDCBA"}]
+               })
+
+      [case_pair] = sheet.pairs
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: case_pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "weak_metamer"
+               })
+
+      [named_entry, synthetic_entry] = Persistence.list_profile_colors(printer_profile)
+
+      assert named_entry.hex_color == "#abcdef"
+      assert named_entry.name == "Lower Pair"
+      assert synthetic_entry.hex_color == "#FEDCBA"
+      assert synthetic_entry.name == "#FEDCBA"
+    end
+
+    test "names pair-only hexes from palette colors when the pair hex is lowercase" do
+      %{palette: palette, printer_profile: printer_profile} =
+        printed_pair_classification_fixture()
+
+      assert {:ok, _case_palette} =
+               Persistence.create_palette(%{
+                 name: "Uppercase Pair Palette",
+                 colors: [%{hex_color: "#ABCDEF", sort_order: 0, display_label: "Upper Pair"}]
+               })
+
+      assert {:ok, sheet} =
+               Persistence.create_test_sheet(%{
+                 lookup_code: "PWDF-TEST",
+                 palette_id: palette.id,
+                 printer_profile_id: printer_profile.id,
+                 sheet_version: "2026-08-01",
+                 pairs: [%{row: 1, col: 0, color_a_hex: "#abcdef", color_b_hex: "#FEDCBA"}]
+               })
+
+      [case_pair] = sheet.pairs
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: case_pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "weak_metamer"
+               })
+
+      [named_entry, synthetic_entry] = Persistence.list_profile_colors(printer_profile)
+
+      assert named_entry.hex_color == "#ABCDEF"
+      assert named_entry.name == "Upper Pair"
+      assert synthetic_entry.hex_color == "#FEDCBA"
+      assert synthetic_entry.name == "#FEDCBA"
+    end
+
+    test "falls back to the hex when only unrelated pair-only palette matches are unlabeled" do
+      %{palette: palette, printer_profile: printer_profile} =
+        printed_pair_classification_fixture()
+
+      assert {:ok, _blank_case_palette} =
+               Persistence.create_palette(%{
+                 name: "Blank Unrelated Pair Palette",
+                 colors: [%{hex_color: "#abcdef", sort_order: 0, display_label: "   "}]
+               })
+
+      assert {:ok, sheet} =
+               Persistence.create_test_sheet(%{
+                 lookup_code: "PWDG-TEST",
+                 palette_id: palette.id,
+                 printer_profile_id: printer_profile.id,
+                 sheet_version: "2026-08-01",
+                 pairs: [%{row: 1, col: 0, color_a_hex: "#ABCDEF", color_b_hex: "#FEDCBA"}]
+               })
+
+      [case_pair] = sheet.pairs
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: case_pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "weak_metamer"
+               })
+
+      [named_entry, synthetic_entry] = Persistence.list_profile_colors(printer_profile)
+
+      assert named_entry.hex_color == "#abcdef"
+      assert named_entry.name == "#abcdef"
+      assert synthetic_entry.hex_color == "#FEDCBA"
+      assert synthetic_entry.name == "#FEDCBA"
+    end
+
+    test "falls back to the hex when a profile color has no display label" do
+      %{printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, palette} =
+               Persistence.create_palette(%{
+                 name: "Unnamed Profile Color Palette",
+                 colors: [%{hex_color: "#ABCDEF", sort_order: 0}]
+               })
+
+      [color] = Persistence.get_palette!(palette.id).colors
+
+      assert {:ok, _measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.5
+               })
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
+      assert profile_color.hex_color == "#ABCDEF"
+      assert profile_color.name == "#ABCDEF"
+    end
+
+    test "trims surrounding whitespace from profile color labels" do
+      %{printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, palette} =
+               Persistence.create_palette(%{
+                 name: "Whitespace Profile Color Palette",
+                 colors: [%{hex_color: "#ABCDEF", sort_order: 0, display_label: "  Soft Gray  "}]
+               })
+
+      [color] = Persistence.get_palette!(palette.id).colors
+
+      assert {:ok, _measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.5
+               })
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
+      assert profile_color.hex_color == "#ABCDEF"
+      assert profile_color.name == "Soft Gray"
+    end
+
+    test "prefers a labeled duplicate hex over an unlabeled canonical candidate" do
+      %{printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, palette} =
+               Persistence.create_palette(%{
+                 name: "Unlabeled Canonical Fixture",
+                 colors: [
+                   %{hex_color: "#ABCDEF", sort_order: 0},
+                   %{hex_color: "#ABCDEF", sort_order: 1, display_label: "Named Duplicate"}
+                 ]
+               })
+
+      [unlabeled_color, labeled_color] = Persistence.get_palette!(palette.id).colors
+
+      for color <- [unlabeled_color, labeled_color] do
+        assert {:ok, _measurement} =
+                 Persistence.create_illuminant_measurement(%{
+                   palette_color_id: color.id,
+                   printer_profile_id: printer_profile.id,
+                   light_source: "white",
+                   normalized_brightness: 0.5
+                 })
+      end
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
+      assert profile_color.hex_color == "#ABCDEF"
+      assert profile_color.name == "Named Duplicate"
+      assert profile_color.response_details["white"][:brightness] == 0.5
+    end
+
+    test "keeps canonical ordering and hex casing when borrowing a duplicate label" do
+      %{printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert {:ok, palette} =
+               Persistence.create_palette(%{
+                 name: "Canonical Hex Ownership Fixture",
+                 colors: [
+                   %{hex_color: "#ABCDEF", sort_order: 0},
+                   %{hex_color: "#abcdef", sort_order: 1, display_label: "Named Duplicate"}
+                 ]
+               })
+
+      [canonical_color, labeled_duplicate] = Persistence.get_palette!(palette.id).colors
+
+      for color <- [canonical_color, labeled_duplicate] do
+        assert {:ok, _measurement} =
+                 Persistence.create_illuminant_measurement(%{
+                   palette_color_id: color.id,
+                   printer_profile_id: printer_profile.id,
+                   light_source: "white",
+                   normalized_brightness: 0.5
+                 })
+      end
+
+      [profile_color] = Persistence.list_profile_colors(printer_profile)
+
+      assert profile_color.hex_color == "#ABCDEF"
+      assert profile_color.name == "Named Duplicate"
+    end
+
+    test "merges a confirmed pair hex with measurements on the same hex" do
+      %{palette: palette, pair: pair, printer_profile: printer_profile} =
+        printed_pair_classification_fixture()
+
+      measured_color = Persistence.get_palette!(palette.id).colors |> List.first()
+      assert measured_color.hex_color == "#112233"
+
+      assert {:ok, _measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: measured_color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.3
+               })
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      [measured_entry, pair_only_entry] = Persistence.list_profile_colors(printer_profile)
+
+      assert measured_entry.hex_color == "#112233"
+      assert measured_entry.name == "Patch 1"
+      assert measured_entry.response_details["white"][:brightness] == 0.3
+      assert pair_only_entry.hex_color == "#445566"
+    end
+
+    test "keeps the profile-backed label when a confirmed pair hex matches an unrelated palette color" do
+      %{palette: palette, pair: pair, printer_profile: printer_profile} =
+        printed_pair_classification_fixture()
+
+      measured_color = Persistence.get_palette!(palette.id).colors |> List.first()
+
+      assert {:ok, _unrelated_palette} =
+               Persistence.create_palette(%{
+                 name: "Unrelated Duplicate Labels",
+                 colors: [
+                   %{
+                     hex_color: measured_color.hex_color,
+                     sort_order: -1,
+                     display_label: "Wrong Label"
+                   }
+                 ]
+               })
+
+      assert {:ok, _measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: measured_color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.3
+               })
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      [measured_entry, pair_only_entry] = Persistence.list_profile_colors(printer_profile)
+
+      assert measured_entry.hex_color == "#112233"
+      assert measured_entry.name == "Patch 1"
+      assert measured_entry.response_details["white"][:brightness] == 0.3
+      assert pair_only_entry.hex_color == "#445566"
+    end
+
+    test "keeps the measured profile-backed label when a confirmed pair source shares the hex" do
+      %{palette: palette, pair: pair, printer_profile: printer_profile} =
+        printed_pair_classification_fixture()
+
+      measured_color = Persistence.get_palette!(palette.id).colors |> List.first()
+
+      assert {:ok, unrelated_palette} =
+               Persistence.create_palette(%{
+                 name: "Measured Duplicate Labels",
+                 colors: [
+                   %{
+                     hex_color: measured_color.hex_color,
+                     sort_order: -1,
+                     display_label: "Measured Duplicate"
+                   }
+                 ]
+               })
+
+      [measured_duplicate] = Persistence.get_palette!(unrelated_palette.id).colors
+
+      assert {:ok, _measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: measured_duplicate.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.6
+               })
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      [measured_entry, pair_only_entry] = Persistence.list_profile_colors(printer_profile)
+
+      assert measured_entry.hex_color == "#112233"
+      assert measured_entry.name == "Measured Duplicate"
+      assert measured_entry.response_details["white"][:brightness] == 0.6
+      assert pair_only_entry.hex_color == "#445566"
+      assert pair_only_entry.name == "Patch 2"
+    end
+
+    test "prefers the confirmed pair's source palette label for pair-only colors" do
+      %{palette: palette, pair: pair, printer_profile: printer_profile} =
+        printed_pair_classification_fixture()
+
+      assert {:ok, _unrelated_palette} =
+               Persistence.create_palette(%{
+                 name: "Unrelated Pair Labels",
+                 colors: [
+                   %{
+                     hex_color: "#445566",
+                     sort_order: -1,
+                     display_label: "Wrong Pair Label"
+                   }
+                 ]
+               })
+
+      measured_color = Persistence.get_palette!(palette.id).colors |> List.first()
+
+      assert {:ok, _measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: measured_color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.3
+               })
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      [measured_entry, pair_only_entry] = Persistence.list_profile_colors(printer_profile)
+
+      assert measured_entry.hex_color == "#112233"
+      assert pair_only_entry.hex_color == "#445566"
+      assert pair_only_entry.name == "Patch 2"
+    end
+
+    test "falls back to the hex when the confirmed pair source label is blank, even with duplicate labels elsewhere" do
+      %{palette: palette, pair: pair, printer_profile: printer_profile} =
+        printed_pair_classification_fixture()
+
+      source_pair_color =
+        Enum.find(palette.colors, &(&1.hex_color == "#445566"))
+
+      assert {:ok, _} =
+               Persistence.create_palette(%{
+                 name: "Fallback Pair Labels",
+                 colors: [
+                   %{hex_color: "#445566", sort_order: -1, display_label: "Fallback Pair Label"}
+                 ]
+               })
+
+      assert {:ok, _} =
+               source_pair_color
+               |> Ecto.Changeset.change(display_label: "   ")
+               |> Repo.update()
+
+      measured_color = Persistence.get_palette!(palette.id).colors |> List.first()
+
+      assert {:ok, _measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: measured_color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.3
+               })
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      [measured_entry, pair_only_entry] = Persistence.list_profile_colors(printer_profile)
+
+      assert measured_entry.hex_color == "#112233"
+      assert pair_only_entry.hex_color == "#445566"
+      assert pair_only_entry.name == "#445566"
+    end
+
+    test "falls back to the hex when a confirmed pair source label is blank and no fallback exists" do
+      %{palette: palette, pair: pair, printer_profile: printer_profile} =
+        printed_pair_classification_fixture()
+
+      source_pair_color =
+        Enum.find(palette.colors, &(&1.hex_color == "#445566"))
+
+      assert {:ok, _} =
+               source_pair_color
+               |> Ecto.Changeset.change(display_label: "   ")
+               |> Repo.update()
+
+      measured_color = Persistence.get_palette!(palette.id).colors |> List.first()
+
+      assert {:ok, _measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: measured_color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.3
+               })
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      [measured_entry, pair_only_entry] = Persistence.list_profile_colors(printer_profile)
+
+      assert measured_entry.hex_color == "#112233"
+      assert pair_only_entry.hex_color == "#445566"
+      assert pair_only_entry.name == "#445566"
+    end
+
+    test "keeps measured colors ahead of pair-only colors that borrow unrelated palette labels" do
+      %{palette: palette, pair: pair, printer_profile: printer_profile} =
+        printed_pair_classification_fixture()
+
+      assert {:ok, _unrelated_palette} =
+               Persistence.create_palette(%{
+                 name: "Early Fallback Pair Labels",
+                 colors: [
+                   %{hex_color: "#445566", sort_order: -1, display_label: "Fallback Pair Label"}
+                 ]
+               })
+
+      measured_color = Persistence.get_palette!(palette.id).colors |> List.first()
+
+      assert {:ok, _measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: measured_color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.3
+               })
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      [measured_entry, pair_only_entry] = Persistence.list_profile_colors(printer_profile)
+
+      assert measured_entry.hex_color == "#112233"
+      assert pair_only_entry.hex_color == "#445566"
+      assert pair_only_entry.name == "Patch 2"
+    end
+
+    test "keeps the confirmed pair label when other classified sheets contain duplicate hexes" do
+      %{palette: palette, pair: pair, printer_profile: printer_profile} =
+        printed_pair_classification_fixture()
+
+      assert {:ok, wrong_palette} =
+               Persistence.create_palette(%{
+                 name: "Wrong Classified Labels",
+                 colors: [
+                   %{
+                     hex_color: "#445566",
+                     sort_order: -1,
+                     display_label: "Wrong Classified Label"
+                   },
+                   %{hex_color: "#ABC123", sort_order: 0, display_label: "Other Patch"},
+                   %{hex_color: "#DEF456", sort_order: 1, display_label: "Another Patch"}
+                 ]
+               })
+
+      assert {:ok, wrong_sheet} =
+               Persistence.create_test_sheet(%{
+                 lookup_code: "PWDG-TEST",
+                 palette_id: wrong_palette.id,
+                 printer_profile_id: printer_profile.id,
+                 sheet_version: "2026-08-02",
+                 pairs: [%{row: 0, col: 0, color_a_hex: "#ABC123", color_b_hex: "#DEF456"}]
+               })
+
+      [wrong_pair] = wrong_sheet.pairs
+      measured_color = Persistence.get_palette!(palette.id).colors |> List.first()
+
+      assert {:ok, _measurement} =
+               Persistence.create_illuminant_measurement(%{
+                 palette_color_id: measured_color.id,
+                 printer_profile_id: printer_profile.id,
+                 light_source: "white",
+                 normalized_brightness: 0.3
+               })
+
+      assert {:ok, _metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      assert {:ok, _other_metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: wrong_pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "blue",
+                 classification: "weak_metamer"
+               })
+
+      profile_colors =
+        Persistence.list_profile_colors(printer_profile)
+        |> Map.new(&{&1.hex_color, &1})
+
+      assert profile_colors["#112233"].response_details["white"][:brightness] == 0.3
+      assert profile_colors["#445566"].name == "Patch 2"
+      assert profile_colors["#ABC123"].name == "Other Patch"
+      assert profile_colors["#DEF456"].name == "Another Patch"
+    end
+
+    test "excludes pair hexes from contrasting, superseded, or other-profile classifications" do
+      %{
+        pair: pair,
+        second_pair: second_pair,
+        printer_profile: printer_profile,
+        second_printer_profile: second_printer_profile
+      } = printed_pair_classification_fixture()
+
+      assert {:ok, _contrasting} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "contrasting"
+               })
+
+      assert {:ok, _superseded_metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: second_pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "blue",
+                 classification: "strong_metamer"
+               })
+
+      assert {:ok, _replacement} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: second_pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "blue",
+                 classification: "contrasting"
+               })
+
+      assert {:ok, _other_profile} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: second_printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      assert Persistence.list_profile_colors(printer_profile) == []
+    end
+
+    test "raises when listing profile colors for an unpersisted printer profile" do
+      assert_raise ArgumentError,
+                   "list_profile_colors/1 requires a persisted printer profile",
+                   fn ->
+                     Persistence.list_profile_colors(%PrinterProfile{
+                       printer_make_model: "Fixture Printer",
+                       paper_type: "Fixture Paper",
+                       ink_type: "Fixture Ink"
+                     })
+                   end
+    end
+
+    test "raises when listing profile colors without a printer profile struct" do
+      assert_raise ArgumentError,
+                   "list_profile_colors/1 requires a printer profile",
+                   fn ->
+                     Persistence.list_profile_colors("not a profile")
+                   end
+    end
+
     test "raises when building a response vector for an unpersisted printer profile" do
       %{color: color} = persisted_measurement_fixture()
 
       assert_raise ArgumentError,
-                   "response_vector/2 requires persisted palette color and printer profile",
+                   "response_vector/2 requires a persisted printer profile",
                    fn ->
                      Persistence.response_vector(color, %PrinterProfile{
                        printer_make_model: "Fixture Printer",
                        paper_type: "Fixture Paper",
                        ink_type: "Fixture Ink"
                      })
+                   end
+    end
+
+    test "raises when building a response vector for an unpersisted palette color" do
+      %{printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert_raise ArgumentError,
+                   "response_vector/2 requires persisted palette color and printer profile",
+                   fn ->
+                     Persistence.response_vector(
+                       %PaletteColor{hex_color: "#112233", sort_order: 0},
+                       printer_profile
+                     )
+                   end
+    end
+
+    test "raises when building a response vector with a non-palette-color first argument" do
+      %{printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert_raise ArgumentError,
+                   "response_vector/2 requires persisted palette color and printer profile",
+                   fn ->
+                     Persistence.response_vector("not a palette color", printer_profile)
+                   end
+    end
+
+    test "raises when building a response vector without a printer profile struct" do
+      %{color: color} = persisted_measurement_fixture()
+
+      assert_raise ArgumentError,
+                   "response_vector/2 requires a printer profile",
+                   fn ->
+                     Persistence.response_vector(color, "not a profile")
                    end
     end
 
@@ -388,6 +1534,113 @@ defmodule ColorMatching.PersistenceTest do
                        [%PaletteColor{hex_color: "#112233", sort_order: 0}],
                        printer_profile
                      )
+                   end
+    end
+
+    test "raises when any response vector color is unpersisted" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert_raise ArgumentError,
+                   "response_vectors/2 requires persisted palette colors with hex colors",
+                   fn ->
+                     Persistence.response_vectors(
+                       [color, %PaletteColor{hex_color: "#445566", sort_order: 1}],
+                       printer_profile
+                     )
+                   end
+    end
+
+    test "raises when response vectors are requested with a non-list first argument" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert_raise ArgumentError,
+                   "response_vectors/2 requires persisted palette colors with hex colors",
+                   fn ->
+                     Persistence.response_vectors(color, printer_profile)
+                   end
+    end
+
+    test "raises when building response vectors without a printer profile struct" do
+      %{color: color} = persisted_measurement_fixture()
+
+      assert_raise ArgumentError,
+                   "response_vectors/2 requires a printer profile",
+                   fn ->
+                     Persistence.response_vectors([color], "not a profile")
+                   end
+    end
+
+    test "raises when building response vectors for an unpersisted printer profile" do
+      %{color: color} = persisted_measurement_fixture()
+
+      assert_raise ArgumentError,
+                   "response_vectors/2 requires a persisted printer profile",
+                   fn ->
+                     Persistence.response_vectors([color], %PrinterProfile{
+                       printer_make_model: "Fixture Printer",
+                       paper_type: "Fixture Paper",
+                       ink_type: "Fixture Ink"
+                     })
+                   end
+    end
+
+    test "raises when building response details for an unpersisted printer profile" do
+      %{color: color} = persisted_measurement_fixture()
+
+      assert_raise ArgumentError,
+                   "response_details/2 requires a persisted printer profile",
+                   fn ->
+                     Persistence.response_details([color], %PrinterProfile{
+                       printer_make_model: "Fixture Printer",
+                       paper_type: "Fixture Paper",
+                       ink_type: "Fixture Ink"
+                     })
+                   end
+    end
+
+    test "raises when building response details for unpersisted palette colors" do
+      %{printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert_raise ArgumentError,
+                   "response_details/2 requires persisted palette colors and printer profile",
+                   fn ->
+                     Persistence.response_details(
+                       [%PaletteColor{hex_color: "#112233", sort_order: 0}],
+                       printer_profile
+                     )
+                   end
+    end
+
+    test "raises when any response detail color is unpersisted" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert_raise ArgumentError,
+                   "response_details/2 requires persisted palette colors and printer profile",
+                   fn ->
+                     Persistence.response_details(
+                       [color, %PaletteColor{hex_color: "#445566", sort_order: 1}],
+                       printer_profile
+                     )
+                   end
+    end
+
+    test "raises when response details are requested with a non-list first argument" do
+      %{color: color, printer_profile: printer_profile} = persisted_measurement_fixture()
+
+      assert_raise ArgumentError,
+                   "response_details/2 requires persisted palette colors and printer profile",
+                   fn ->
+                     Persistence.response_details(color, printer_profile)
+                   end
+    end
+
+    test "raises when building response details without a printer profile struct" do
+      %{color: color} = persisted_measurement_fixture()
+
+      assert_raise ArgumentError,
+                   "response_details/2 requires a printer profile",
+                   fn ->
+                     Persistence.response_details([color], "not a profile")
                    end
     end
 
@@ -948,6 +2201,141 @@ defmodule ColorMatching.PersistenceTest do
              |> Enum.map(& &1.id)
              |> Enum.sort() == Enum.sort([matching.id])
     end
+
+    test "lists confirmed metamer pairs for a profile" do
+      %{
+        pair: pair,
+        second_pair: second_pair,
+        printer_profile: printer_profile,
+        second_printer_profile: second_printer_profile
+      } = printed_pair_classification_fixture()
+
+      assert {:ok, strong_metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      assert {:ok, weak_metamer} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: second_pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "blue",
+                 classification: "weak_metamer"
+               })
+
+      assert {:ok, _contrasting} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "green",
+                 classification: "contrasting"
+               })
+
+      assert {:ok, _other_profile} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: second_printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      confirmed_pairs = Persistence.list_confirmed_metamer_pairs(printer_profile)
+
+      assert Enum.map(confirmed_pairs, & &1.id) |> Enum.sort() ==
+               Enum.sort([strong_metamer.id, weak_metamer.id])
+
+      assert Enum.all?(confirmed_pairs, &(&1.active == true))
+      assert Enum.all?(confirmed_pairs, &(&1.reproduction_profile_id == printer_profile.id))
+      assert Enum.all?(confirmed_pairs, &Ecto.assoc_loaded?(&1.test_sheet_pair))
+
+      assert Enum.map(confirmed_pairs, & &1.classification) |> Enum.sort() == [
+               "strong_metamer",
+               "weak_metamer"
+             ]
+    end
+
+    test "excludes superseded metamer classifications that are no longer active" do
+      %{pair: pair, printer_profile: printer_profile} = printed_pair_classification_fixture()
+
+      assert {:ok, _superseded} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      assert {:ok, _replacement} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "contrasting"
+               })
+
+      assert Persistence.list_confirmed_metamer_pairs(printer_profile) == []
+    end
+
+    test "orders confirmed metamer pairs by pair id and illuminant" do
+      %{
+        pair: pair,
+        second_pair: second_pair,
+        printer_profile: printer_profile
+      } = printed_pair_classification_fixture()
+
+      assert {:ok, pair_lps} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      assert {:ok, pair_blue} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "blue",
+                 classification: "weak_metamer"
+               })
+
+      assert {:ok, second_pair_green} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: second_pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "green",
+                 classification: "strong_metamer"
+               })
+
+      assert Enum.map(Persistence.list_confirmed_metamer_pairs(printer_profile), & &1.id) == [
+               pair_blue.id,
+               pair_lps.id,
+               second_pair_green.id
+             ]
+    end
+
+    test "raises when listing confirmed metamer pairs for an unpersisted printer profile" do
+      assert_raise ArgumentError,
+                   "list_confirmed_metamer_pairs/1 requires a persisted printer profile",
+                   fn ->
+                     Persistence.list_confirmed_metamer_pairs(%PrinterProfile{
+                       printer_make_model: "Fixture Printer",
+                       paper_type: "Fixture Paper",
+                       ink_type: "Fixture Ink"
+                     })
+                   end
+    end
+
+    test "raises when listing confirmed metamer pairs without a printer profile struct" do
+      assert_raise ArgumentError,
+                   "list_confirmed_metamer_pairs/1 requires a printer profile",
+                   fn ->
+                     Persistence.list_confirmed_metamer_pairs("not a profile")
+                   end
+    end
   end
 
   defp persisted_measurement_fixture do
@@ -973,6 +2361,18 @@ defmodule ColorMatching.PersistenceTest do
     %{color: color, printer_profile: printer_profile}
   end
 
+  defp duplicate_hex_color_fixture(color, palette_name) do
+    assert {:ok, duplicate_palette} =
+             Persistence.create_palette(%{
+               name: palette_name,
+               colors: [
+                 %{hex_color: color.hex_color, sort_order: 0, display_label: "Duplicate"}
+               ]
+             })
+
+    Persistence.get_palette!(duplicate_palette.id).colors |> List.first()
+  end
+
   defp printed_pair_classification_fixture do
     assert {:ok, palette} =
              Persistence.create_palette(%{
@@ -983,6 +2383,8 @@ defmodule ColorMatching.PersistenceTest do
                  %{hex_color: "#778899", sort_order: 2, display_label: "Patch 3"}
                ]
              })
+
+    palette = Persistence.get_palette!(palette.id)
 
     assert {:ok, printer_profile} =
              Persistence.create_printer_profile(%{
@@ -1013,6 +2415,7 @@ defmodule ColorMatching.PersistenceTest do
     [pair, second_pair] = sheet.pairs
 
     %{
+      palette: palette,
       pair: pair,
       second_pair: second_pair,
       printer_profile: printer_profile,
