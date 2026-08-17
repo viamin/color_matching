@@ -38,11 +38,34 @@ else
         fi
     }
 
+    find_mise() {
+        candidate="$(command -v mise 2>/dev/null || true)"
+        if [ -n "${candidate}" ]; then
+            printf '%s\n' "${candidate}"
+            return 0
+        fi
+
+        for candidate in \
+            "${HOME}/.local/bin/mise" \
+            "${HOME}/bin/mise" \
+            "${HOME}/.cargo/bin/mise"
+        do
+            if [ -x "${candidate}" ]; then
+                printf '%s\n' "${candidate}"
+                return 0
+            fi
+        done
+
+        return 1
+    }
+
     prepend_elixir_install_bins
 
-    if command -v mise >/dev/null 2>&1; then
+    mise_bin="$(find_mise || true)"
+
+    if [ -n "${mise_bin}" ]; then
         run_mix() {
-            mise exec -- mix "$@"
+            "${mise_bin}" exec -- mix "$@"
         }
     elif command -v mix >/dev/null 2>&1; then
         run_mix() {
