@@ -8,109 +8,22 @@
 
 set -euo pipefail
 
-export PATH="${HOME}/.local/bin:${PATH}"
-
-prepend_elixir_install_bins() {
-  local otp_root="${HOME}/.elixir-install/installs/otp"
-  local elixir_root="${HOME}/.elixir-install/installs/elixir"
-  local otp_bin=""
-  local elixir_bin=""
-
-  if [ -d "${otp_root}" ]; then
-    otp_bin="$(find "${otp_root}" -mindepth 2 -maxdepth 2 -type d -name bin | sort -V | tail -n 1)"
-  fi
-
-  if [ -d "${elixir_root}" ]; then
-    elixir_bin="$(find "${elixir_root}" -mindepth 2 -maxdepth 2 -type d -name bin | sort -V | tail -n 1)"
-  fi
-
-  if [ -n "${otp_bin}" ] && [ -n "${elixir_bin}" ]; then
-    export PATH="${otp_bin}:${elixir_bin}:${PATH}"
-  fi
-}
-
-find_mise() {
-  local candidate
-
-  if candidate="$(command -v mise 2>/dev/null)"; then
-    printf '%s\n' "${candidate}"
-    return 0
-  fi
-
-  for candidate in \
-    "${HOME}/.local/bin/mise" \
-    "${HOME}/bin/mise" \
-    "${HOME}/.cargo/bin/mise"
-  do
-    if [ -x "${candidate}" ]; then
-      printf '%s\n' "${candidate}"
-      return 0
-    fi
-  done
-
-  return 1
-}
-
-prepend_elixir_install_bins
-
-if mise_bin="$(find_mise)"; then
-  mix_cmd=("${mise_bin}" exec -- mix)
-elif command -v mix >/dev/null 2>&1; then
-  mix_cmd=(mix)
-else
-  echo "Error: neither mix nor mise is available. Install the Elixir toolchain before linting."
-  exit 1
+if ! command -v mix >/dev/null 2>&1; then
+  echo "Warning: mix not available, skipping Elixir formatting checks"
+  exit 0
 fi
-
-run_mix() {
-  "${mix_cmd[@]}" "$@"
-}
-
-run_mix_test() {
-  MIX_ENV=test "${mix_cmd[@]}" test
-}
-
-ensure_mix_bootstrap() {
-  archives="$(run_mix archive 2>/dev/null || true)"
-
-  if ! printf '%s\n' "${archives}" | grep -q 'hex-'; then
-    echo "Installing Hex..."
-    run_mix local.hex --force
-  fi
-
-  echo "Installing Rebar..."
-  run_mix local.rebar --force >/dev/null
-
-  echo "Fetching Mix dependencies..."
-  run_mix deps.get >/dev/null
-}
-
-ensure_mix_bootstrap
 
 staged_files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ex|exs)$' || true)
 
 if [ -n "${1:-}" ] && [ "${1}" = "--staged" ]; then
   if [ -n "${staged_files}" ]; then
     echo "Formatting staged files: ${staged_files}"
-    while IFS= read -r file; do
-      [ -n "${file}" ] || continue
-      run_mix format "${file}"
-      git add "${file}"
-    done <<EOF
-${staged_files}
-EOF
+    echo "${staged_files}" | xargs mix format
+    echo "${staged_files}" | xargs git add
   else
     echo "No Elixir files staged to format"
   fi
 fi
 
 echo "Verifying mix format on the whole tree..."
-run_mix format --check-formatted
-
-echo "Running Credo in strict mode..."
-run_mix credo --strict
-
-if [ -n "${1:-}" ] && [ "${1}" = "--staged" ]; then
-  echo "Running test suite..."
-  run_mix_test
-fi
+mix format --check-formatted

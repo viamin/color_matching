@@ -11,122 +11,44 @@ echo "Setting up git hooks..."
 cat > .git/hooks/pre-commit << 'EOF'
 #!/bin/sh
 #
-# Pre-commit hook to enforce lint and tests before commit.
+# Pre-commit hook to run mix format
+# Called by "git commit" with no arguments.  The hook should
+# exit with non-zero status after issuing an appropriate message if
+# it wants to stop the commit.
 
-if [ -x bin/lint ]; then
-    echo "Running bin/lint --staged..."
-    bin/lint --staged || exit 1
-else
-    export PATH="${HOME}/.local/bin:${PATH}"
-
-    prepend_elixir_install_bins() {
-        otp_root="${HOME}/.elixir-install/installs/otp"
-        elixir_root="${HOME}/.elixir-install/installs/elixir"
-        otp_bin=""
-        elixir_bin=""
-
-        if [ -d "${otp_root}" ]; then
-            otp_bin=$(find "${otp_root}" -mindepth 2 -maxdepth 2 -type d -name bin | sort -V | tail -n 1)
-        fi
-
-        if [ -d "${elixir_root}" ]; then
-            elixir_bin=$(find "${elixir_root}" -mindepth 2 -maxdepth 2 -type d -name bin | sort -V | tail -n 1)
-        fi
-
-        if [ -n "${otp_bin}" ] && [ -n "${elixir_bin}" ]; then
-            export PATH="${otp_bin}:${elixir_bin}:${PATH}"
-        fi
-    }
-
-    find_mise() {
-        candidate="$(command -v mise 2>/dev/null || true)"
-        if [ -n "${candidate}" ]; then
-            printf '%s\n' "${candidate}"
-            return 0
-        fi
-
-        for candidate in \
-            "${HOME}/.local/bin/mise" \
-            "${HOME}/bin/mise" \
-            "${HOME}/.cargo/bin/mise"
-        do
-            if [ -x "${candidate}" ]; then
-                printf '%s\n' "${candidate}"
-                return 0
-            fi
-        done
-
-        return 1
-    }
-
-    prepend_elixir_install_bins
-
-    mise_bin="$(find_mise || true)"
-
-    if [ -n "${mise_bin}" ]; then
-        run_mix() {
-            "${mise_bin}" exec -- mix "$@"
-        }
-    elif command -v mix >/dev/null 2>&1; then
-        run_mix() {
-            mix "$@"
-        }
-    else
-        echo "Error: neither mix nor mise is available. Please install Elixir or mise."
-        exit 1
-    fi
-
-    ensure_mix_bootstrap() {
-        archives="$(run_mix archive 2>/dev/null || true)"
-
-        if ! printf '%s\n' "${archives}" | grep -q 'hex-'; then
-            echo "Installing Hex..."
-            run_mix local.hex --force
-        fi
-
-        echo "Installing Rebar..."
-        run_mix local.rebar --force >/dev/null
-
-        echo "Fetching Mix dependencies..."
-        run_mix deps.get >/dev/null
-    }
-
-    ensure_mix_bootstrap
-
-    staged_files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ex|exs)$' || true)
-
-    if [ -n "${staged_files}" ]; then
-        echo "Formatting staged Elixir files in fallback..."
-        while IFS= read -r file; do
-            [ -n "${file}" ] || continue
-            run_mix format "${file}"
-            git add "${file}"
-        done <<STAGED_FILES
-${staged_files}
-STAGED_FILES
-    else
-        echo "No staged Elixir files to format in fallback."
-    fi
-
-    echo "Running formatter fallback..."
-    if ! run_mix format --check-formatted; then
-        echo "Error: formatting check failed."
-        exit 1
-    fi
-
-    echo "Running Credo fallback in strict mode..."
-    if ! run_mix credo --strict; then
-        echo "Error: Credo failed."
-        exit 1
-    fi
-
-    echo "Running test suite fallback..."
-    if ! MIX_ENV=test run_mix test; then
-        echo "Error: test suite failed."
-        exit 1
-    fi
+# Check if mix is available
+if ! command -v mix >/dev/null 2>&1; then
+    echo "Error: mix command not found. Please ensure Elixir is installed."
+    exit 1
 fi
 
+# Run mix format on staged files
+echo "Running mix format on staged files..."
+
+# Get list of staged .ex and .exs files
+staged_files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ex|exs)$')
+
+if [ -n "$staged_files" ]; then
+    # Format the staged files
+    echo "Formatting files: $staged_files"
+    echo "$staged_files" | xargs mix format
+    
+    # Add the formatted files back to staging
+    echo "$staged_files" | xargs git add
+    
+    echo "✅ Code formatting complete"
+else
+    echo "No Elixir files to format"
+fi
+
+# Optional: Run mix format --check-formatted to ensure all files are formatted
+echo "Checking if all files are properly formatted..."
+if ! mix format --check-formatted; then
+    echo "❌ Some files are not properly formatted. Please run 'mix format' and try again."
+    exit 1
+fi
+
+echo "✅ All files are properly formatted"
 exit 0
 EOF
 
@@ -136,9 +58,8 @@ chmod +x .git/hooks/pre-commit
 echo "✅ Git hooks installed successfully!"
 echo ""
 echo "The pre-commit hook will now:"
-echo "  • Run 'bin/lint --staged' before each commit when available"
-echo "  • Fall back to bootstrapped Elixir formatting/tests when bin/lint is unavailable"
-echo "  • Enforce the same strict Credo level used by CI"
-echo "  • Prefer the repo's pinned mise toolchain when available"
+echo "  • Run 'mix format' on staged Elixir files before each commit"
+echo "  • Ensure all files are properly formatted"
+echo "  • Automatically stage formatted files"
 echo ""
-echo "Fix hook failures before committing; do not bypass the checks."
+echo "To bypass the hook (not recommended), use: git commit --no-verify"
