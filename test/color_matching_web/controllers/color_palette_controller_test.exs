@@ -1171,6 +1171,53 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       refute Enum.any?(body["metamer_pairs"], &(&1["classification"] == "contrasting"))
     end
 
+    test "orders metamer pairs by pair id and illuminant in the API response", %{conn: conn} do
+      %{
+        pair: pair,
+        second_pair: second_pair,
+        printer_profile: printer_profile
+      } = printed_pair_classification_fixture()
+
+      assert {:ok, _pair_lps} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "lps",
+                 classification: "strong_metamer"
+               })
+
+      assert {:ok, _pair_blue} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "blue",
+                 classification: "weak_metamer"
+               })
+
+      assert {:ok, _second_pair_green} =
+               Persistence.set_printed_pair_classification(%{
+                 test_sheet_pair_id: second_pair.id,
+                 reproduction_profile_id: printer_profile.id,
+                 illuminant: "green",
+                 classification: "strong_metamer"
+               })
+
+      body =
+        conn
+        |> get(~p"/api/v1/printer_profiles/#{printer_profile.id}/metamer_pairs")
+        |> json_response(200)
+
+      expected_order =
+        [
+          {pair.pair_id, "blue"},
+          {pair.pair_id, "lps"},
+          {second_pair.pair_id, "green"}
+        ]
+        |> Enum.sort()
+
+      assert Enum.map(body["metamer_pairs"], &{&1["pair_id"], &1["illuminant"]}) == expected_order
+    end
+
     test "drops pairs whose metamer classification was superseded", %{conn: conn} do
       %{pair: pair, printer_profile: printer_profile} = printed_pair_classification_fixture()
 
