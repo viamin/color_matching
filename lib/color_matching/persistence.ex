@@ -6,7 +6,7 @@ defmodule ColorMatching.Persistence do
   import Ecto.Query, warn: false
   import Ecto.Changeset, only: [add_error: 3]
 
-  alias ColorMatching.PaletteStorage
+  alias ColorMatching.{ColorLabel, PaletteStorage}
 
   alias ColorMatching.Persistence.{
     Capture,
@@ -1019,9 +1019,7 @@ defmodule ColorMatching.Persistence do
 
   defp palette_color_name(%PaletteColor{display_label: display_label, hex_color: hex_color})
        when is_binary(display_label) do
-    normalized_label = String.trim(display_label)
-
-    if normalized_label == "", do: hex_color, else: normalized_label
+    ColorLabel.normalize_or_hex(display_label, hex_color)
   end
 
   defp palette_color_name(%PaletteColor{hex_color: hex_color}), do: hex_color
