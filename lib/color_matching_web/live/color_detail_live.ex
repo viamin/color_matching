@@ -339,7 +339,7 @@ defmodule ColorMatchingWeb.ColorDetailLive do
                 name="notes"
                 rows="2"
                 class="mt-1 block w-full rounded-md border border-gray-300 shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
-              ><%= @measurement_form["notes"] %></textarea>
+              >{@measurement_form["notes"]}</textarea>
             </div>
 
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
