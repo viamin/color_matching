@@ -110,7 +110,7 @@ defmodule ColorMatchingWeb.ColorDetailLiveTest do
       assert missing_count >= 4
     end
 
-    test "submits an individual measurement via the form", %{conn: conn} do
+    test "submits an individual measurement with optional metadata via the form", %{conn: conn} do
       %{palette: palette, color: color, printer_profile: printer_profile} =
         persisted_color_fixture()
 
@@ -120,17 +120,31 @@ defmodule ColorMatchingWeb.ColorDetailLiveTest do
       html =
         render_submit(view, "submit_measurement", %{
           "light_source" => "green",
-          "brightness" => "0.63"
+          "brightness" => "0.63",
+          "notes" => "Center patch",
+          "measured_at" => "2026-07-27T15:45:00Z",
+          "measurement_method" => "camera",
+          "measurement_device" => "phone-camera",
+          "test_run_id" => "sheet-2026-07-27-a"
         })
 
       assert html =~ "Recorded"
       assert html =~ "Green"
+      assert html =~ "Center patch"
+      assert html =~ "camera"
+      assert html =~ "phone-camera"
+      assert html =~ "sheet-2026-07-27-a"
 
       [persisted] = Persistence.list_illuminant_measurements(color.id, printer_profile.id)
       assert persisted.light_source == "green"
       assert persisted.normalized_brightness == 0.63
       assert persisted.palette_color_id == color.id
       assert persisted.printer_profile_id == printer_profile.id
+      assert persisted.notes == "Center patch"
+      assert persisted.measured_at == ~U[2026-07-27 15:45:00.000000Z]
+      assert persisted.measurement_method == "camera"
+      assert persisted.measurement_device == "phone-camera"
+      assert persisted.test_run_id == "sheet-2026-07-27-a"
     end
 
     test "light source dropdown syncs back into the form via phx-change", %{conn: conn} do
