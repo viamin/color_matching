@@ -358,10 +358,9 @@ defmodule ColorMatchingWeb.ColorDetailLive do
                 <label for="measurement-measured-at" class="block text-sm font-medium text-gray-700">
                   Measured at
                 </label>
-                <%!-- type="text" (not "datetime-local") because the field is stored as
-                     :utc_datetime_usec and cast via DateTime.from_iso8601/1, which requires an
-                     explicit UTC offset (e.g. trailing "Z"). datetime-local values omit the
-                     offset and would always fail the changeset cast. --%>
+                <%!-- type="text" (not "datetime-local") because users may include a
+                     timezone offset (e.g. trailing "Z") and we want to keep the
+                     explicit-ISO-8601 placeholder visible in the input. --%>
                 <input
                   id="measurement-measured-at"
                   type="text"

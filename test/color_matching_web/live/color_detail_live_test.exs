@@ -204,6 +204,11 @@ defmodule ColorMatchingWeb.ColorDetailLiveTest do
         "measurement_method" => "camera"
       })
 
+      render_change(view, "update_measurement_field", %{
+        "_field" => "measurement_device",
+        "measurement_device" => "phone-camera"
+      })
+
       # Changing the light source dropdown re-renders the form. None of the
       # previously typed metadata should be lost in that re-render.
       html =
@@ -213,6 +218,7 @@ defmodule ColorMatchingWeb.ColorDetailLiveTest do
       assert html =~ "2026-07-27T15:45:00Z"
       assert html =~ "sheet-2026-07-27-a"
       assert html =~ "camera"
+      assert html =~ "phone-camera"
     end
 
     test "shows validation errors for out-of-range brightness input", %{conn: conn} do
@@ -241,7 +247,7 @@ defmodule ColorMatchingWeb.ColorDetailLiveTest do
         render_submit(view, "submit_measurement", %{
           "light_source" => "blue",
           "brightness" => "0.42",
-          "measured_at" => "2026-07-27 15:45"
+          "measured_at" => "not-a-date"
         })
 
       assert html =~ "measured_at is invalid"
