@@ -566,8 +566,9 @@ defmodule ColorMatchingWeb.ColorDetailLive do
           opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
         end)
       end)
-      |> Map.values()
-      |> List.flatten()
+      |> Enum.flat_map(fn {field, field_messages} ->
+        Enum.map(field_messages, &"#{field} #{&1}")
+      end)
 
     assign(socket, :form_errors, %{"other" => messages})
   end

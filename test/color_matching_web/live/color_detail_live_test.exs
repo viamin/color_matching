@@ -231,6 +231,23 @@ defmodule ColorMatchingWeb.ColorDetailLiveTest do
       refute html =~ "Recorded"
     end
 
+    test "attributes malformed measured_at errors to the measured_at field", %{conn: conn} do
+      %{palette: palette, color: color} = persisted_color_fixture()
+
+      {:ok, view, _html} =
+        live(conn, ~p"/palettes/#{palette.id}/colors/#{color.id}")
+
+      html =
+        render_submit(view, "submit_measurement", %{
+          "light_source" => "blue",
+          "brightness" => "0.42",
+          "measured_at" => "2026-07-27 15:45"
+        })
+
+      assert html =~ "measured_at is invalid"
+      refute html =~ "Recorded"
+    end
+
     test "surfaces errors when the printer profile was removed while the page was open",
          %{conn: conn} do
       %{palette: palette, color: color, printer_profile: printer_profile} =
