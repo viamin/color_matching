@@ -110,7 +110,7 @@ defmodule ColorMatchingWeb.ColorDetailLiveTest do
       assert missing_count >= 4
     end
 
-    test "submits an individual measurement via the form", %{conn: conn} do
+    test "submits an individual measurement with optional metadata via the form", %{conn: conn} do
       %{palette: palette, color: color, printer_profile: printer_profile} =
         persisted_color_fixture()
 
@@ -120,17 +120,31 @@ defmodule ColorMatchingWeb.ColorDetailLiveTest do
       html =
         render_submit(view, "submit_measurement", %{
           "light_source" => "green",
-          "brightness" => "0.63"
+          "brightness" => "0.63",
+          "notes" => "Center patch",
+          "measured_at" => "2026-07-27T15:45:00Z",
+          "measurement_method" => "camera",
+          "measurement_device" => "phone-camera",
+          "test_run_id" => "sheet-2026-07-27-a"
         })
 
       assert html =~ "Recorded"
       assert html =~ "Green"
+      assert html =~ "Center patch"
+      assert html =~ "camera"
+      assert html =~ "phone-camera"
+      assert html =~ "sheet-2026-07-27-a"
 
       [persisted] = Persistence.list_illuminant_measurements(color.id, printer_profile.id)
       assert persisted.light_source == "green"
       assert persisted.normalized_brightness == 0.63
       assert persisted.palette_color_id == color.id
       assert persisted.printer_profile_id == printer_profile.id
+      assert persisted.notes == "Center patch"
+      assert persisted.measured_at == ~U[2026-07-27 15:45:00.000000Z]
+      assert persisted.measurement_method == "camera"
+      assert persisted.measurement_device == "phone-camera"
+      assert persisted.test_run_id == "sheet-2026-07-27-a"
     end
 
     test "light source dropdown syncs back into the form via phx-change", %{conn: conn} do
@@ -162,6 +176,51 @@ defmodule ColorMatchingWeb.ColorDetailLiveTest do
       assert html =~ ~r/<option value="green"[^>]*selected/
     end
 
+    test "typed metadata fields survive a re-render triggered by another field", %{conn: conn} do
+      %{palette: palette, color: color} = persisted_color_fixture()
+
+      {:ok, view, _html} =
+        live(conn, ~p"/palettes/#{palette.id}/colors/#{color.id}")
+
+      # Fill in every metadata field one at a time, the way a real user would
+      # tab through the form.
+      render_change(view, "update_measurement_field", %{
+        "_field" => "notes",
+        "notes" => "Center patch"
+      })
+
+      render_change(view, "update_measurement_field", %{
+        "_field" => "measured_at",
+        "measured_at" => "2026-07-27T15:45:00Z"
+      })
+
+      render_change(view, "update_measurement_field", %{
+        "_field" => "test_run_id",
+        "test_run_id" => "sheet-2026-07-27-a"
+      })
+
+      render_change(view, "update_measurement_field", %{
+        "_field" => "measurement_method",
+        "measurement_method" => "camera"
+      })
+
+      render_change(view, "update_measurement_field", %{
+        "_field" => "measurement_device",
+        "measurement_device" => "phone-camera"
+      })
+
+      # Changing the light source dropdown re-renders the form. None of the
+      # previously typed metadata should be lost in that re-render.
+      html =
+        render_change(view, "update_measurement_light_source", %{"light_source" => "green"})
+
+      assert html =~ "Center patch"
+      assert html =~ "2026-07-27T15:45:00Z"
+      assert html =~ "sheet-2026-07-27-a"
+      assert html =~ "camera"
+      assert html =~ "phone-camera"
+    end
+
     test "shows validation errors for out-of-range brightness input", %{conn: conn} do
       %{palette: palette, color: color} = persisted_color_fixture()
 
@@ -175,6 +234,23 @@ defmodule ColorMatchingWeb.ColorDetailLiveTest do
         })
 
       assert html =~ "must be less than or equal to 1.0"
+      refute html =~ "Recorded"
+    end
+
+    test "attributes malformed measured_at errors to the measured_at field", %{conn: conn} do
+      %{palette: palette, color: color} = persisted_color_fixture()
+
+      {:ok, view, _html} =
+        live(conn, ~p"/palettes/#{palette.id}/colors/#{color.id}")
+
+      html =
+        render_submit(view, "submit_measurement", %{
+          "light_source" => "blue",
+          "brightness" => "0.42",
+          "measured_at" => "not-a-date"
+        })
+
+      assert html =~ "measured_at is invalid"
       refute html =~ "Recorded"
     end
 

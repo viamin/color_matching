@@ -85,12 +85,22 @@ defmodule ColorMatchingWeb.ColorDetailLive do
      |> clear_form_error()}
   end
 
+  def handle_event("update_measurement_field", %{"_field" => field} = params, socket) do
+    value = input_value(params, field)
+
+    {:noreply,
+     socket
+     |> put_in_measurement_form(field, value)
+     |> clear_form_error()}
+  end
+
   def handle_event("submit_measurement", %{"light_source" => light_source} = params, socket)
       when light_source in @light_source_keys do
     palette_color = socket.assigns.palette_color
     printer_profile = socket.assigns.printer_profile
 
     attrs = build_measurement_attrs(palette_color, printer_profile, light_source, params)
+    updated_form = merge_measurement_form(socket.assigns.measurement_form, params)
 
     case Persistence.create_illuminant_measurement(attrs) do
       {:ok, _measurement} ->
@@ -105,7 +115,10 @@ defmodule ColorMatchingWeb.ColorDetailLive do
          |> put_flash(:info, "Recorded #{light_source_label(light_source)} measurement")}
 
       {:error, changeset} ->
-        {:noreply, put_form_errors(socket, light_source, changeset)}
+        {:noreply,
+         socket
+         |> assign(:measurement_form, updated_form)
+         |> put_form_errors(light_source, changeset)}
     end
   end
 
@@ -326,6 +339,94 @@ defmodule ColorMatchingWeb.ColorDetailLive do
               <% end %>
             </div>
 
+            <div>
+              <label for="measurement-notes" class="block text-sm font-medium text-gray-700">
+                Notes
+              </label>
+              <textarea
+                id="measurement-notes"
+                name="notes"
+                rows="2"
+                phx-change="update_measurement_field"
+                phx-value-_field="notes"
+                class="mt-1 block w-full rounded-md border border-gray-300 shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
+              >{@measurement_form["notes"]}</textarea>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label for="measurement-measured-at" class="block text-sm font-medium text-gray-700">
+                  Measured at
+                </label>
+                <%!-- type="text" (not "datetime-local") because users may include a
+                     timezone offset (e.g. trailing "Z") and we want to keep the
+                     explicit-ISO-8601 placeholder visible in the input. --%>
+                <input
+                  id="measurement-measured-at"
+                  type="text"
+                  name="measured_at"
+                  placeholder="2026-07-27T12:34:56Z"
+                  value={@measurement_form["measured_at"]}
+                  phx-change="update_measurement_field"
+                  phx-value-_field="measured_at"
+                  class="mt-1 block w-full rounded-md border border-gray-300 shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
+                />
+              </div>
+
+              <div>
+                <label for="measurement-test-run-id" class="block text-sm font-medium text-gray-700">
+                  Test run
+                </label>
+                <input
+                  id="measurement-test-run-id"
+                  type="text"
+                  name="test_run_id"
+                  value={@measurement_form["test_run_id"]}
+                  phx-change="update_measurement_field"
+                  phx-value-_field="test_run_id"
+                  class="mt-1 block w-full rounded-md border border-gray-300 shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
+                />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label
+                  for="measurement-method"
+                  class="block text-sm font-medium text-gray-700"
+                >
+                  Method
+                </label>
+                <input
+                  id="measurement-method"
+                  type="text"
+                  name="measurement_method"
+                  value={@measurement_form["measurement_method"]}
+                  phx-change="update_measurement_field"
+                  phx-value-_field="measurement_method"
+                  class="mt-1 block w-full rounded-md border border-gray-300 shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
+                />
+              </div>
+
+              <div>
+                <label
+                  for="measurement-device"
+                  class="block text-sm font-medium text-gray-700"
+                >
+                  Device
+                </label>
+                <input
+                  id="measurement-device"
+                  type="text"
+                  name="measurement_device"
+                  value={@measurement_form["measurement_device"]}
+                  phx-change="update_measurement_field"
+                  phx-value-_field="measurement_device"
+                  class="mt-1 block w-full rounded-md border border-gray-300 shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
+                />
+              </div>
+            </div>
+
             <button
               type="submit"
               disabled={@printer_profile == nil}
@@ -422,12 +523,29 @@ defmodule ColorMatchingWeb.ColorDetailLive do
       palette_color_id: palette_color.id,
       printer_profile_id: printer_profile.id,
       light_source: light_source,
-      normalized_brightness: raw_brightness
+      normalized_brightness: raw_brightness,
+      notes: optional_param(params, "notes"),
+      measured_at: optional_param(params, "measured_at"),
+      measurement_method: optional_param(params, "measurement_method"),
+      measurement_device: optional_param(params, "measurement_device"),
+      test_run_id: optional_param(params, "test_run_id")
     }
   end
 
   defp empty_measurement_form do
-    %{"light_source" => "white", "brightness" => ""}
+    %{
+      "light_source" => "white",
+      "brightness" => "",
+      "notes" => "",
+      "measured_at" => "",
+      "measurement_method" => "",
+      "measurement_device" => "",
+      "test_run_id" => ""
+    }
+  end
+
+  defp merge_measurement_form(form, params) do
+    Map.merge(form, Map.take(params, Map.keys(form)))
   end
 
   defp put_in_measurement_form(socket, field, value) do
@@ -447,10 +565,28 @@ defmodule ColorMatchingWeb.ColorDetailLive do
           opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
         end)
       end)
-      |> Map.values()
-      |> List.flatten()
+      |> Enum.flat_map(fn {field, field_messages} ->
+        Enum.map(field_messages, &"#{field} #{&1}")
+      end)
 
     assign(socket, :form_errors, %{"other" => messages})
+  end
+
+  defp optional_param(params, field) do
+    case Map.get(params, field) do
+      nil -> nil
+      value when is_binary(value) -> blank_to_nil(value)
+      value -> value
+    end
+  end
+
+  defp blank_to_nil(value) when is_binary(value) do
+    value
+    |> String.trim()
+    |> case do
+      "" -> nil
+      trimmed -> trimmed
+    end
   end
 
   defp color_page_title(%PaletteColor{} = palette_color) do
