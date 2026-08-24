@@ -85,6 +85,15 @@ defmodule ColorMatchingWeb.ColorDetailLive do
      |> clear_form_error()}
   end
 
+  def handle_event("update_measurement_field", %{"_field" => field} = params, socket) do
+    value = input_value(params, field)
+
+    {:noreply,
+     socket
+     |> put_in_measurement_form(field, value)
+     |> clear_form_error()}
+  end
+
   def handle_event("submit_measurement", %{"light_source" => light_source} = params, socket)
       when light_source in @light_source_keys do
     palette_color = socket.assigns.palette_color
@@ -338,6 +347,8 @@ defmodule ColorMatchingWeb.ColorDetailLive do
                 id="measurement-notes"
                 name="notes"
                 rows="2"
+                phx-change="update_measurement_field"
+                phx-value-_field="notes"
                 class="mt-1 block w-full rounded-md border border-gray-300 shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
               >{@measurement_form["notes"]}</textarea>
             </div>
@@ -347,12 +358,18 @@ defmodule ColorMatchingWeb.ColorDetailLive do
                 <label for="measurement-measured-at" class="block text-sm font-medium text-gray-700">
                   Measured at
                 </label>
+                <%!-- type="text" (not "datetime-local") because the field is stored as
+                     :utc_datetime_usec and cast via DateTime.from_iso8601/1, which requires an
+                     explicit UTC offset (e.g. trailing "Z"). datetime-local values omit the
+                     offset and would always fail the changeset cast. --%>
                 <input
                   id="measurement-measured-at"
                   type="text"
                   name="measured_at"
                   placeholder="2026-07-27T12:34:56Z"
                   value={@measurement_form["measured_at"]}
+                  phx-change="update_measurement_field"
+                  phx-value-_field="measured_at"
                   class="mt-1 block w-full rounded-md border border-gray-300 shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
                 />
               </div>
@@ -366,6 +383,8 @@ defmodule ColorMatchingWeb.ColorDetailLive do
                   type="text"
                   name="test_run_id"
                   value={@measurement_form["test_run_id"]}
+                  phx-change="update_measurement_field"
+                  phx-value-_field="test_run_id"
                   class="mt-1 block w-full rounded-md border border-gray-300 shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
                 />
               </div>
@@ -384,6 +403,8 @@ defmodule ColorMatchingWeb.ColorDetailLive do
                   type="text"
                   name="measurement_method"
                   value={@measurement_form["measurement_method"]}
+                  phx-change="update_measurement_field"
+                  phx-value-_field="measurement_method"
                   class="mt-1 block w-full rounded-md border border-gray-300 shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
                 />
               </div>
@@ -400,6 +421,8 @@ defmodule ColorMatchingWeb.ColorDetailLive do
                   type="text"
                   name="measurement_device"
                   value={@measurement_form["measurement_device"]}
+                  phx-change="update_measurement_field"
+                  phx-value-_field="measurement_device"
                   class="mt-1 block w-full rounded-md border border-gray-300 shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
                 />
               </div>

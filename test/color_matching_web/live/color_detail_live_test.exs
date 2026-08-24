@@ -176,6 +176,45 @@ defmodule ColorMatchingWeb.ColorDetailLiveTest do
       assert html =~ ~r/<option value="green"[^>]*selected/
     end
 
+    test "typed metadata fields survive a re-render triggered by another field", %{conn: conn} do
+      %{palette: palette, color: color} = persisted_color_fixture()
+
+      {:ok, view, _html} =
+        live(conn, ~p"/palettes/#{palette.id}/colors/#{color.id}")
+
+      # Fill in every metadata field one at a time, the way a real user would
+      # tab through the form.
+      render_change(view, "update_measurement_field", %{
+        "_field" => "notes",
+        "notes" => "Center patch"
+      })
+
+      render_change(view, "update_measurement_field", %{
+        "_field" => "measured_at",
+        "measured_at" => "2026-07-27T15:45:00Z"
+      })
+
+      render_change(view, "update_measurement_field", %{
+        "_field" => "test_run_id",
+        "test_run_id" => "sheet-2026-07-27-a"
+      })
+
+      render_change(view, "update_measurement_field", %{
+        "_field" => "measurement_method",
+        "measurement_method" => "camera"
+      })
+
+      # Changing the light source dropdown re-renders the form. None of the
+      # previously typed metadata should be lost in that re-render.
+      html =
+        render_change(view, "update_measurement_light_source", %{"light_source" => "green"})
+
+      assert html =~ "Center patch"
+      assert html =~ "2026-07-27T15:45:00Z"
+      assert html =~ "sheet-2026-07-27-a"
+      assert html =~ "camera"
+    end
+
     test "shows validation errors for out-of-range brightness input", %{conn: conn} do
       %{palette: palette, color: color} = persisted_color_fixture()
 
