@@ -82,7 +82,9 @@ defmodule ColorMatching.MixProject do
       {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false},
       # Test coverage
       {:castore, "~> 1.0", only: :test},
-      {:excoveralls, "~> 0.18", only: :test}
+      {:excoveralls, "~> 0.18", only: :test},
+      # Property-based testing
+      {:stream_data, "~> 1.1", only: [:dev, :test]}
     ]
   end
 
