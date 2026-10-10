@@ -89,7 +89,7 @@ defmodule ColorMatchingWeb.RankedResultsControllerTest do
 
     capture_id =
       conn
-      |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload(timestamp))
+      |> post_json(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload(timestamp))
       |> json_response(201)
       |> Map.fetch!("capture_id")
 
@@ -111,7 +111,7 @@ defmodule ColorMatchingWeb.RankedResultsControllerTest do
     }
 
     conn
-    |> post(~p"/api/v1/captures/#{capture_id}/measurements", payload)
+    |> post_json(~p"/api/v1/captures/#{capture_id}/measurements", payload)
     |> json_response(200)
 
     conn
@@ -128,7 +128,7 @@ defmodule ColorMatchingWeb.RankedResultsControllerTest do
     }
 
     conn
-    |> post(~p"/api/v1/captures/#{capture_id}/judgments", payload)
+    |> post_json(~p"/api/v1/captures/#{capture_id}/judgments", payload)
     |> json_response(200)
 
     conn
