@@ -48,7 +48,42 @@ defmodule ColorMatchingWeb.OpenApiControllerTest do
       |> Enum.find(&(&1["name"] == "printer_profile_id"))
 
     assert printer_profile_id["required"]
-    assert printer_profile_id["schema"] == %{"minimum" => 1, "type" => "integer"}
+
+    assert printer_profile_id["schema"] == %{
+             "maximum" => 9_223_372_036_854_775_807,
+             "minimum" => 1,
+             "type" => "integer"
+           }
+  end
+
+  test "documents positive printer profile path IDs", %{conn: conn} do
+    spec = conn |> get(~p"/api/v1/openapi.json") |> json_response(200)
+
+    for path <- [
+          "/api/v1/printer_profiles/{printer_profile_id}/colors",
+          "/api/v1/printer_profiles/{printer_profile_id}/metamer_pairs"
+        ] do
+      parameter =
+        spec["paths"][path]["get"]["parameters"]
+        |> Enum.find(&(&1["name"] == "printer_profile_id"))
+
+      assert parameter["schema"] == %{
+               "maximum" => 9_223_372_036_854_775_807,
+               "minimum" => 1,
+               "type" => "integer"
+             }
+
+      assert Map.has_key?(spec["paths"][path]["get"]["responses"], "422")
+    end
+  end
+
+  test "returns 405 for unsupported methods on documented read-only endpoints" do
+    conn =
+      Plug.Test.conn("TRACE", "/api/v1/palettes")
+      |> ColorMatchingWeb.Endpoint.call([])
+
+    assert conn.status == 405
+    assert get_resp_header(conn, "allow") == ["GET"]
   end
 
   test "uses concrete palette response schemas", %{conn: conn} do
