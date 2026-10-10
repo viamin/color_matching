@@ -15,8 +15,11 @@ defmodule ColorMatchingWeb.ApiSpec do
       paths: api_paths(),
       components: %Components{
         securitySchemes: %{
-          "bearerAuth" =>
-            %SecurityScheme{type: "http", scheme: "bearer", bearerFormat: "API token"}
+          "bearerAuth" => %SecurityScheme{
+            type: "http",
+            scheme: "bearer",
+            bearerFormat: "API token"
+          }
         }
       }
     }

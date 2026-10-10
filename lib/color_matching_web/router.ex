@@ -24,6 +24,13 @@ defmodule ColorMatchingWeb.Router do
     plug ColorMatchingWeb.Plugs.ApiAuth
   end
 
+  # Like :api, but the multi-image mapping endpoint answers PNG bodies, so
+  # clients may send "Accept: image/png" and the spec plug must still run.
+  pipeline :api_mapping do
+    plug(:accepts, ["json", "png"])
+    plug(OpenApiSpex.Plug.PutApiSpec, module: ColorMatchingWeb.ApiSpec)
+  end
+
   scope "/", ColorMatchingWeb do
     pipe_through(:download)
 
@@ -77,6 +84,8 @@ defmodule ColorMatchingWeb.Router do
   end
 
   scope "/api", ColorMatchingWeb do
+    pipe_through(:api_mapping)
+
     post("/multi_image_mapping", MultiImageMappingController, :create)
   end
 

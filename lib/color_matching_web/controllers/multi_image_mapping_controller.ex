@@ -32,13 +32,20 @@ defmodule ColorMatchingWeb.MultiImageMappingController do
   ## Error response
 
       { "errors": { "base": ["..."] } }
+
+  Requests that violate the published request contract (missing or
+  mistyped `palette_id`, `printer_profile_id`, `weights`, or `images`)
+  are rejected by OpenAPI request validation before this controller
+  runs, using the standard OpenApiSpex error document:
+
+      { "errors": [{ "detail": "Missing field: palette_id", ... }] }
   """
 
   use ColorMatchingWeb, :controller
   use OpenApiSpex.ControllerSpecs
 
   alias ColorMatching.{MultiImagePaletteMapper, Persistence, PNG, ResponseVector}
-  alias ColorMatchingWeb.ApiSchemas.JsonObject
+  alias ColorMatchingWeb.ApiSchemas.{JsonObject, MappingRequest}
 
   plug OpenApiSpex.Plug.CastAndValidate, json_render_error_v2: true, replace_params: false
 
@@ -46,7 +53,7 @@ defmodule ColorMatchingWeb.MultiImageMappingController do
 
   operation :create,
     summary: "Map grayscale images to a palette-colored PNG",
-    request_body: {"Mapping inputs", "application/json", JsonObject},
+    request_body: {"Mapping inputs", "application/json", MappingRequest},
     responses: [
       ok: {"Mapped PNG", "image/png", nil},
       unprocessable_entity: {"Invalid mapping request", "application/json", JsonObject}
