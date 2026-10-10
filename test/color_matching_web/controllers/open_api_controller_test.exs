@@ -29,4 +29,33 @@ defmodule ColorMatchingWeb.OpenApiControllerTest do
                "/api/multi_image_mapping"
              ])
   end
+
+  test "documents palette lookup errors and the required printer profile query", %{conn: conn} do
+    spec = conn |> get(~p"/api/v1/openapi.json") |> json_response(200)
+
+    assert_error_responses(spec, "/api/v1/colors")
+    assert Map.has_key?(spec["paths"]["/api/v1/colors"]["get"]["responses"], "422")
+
+    for path <- [
+          "/api/v1/printer_profiles/{printer_profile_id}/colors",
+          "/api/v1/printer_profiles/{printer_profile_id}/metamer_pairs"
+        ] do
+      assert_error_responses(spec, path)
+    end
+
+    printer_profile_id =
+      spec["paths"]["/api/v1/colors"]["get"]["parameters"]
+      |> Enum.find(&(&1["name"] == "printer_profile_id"))
+
+    assert printer_profile_id["required"]
+    assert printer_profile_id["schema"] == %{"minimum" => 1, "type" => "integer"}
+  end
+
+  defp assert_error_responses(spec, path) do
+    responses = spec["paths"][path]["get"]["responses"]
+
+    assert Map.has_key?(responses, "400")
+    assert Map.has_key?(responses, "401")
+    assert Map.has_key?(responses, "404")
+  end
 end

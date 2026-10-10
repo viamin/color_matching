@@ -13,12 +13,18 @@ defmodule ColorMatchingWeb.IlluminantMeasurementController do
   operation :create,
     summary: "Create an illuminant measurement",
     request_body: {"Measurement attributes", "application/json", JsonObject},
-    responses: [created: {"Measurement created", "application/json", JsonObject}]
+    responses: [
+      created: {"Measurement created", "application/json", JsonObject},
+      unprocessable_entity: {"Invalid measurement attributes", "application/json", JsonObject}
+    ]
 
   operation :bulk_create,
     summary: "Create illuminant measurements in bulk",
     request_body: {"Bulk measurement attributes", "application/json", JsonObject},
-    responses: [created: {"Measurements created", "application/json", JsonObject}]
+    responses: [
+      created: {"Measurements created", "application/json", JsonObject},
+      unprocessable_entity: {"Invalid measurement attributes", "application/json", JsonObject}
+    ]
 
   def create(conn, params) do
     case Persistence.create_illuminant_measurement(params) do

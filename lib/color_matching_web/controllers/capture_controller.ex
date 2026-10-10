@@ -14,19 +14,34 @@ defmodule ColorMatchingWeb.CaptureController do
     summary: "Create a capture for a test sheet",
     parameters: [sheet_id: [in: :path, type: :string]],
     request_body: {"Capture attributes", "application/json", JsonObject},
-    responses: [created: {"Capture created", "application/json", JsonObject}]
+    responses: [
+      created: {"Capture created", "application/json", JsonObject},
+      unauthorized: {"Unauthorized", "application/json", JsonObject},
+      not_found: {"Test sheet not found", "application/json", JsonObject},
+      unprocessable_entity: {"Invalid capture attributes", "application/json", JsonObject}
+    ]
 
   operation :upload_measurements,
     summary: "Upload capture measurements",
     parameters: [capture_id: [in: :path, type: :string]],
     request_body: {"Measurement upload", "application/json", JsonObject},
-    responses: [ok: {"Measurements accepted", "application/json", JsonObject}]
+    responses: [
+      ok: {"Measurements accepted", "application/json", JsonObject},
+      unauthorized: {"Unauthorized", "application/json", JsonObject},
+      not_found: {"Capture not found", "application/json", JsonObject},
+      unprocessable_entity: {"Invalid measurement upload", "application/json", JsonObject}
+    ]
 
   operation :upload_judgments,
     summary: "Upload capture judgments",
     parameters: [capture_id: [in: :path, type: :string]],
     request_body: {"Judgment upload", "application/json", JsonObject},
-    responses: [ok: {"Judgments accepted", "application/json", JsonObject}]
+    responses: [
+      ok: {"Judgments accepted", "application/json", JsonObject},
+      unauthorized: {"Unauthorized", "application/json", JsonObject},
+      not_found: {"Capture not found", "application/json", JsonObject},
+      unprocessable_entity: {"Invalid judgment upload", "application/json", JsonObject}
+    ]
 
   @spec create(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def create(conn, %{"sheet_id" => sheet_id} = params) do

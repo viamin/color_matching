@@ -56,6 +56,7 @@ defmodule ColorMatchingWeb.MultiImageMappingController do
     request_body: {"Mapping inputs", "application/json", MappingRequest},
     responses: [
       ok: {"Mapped PNG", "image/png", nil},
+      not_found: {"Palette or printer profile not found", "application/json", JsonObject},
       unprocessable_entity: {"Invalid mapping request", "application/json", JsonObject}
     ]
 

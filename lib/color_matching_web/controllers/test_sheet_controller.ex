@@ -15,16 +15,27 @@ defmodule ColorMatchingWeb.TestSheetController do
   operation :manifest,
     summary: "Fetch a test sheet manifest",
     parameters: [sheet_id: [in: :path, type: :string]],
-    responses: [ok: {"Sheet manifest", "application/json", Manifest}]
+    responses: [
+      ok: {"Sheet manifest", "application/json", Manifest},
+      unauthorized: {"Unauthorized", "application/json", JsonObject},
+      not_found: {"Test sheet not found", "application/json", JsonObject}
+    ]
 
   operation :recent,
     summary: "List recent test sheets",
-    responses: [ok: {"Recent sheets", "application/json", JsonObject}]
+    responses: [
+      ok: {"Recent sheets", "application/json", JsonObject},
+      unauthorized: {"Unauthorized", "application/json", JsonObject}
+    ]
 
   operation :ranked_results,
     summary: "Fetch ranked results for a test sheet",
     parameters: [sheet_id: [in: :path, type: :string]],
-    responses: [ok: {"Ranked results", "application/json", RankedResultsSchema}]
+    responses: [
+      ok: {"Ranked results", "application/json", RankedResultsSchema},
+      unauthorized: {"Unauthorized", "application/json", JsonObject},
+      not_found: {"Test sheet not found", "application/json", JsonObject}
+    ]
 
   @spec manifest(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def manifest(conn, %{"sheet_id" => sheet_id}) do

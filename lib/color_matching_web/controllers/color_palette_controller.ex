@@ -34,6 +34,7 @@ defmodule ColorMatchingWeb.ColorPaletteController do
   alias ColorMatching.{ColorFormat, ColorLabel, Persistence}
   alias ColorMatching.Persistence.{PaletteColor, PrinterProfile}
   alias ColorMatchingWeb.ApiSchemas.JsonObject
+  alias OpenApiSpex.Schema
 
   plug OpenApiSpex.Plug.CastAndValidate, json_render_error_v2: true, replace_params: false
 
@@ -42,29 +43,55 @@ defmodule ColorMatchingWeb.ColorPaletteController do
 
   operation :printer_profiles,
     summary: "List printer profiles",
-    responses: [ok: {"Printer profiles", "application/json", JsonObject}]
+    responses: [
+      ok: {"Printer profiles", "application/json", JsonObject},
+      unauthorized: {"Unauthorized", "application/json", JsonObject}
+    ]
 
   operation :profile_colors,
     summary: "List profile colors",
     parameters: [printer_profile_id: [in: :path, type: :string]],
-    responses: [ok: {"Profile colors", "application/json", JsonObject}]
+    responses: [
+      ok: {"Profile colors", "application/json", JsonObject},
+      bad_request: {"Invalid printer profile ID", "application/json", JsonObject},
+      unauthorized: {"Unauthorized", "application/json", JsonObject},
+      not_found: {"Printer profile not found", "application/json", JsonObject}
+    ]
 
   operation :metamer_pairs,
     summary: "List confirmed metamer pairs",
     parameters: [printer_profile_id: [in: :path, type: :string]],
-    responses: [ok: {"Metamer pairs", "application/json", JsonObject}]
+    responses: [
+      ok: {"Metamer pairs", "application/json", JsonObject},
+      bad_request: {"Invalid printer profile ID", "application/json", JsonObject},
+      unauthorized: {"Unauthorized", "application/json", JsonObject},
+      not_found: {"Printer profile not found", "application/json", JsonObject}
+    ]
 
   operation :palettes,
     summary: "List palettes",
-    responses: [ok: {"Palettes", "application/json", JsonObject}]
+    responses: [
+      ok: {"Palettes", "application/json", JsonObject},
+      unauthorized: {"Unauthorized", "application/json", JsonObject}
+    ]
 
   operation :colors,
     summary: "List palette colors and illuminant responses",
     parameters: [
-      printer_profile_id: [in: :query, type: :string],
-      palette_id: [in: :query, type: :string]
+      printer_profile_id: [
+        in: :query,
+        required: true,
+        schema: %Schema{type: :integer, minimum: 1}
+      ],
+      palette_id: [in: :query, schema: %Schema{type: :integer, minimum: 1}]
     ],
-    responses: [ok: {"Colors", "application/json", JsonObject}]
+    responses: [
+      ok: {"Colors", "application/json", JsonObject},
+      bad_request: {"Invalid palette or printer profile ID", "application/json", JsonObject},
+      unauthorized: {"Unauthorized", "application/json", JsonObject},
+      not_found: {"Palette or printer profile not found", "application/json", JsonObject},
+      unprocessable_entity: {"Invalid query parameters", "application/json", JsonObject}
+    ]
 
   @doc """
   `GET /api/v1/printer_profiles`
