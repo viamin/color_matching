@@ -72,6 +72,37 @@ defmodule ColorMatchingWeb.OpenApiControllerTest do
            ]
   end
 
+  test "documents compatible pair-score fields and shared bulk metadata", %{conn: conn} do
+    spec = conn |> get(~p"/api/v1/openapi.json") |> json_response(200)
+    schemas = spec["components"]["schemas"]
+
+    assert length(schemas["CaptureRequest"]["anyOf"]) == 2
+    assert schemas["PairScoreRequest"]["required"] == ["algorithm_version", "pair_id"]
+    assert length(schemas["PairScoreRequest"]["anyOf"]) == 3
+
+    assert length(schemas["RgbPayload"]["anyOf"]) == 3
+
+    bulk_request =
+      spec["paths"]["/api/illuminant_measurements/bulk"]["post"]
+      |> get_in(["requestBody", "content", "application/json", "schema", "$ref"])
+
+    assert bulk_request == "#/components/schemas/BulkIlluminantMeasurementRequest"
+
+    assert schemas["BulkIlluminantMeasurementRequest"]["required"] == [
+             "light_source",
+             "measurements",
+             "printer_profile_id"
+           ]
+
+    assert get_in(schemas, [
+             "BulkIlluminantMeasurementRequest",
+             "properties",
+             "measurements",
+             "items",
+             "$ref"
+           ]) == "#/components/schemas/BulkIlluminantMeasurementRow"
+  end
+
   defp assert_error_responses(spec, path) do
     responses = spec["paths"][path]["get"]["responses"]
 

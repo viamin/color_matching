@@ -153,6 +153,46 @@ defmodule ColorMatchingWeb.ApiSchemas do
         image_width: %Schema{type: :integer, exclusiveMinimum: 0},
         image_height: %Schema{type: :integer, exclusiveMinimum: 0},
         app_version: %Schema{type: :string},
+        timestamp: %Schema{type: :string, format: :"date-time"},
+        detected_marker_count: %Schema{type: :integer, minimum: 0},
+        blur_score: %Schema{type: :number, minimum: 0},
+        rejection_reasons: %Schema{type: :array, items: %Schema{type: :string}},
+        metadata: CaptureMetadata,
+        quality: %Schema{
+          type: :object,
+          properties: %{
+            detected_marker_count: %Schema{type: :integer, minimum: 0},
+            blur_score: %Schema{type: :number, minimum: 0},
+            rejections: %Schema{type: :array, items: %Schema{type: :string}}
+          }
+        }
+      },
+      anyOf: [
+        %Schema{
+          required: [:device_model, :lens, :image_width, :image_height, :app_version, :timestamp]
+        },
+        %Schema{required: [:metadata]}
+      ]
+    })
+  end
+
+  defmodule CaptureMetadata do
+    @moduledoc false
+    require OpenApiSpex
+
+    OpenApiSpex.schema(%{
+      title: "CaptureMetadata",
+      type: :object,
+      properties: %{
+        device_model: %Schema{type: :string},
+        lens: %Schema{type: :string},
+        exposure_duration_seconds: %Schema{type: :number, exclusiveMinimum: 0},
+        iso: %Schema{type: :integer, exclusiveMinimum: 0},
+        focus_lens_position: %Schema{type: :number, minimum: 0},
+        white_balance_gains: %Schema{type: :object},
+        image_width: %Schema{type: :integer, exclusiveMinimum: 0},
+        image_height: %Schema{type: :integer, exclusiveMinimum: 0},
+        app_version: %Schema{type: :string},
         timestamp: %Schema{type: :string, format: :"date-time"}
       },
       required: [:device_model, :lens, :image_width, :image_height, :app_version, :timestamp]
@@ -171,7 +211,69 @@ defmodule ColorMatchingWeb.ApiSchemas do
     OpenApiSpex.schema(%{
       title: "MeasurementUploadRequest",
       type: :object,
-      properties: %{measurements: %Schema{type: :array, items: %Schema{type: :object, properties: %{patch_id: %Schema{type: :string}, linear_rgb_median: %Schema{type: :array, items: %Schema{type: :number}}, normalized_linear_rgb_median: %Schema{type: :array, items: %Schema{type: :number}}}, required: [:patch_id, :linear_rgb_median, :normalized_linear_rgb_median]}}, pair_scores: %Schema{type: :array, items: %Schema{type: :object, properties: %{pair_id: %Schema{type: :string}, algorithm_version: %Schema{type: :string}, score: %Schema{type: :number}}, required: [:pair_id, :algorithm_version, :score]}}}
+      properties: %{
+        measurements: %Schema{
+          type: :array,
+          items: %Schema{
+            type: :object,
+            properties: %{
+              patch_id: %Schema{type: :string},
+              linear_rgb_median: RgbPayload,
+              normalized_linear_rgb_median: RgbPayload
+            },
+            required: [:patch_id, :linear_rgb_median, :normalized_linear_rgb_median]
+          }
+        },
+        pair_scores: %Schema{type: :array, items: PairScoreRequest}
+      }
+    })
+  end
+
+  defmodule RgbPayload do
+    @moduledoc false
+    require OpenApiSpex
+
+    OpenApiSpex.schema(%{
+      title: "RgbPayload",
+      description: "An RGB array, an object with r/g/b channels, or a JSON-encoded representation.",
+      anyOf: [
+        %Schema{type: :array, items: %Schema{type: :number}},
+        %Schema{
+          type: :object,
+          properties: %{
+            r: %Schema{type: :number},
+            g: %Schema{type: :number},
+            b: %Schema{type: :number}
+          },
+          required: [:r, :g, :b]
+        },
+        %Schema{type: :string}
+      ]
+    })
+  end
+
+  defmodule PairScoreRequest do
+    @moduledoc false
+    require OpenApiSpex
+
+    OpenApiSpex.schema(%{
+      title: "PairScoreRequest",
+      type: :object,
+      description:
+        "A score may be supplied directly, as a compatibility similarity, or as a compatibility distance.",
+      properties: %{
+        pair_id: %Schema{type: :string},
+        algorithm_version: %Schema{type: :string},
+        score: %Schema{type: :number},
+        similarity: %Schema{type: :number},
+        distance: %Schema{type: :number}
+      },
+      required: [:pair_id, :algorithm_version],
+      anyOf: [
+        %Schema{required: [:score]},
+        %Schema{required: [:similarity]},
+        %Schema{required: [:distance]}
+      ]
     })
   end
 
@@ -208,7 +310,43 @@ defmodule ColorMatchingWeb.ApiSchemas do
   defmodule BulkMeasurementRequest do
     @moduledoc false
     require OpenApiSpex
-    OpenApiSpex.schema(%{title: "BulkIlluminantMeasurementRequest", type: :object, properties: %{measurements: %Schema{type: :array, items: MeasurementRequest}}, required: [:measurements]})
+    OpenApiSpex.schema(%{
+      title: "BulkIlluminantMeasurementRequest",
+      type: :object,
+      description:
+        "Shared printer profile and light-source metadata apply to every measurement row.",
+      properties: %{
+        printer_profile_id: %Schema{type: :integer},
+        light_source: %Schema{type: :string, enum: ["white", "red", "green", "blue", "lps"]},
+        raw_value: %Schema{type: :number},
+        raw_unit: %Schema{type: :string},
+        notes: %Schema{type: :string},
+        measured_at: %Schema{type: :string, format: :"date-time"},
+        measurement_method: %Schema{type: :string},
+        measurement_device: %Schema{type: :string},
+        test_run_id: %Schema{type: :string},
+        measurements: %Schema{type: :array, items: BulkMeasurementRow}
+      },
+      required: [:printer_profile_id, :light_source, :measurements]
+    })
+  end
+
+  defmodule BulkMeasurementRow do
+    @moduledoc false
+    require OpenApiSpex
+
+    OpenApiSpex.schema(%{
+      title: "BulkIlluminantMeasurementRow",
+      type: :object,
+      properties: %{
+        color_id: %Schema{type: :integer},
+        brightness: %Schema{type: :number, minimum: 0, maximum: 1},
+        raw_value: %Schema{type: :number},
+        raw_unit: %Schema{type: :string},
+        notes: %Schema{type: :string}
+      },
+      required: [:color_id, :brightness]
+    })
   end
 
   defmodule BulkMeasurementResponse do
