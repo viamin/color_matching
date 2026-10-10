@@ -73,7 +73,28 @@ defmodule ColorMatchingWeb.ApiSchemas do
     OpenApiSpex.schema(%{
       title: "ApiErrorResponse",
       type: :object,
-      properties: %{errors: %Schema{type: :object, additionalProperties: true}},
+      properties: %{
+        errors: %Schema{
+          oneOf: [
+            %Schema{type: :object, additionalProperties: true},
+            %Schema{
+              type: :array,
+              items: %Schema{
+                type: :object,
+                properties: %{
+                  detail: %Schema{type: :string},
+                  source: %Schema{
+                    type: :object,
+                    properties: %{pointer: %Schema{type: :string}},
+                    required: [:pointer]
+                  }
+                },
+                required: [:detail, :source]
+              }
+            }
+          ]
+        }
+      },
       required: [:errors]
     })
   end

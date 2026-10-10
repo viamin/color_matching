@@ -72,6 +72,20 @@ defmodule ColorMatchingWeb.OpenApiControllerTest do
            ]
   end
 
+  test "documents both controller and request-validation error shapes", %{conn: conn} do
+    spec = conn |> get(~p"/api/v1/openapi.json") |> json_response(200)
+
+    error_schema = spec["components"]["schemas"]["ApiErrorResponse"]
+    error_shapes = error_schema["properties"]["errors"]["oneOf"]
+
+    assert Enum.any?(error_shapes, &(&1["type"] == "object"))
+
+    assert Enum.any?(error_shapes, fn shape ->
+             shape["type"] == "array" and
+               get_in(shape, ["items", "required"]) == ["detail", "source"]
+           end)
+  end
+
   test "documents compatible pair-score fields and shared bulk metadata", %{conn: conn} do
     spec = conn |> get(~p"/api/v1/openapi.json") |> json_response(200)
     schemas = spec["components"]["schemas"]
