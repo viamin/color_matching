@@ -47,6 +47,17 @@ To start your Phoenix server:
 
 Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
 
+## Solver parity corpus (macOS clients)
+
+ColorMatching-macOS mirrors this server's `ColorMatching.WeightedSquaredError` solver and the earliest-wins selection of `ColorMatching.IlluminantMatching` (see `WeightedSquaredErrorScorer` in ColorMatching-macOS). To keep the two implementations in lockstep, a deterministic golden-vector corpus is committed at `priv/parity/v1/corpus.json`.
+
+Each scenario in the corpus carries palette colors with response vectors per active channel, the target vector, the channel weights, the per-candidate score table (`"excluded"` marks missing-measurement exclusions), the expected selection and error, and explicit tie-break evidence (`tie_broke`, `tied_indices`) — with ties intentionally included. The corpus is stamped with an `algorithm_version`; when that number changes, every expectation has moved and macOS must update in step.
+
+- Regenerate after changing the solver: `mix parity.generate`
+- CI verifies the committed corpus is byte-identical to a fresh build: `mix parity.generate --check`
+
+To consume the corpus from ColorMatching-macOS, decode `corpus.json`, replay each scenario through `WeightedSquaredErrorScorer` (score every palette color against the target using the scenario's weights), and assert exact agreement with the recorded score table, selection, error, and tie indices. Any mismatch means the clients have diverged on tie-breaking, missing-measurement exclusion, or channel weighting.
+
 Ready to run in production? Please [check our deployment guides](https://hexdocs.pm/phoenix/deployment.html).
 
 ## Learn more
