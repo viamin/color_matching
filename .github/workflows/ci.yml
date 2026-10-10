@@ -165,6 +165,7 @@ jobs:
       - name: Fuzz documented read-only endpoints
         run: |
           pipx run schemathesis run http://127.0.0.1:4002/api/v1/openapi.json \
+            --url=http://127.0.0.1:4002 \
             --include-method=GET \
             --header='Authorization: Bearer schemathesis-ci-token' \
             --max-examples=10
