@@ -3,17 +3,6 @@ defmodule ColorMatchingWeb.ApiSchemas do
 
   alias OpenApiSpex.Schema
 
-  defmodule JsonObject do
-    @moduledoc false
-    require OpenApiSpex
-
-    OpenApiSpex.schema(%{
-      title: "JsonObject",
-      type: :object,
-      additionalProperties: true
-    })
-  end
-
   defmodule Manifest do
     @moduledoc false
     require OpenApiSpex
@@ -75,5 +64,156 @@ defmodule ColorMatchingWeb.ApiSchemas do
         images: %Schema{type: :object, additionalProperties: %Schema{type: :string}}
       }
     })
+  end
+
+  defmodule ErrorResponse do
+    @moduledoc false
+    require OpenApiSpex
+
+    OpenApiSpex.schema(%{
+      title: "ApiErrorResponse",
+      type: :object,
+      properties: %{errors: %Schema{type: :object, additionalProperties: true}},
+      required: [:errors]
+    })
+  end
+
+  defmodule PrinterProfile do
+    @moduledoc false
+    require OpenApiSpex
+
+    OpenApiSpex.schema(%{
+      title: "PrinterProfile",
+      type: :object,
+      properties: %{
+        id: %Schema{type: :integer},
+        printer_make_model: %Schema{type: :string},
+        paper_type: %Schema{type: :string},
+        ink_type: %Schema{type: :string}
+      },
+      required: [:id, :printer_make_model, :paper_type, :ink_type]
+    })
+  end
+
+  defmodule Rgb do
+    @moduledoc false
+    require OpenApiSpex
+    OpenApiSpex.schema(%{title: "Rgb", type: :object, properties: %{r: %Schema{type: :integer}, g: %Schema{type: :integer}, b: %Schema{type: :integer}}, required: [:r, :g, :b]})
+  end
+
+  defmodule PrinterProfilesResponse do
+    @moduledoc false
+    require OpenApiSpex
+    OpenApiSpex.schema(%{title: "PrinterProfilesResponse", type: :object, properties: %{printer_profiles: %Schema{type: :array, items: PrinterProfile}}, required: [:printer_profiles]})
+  end
+
+  defmodule PalettesResponse do
+    @moduledoc false
+    require OpenApiSpex
+    OpenApiSpex.schema(%{title: "PalettesResponse", type: :object, properties: %{palettes: %Schema{type: :array, items: %Schema{type: :object, properties: %{id: %Schema{type: :integer}, name: %Schema{type: :string}, is_preset: %Schema{type: :boolean}, color_count: %Schema{type: :integer}}, required: [:id, :name, :is_preset, :color_count]}}}, required: [:palettes]})
+  end
+
+  defmodule ProfileColorsResponse do
+    @moduledoc false
+    require OpenApiSpex
+    OpenApiSpex.schema(%{title: "ProfileColorsResponse", type: :object, properties: %{printer_profile: PrinterProfile, colors: %Schema{type: :array, items: %Schema{type: :object, properties: %{name: %Schema{type: :string}, hex: %Schema{type: :string}, rgb: Rgb, responses: %Schema{type: :object, additionalProperties: true}}, required: [:name, :hex, :responses]}}}, required: [:printer_profile, :colors]})
+  end
+
+  defmodule ColorsResponse do
+    @moduledoc false
+    require OpenApiSpex
+    OpenApiSpex.schema(%{title: "ColorsResponse", type: :object, properties: %{printer_profile: PrinterProfile, colors: %Schema{type: :array, items: %Schema{type: :object, properties: %{id: %Schema{type: :integer}, name: %Schema{type: :string}, hex: %Schema{type: :string}, rgb: Rgb, palette_id: %Schema{type: :integer}, palette_name: %Schema{type: :string, nullable: true}, sort_order: %Schema{type: :integer}, responses: %Schema{type: :object, additionalProperties: true}}, required: [:id, :name, :hex, :palette_id, :sort_order, :responses]}}}, required: [:printer_profile, :colors]})
+  end
+
+  defmodule MetamerPairsResponse do
+    @moduledoc false
+    require OpenApiSpex
+    OpenApiSpex.schema(%{title: "MetamerPairsResponse", type: :object, properties: %{printer_profile: PrinterProfile, metamer_pairs: %Schema{type: :array, items: %Schema{type: :object, properties: %{pair_id: %Schema{type: :string}, color_a_hex: %Schema{type: :string}, color_b_hex: %Schema{type: :string}, illuminant: %Schema{type: :string}, classification: %Schema{type: :string}, notes: %Schema{type: :string, nullable: true}, classified_at: %Schema{type: :string, format: :"date-time", nullable: true}}, required: [:pair_id, :color_a_hex, :color_b_hex, :illuminant, :classification]}}}, required: [:printer_profile, :metamer_pairs]})
+  end
+
+  defmodule RecentSheetsResponse do
+    @moduledoc false
+    require OpenApiSpex
+    OpenApiSpex.schema(%{title: "RecentSheetsResponse", type: :object, properties: %{sheets: %Schema{type: :array, items: %Schema{type: :object, properties: %{sheet_id: %Schema{type: :string}, manifest_url: %Schema{type: :string}, title: %Schema{type: :string, nullable: true}}, required: [:sheet_id, :manifest_url, :title]}}}, required: [:sheets]})
+  end
+
+  defmodule CaptureRequest do
+    @moduledoc false
+    require OpenApiSpex
+    OpenApiSpex.schema(%{
+      title: "CaptureRequest",
+      type: :object,
+      properties: %{
+        device_model: %Schema{type: :string},
+        lens: %Schema{type: :string},
+        exposure_duration: %Schema{type: :number, exclusiveMinimum: 0},
+        iso: %Schema{type: :integer, exclusiveMinimum: 0},
+        focus_lens_position: %Schema{type: :number, minimum: 0},
+        white_balance_gains: %Schema{type: :object},
+        image_width: %Schema{type: :integer, exclusiveMinimum: 0},
+        image_height: %Schema{type: :integer, exclusiveMinimum: 0},
+        app_version: %Schema{type: :string},
+        timestamp: %Schema{type: :string, format: :"date-time"}
+      },
+      required: [:device_model, :lens, :image_width, :image_height, :app_version, :timestamp]
+    })
+  end
+
+  defmodule CaptureCreatedResponse do
+    @moduledoc false
+    require OpenApiSpex
+    OpenApiSpex.schema(%{title: "CaptureCreatedResponse", type: :object, properties: %{capture_id: %Schema{type: :string}}, required: [:capture_id]})
+  end
+
+  defmodule MeasurementUploadRequest do
+    @moduledoc false
+    require OpenApiSpex
+    OpenApiSpex.schema(%{
+      title: "MeasurementUploadRequest",
+      type: :object,
+      properties: %{measurements: %Schema{type: :array, items: %Schema{type: :object, properties: %{patch_id: %Schema{type: :string}, linear_rgb_median: %Schema{type: :array, items: %Schema{type: :number}}, normalized_linear_rgb_median: %Schema{type: :array, items: %Schema{type: :number}}}, required: [:patch_id, :linear_rgb_median, :normalized_linear_rgb_median]}}, pair_scores: %Schema{type: :array, items: %Schema{type: :object, properties: %{pair_id: %Schema{type: :string}, algorithm_version: %Schema{type: :string}, score: %Schema{type: :number}}, required: [:pair_id, :algorithm_version, :score]}}}
+    })
+  end
+
+  defmodule MeasurementUploadResponse do
+    @moduledoc false
+    require OpenApiSpex
+    OpenApiSpex.schema(%{title: "MeasurementUploadResponse", type: :object, properties: %{capture_id: %Schema{type: :string}, measurement_count: %Schema{type: :integer}, pair_score_count: %Schema{type: :integer}}, required: [:capture_id, :measurement_count, :pair_score_count]})
+  end
+
+  defmodule JudgmentUploadRequest do
+    @moduledoc false
+    require OpenApiSpex
+    OpenApiSpex.schema(%{title: "JudgmentUploadRequest", type: :object, properties: %{judgments: %Schema{type: :array, items: %Schema{type: :object, properties: %{pair_id: %Schema{type: :string}, judgment: %Schema{type: :string}}, required: [:pair_id, :judgment]}}}, required: [:judgments]})
+  end
+
+  defmodule JudgmentUploadResponse do
+    @moduledoc false
+    require OpenApiSpex
+    OpenApiSpex.schema(%{title: "JudgmentUploadResponse", type: :object, properties: %{capture_id: %Schema{type: :string}, judgment_count: %Schema{type: :integer}}, required: [:capture_id, :judgment_count]})
+  end
+
+  defmodule MeasurementRequest do
+    @moduledoc false
+    require OpenApiSpex
+    OpenApiSpex.schema(%{title: "IlluminantMeasurementRequest", type: :object, properties: %{color_id: %Schema{type: :integer}, printer_profile_id: %Schema{type: :integer}, light_source: %Schema{type: :string, enum: ["white", "red", "green", "blue", "lps"]}, brightness: %Schema{type: :number, minimum: 0, maximum: 1}}, required: [:color_id, :printer_profile_id, :light_source, :brightness]})
+  end
+
+  defmodule MeasurementResponse do
+    @moduledoc false
+    require OpenApiSpex
+    OpenApiSpex.schema(%{title: "IlluminantMeasurementResponse", type: :object, properties: %{data: %Schema{type: :object, additionalProperties: true}}, required: [:data]})
+  end
+
+  defmodule BulkMeasurementRequest do
+    @moduledoc false
+    require OpenApiSpex
+    OpenApiSpex.schema(%{title: "BulkIlluminantMeasurementRequest", type: :object, properties: %{measurements: %Schema{type: :array, items: MeasurementRequest}}, required: [:measurements]})
+  end
+
+  defmodule BulkMeasurementResponse do
+    @moduledoc false
+    require OpenApiSpex
+    OpenApiSpex.schema(%{title: "BulkIlluminantMeasurementResponse", type: :object, properties: %{data: %Schema{type: :array, items: %Schema{type: :object, additionalProperties: true}}}, required: [:data]})
   end
 end

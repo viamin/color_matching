@@ -51,6 +51,27 @@ defmodule ColorMatchingWeb.OpenApiControllerTest do
     assert printer_profile_id["schema"] == %{"minimum" => 1, "type" => "integer"}
   end
 
+  test "uses concrete palette response schemas", %{conn: conn} do
+    spec = conn |> get(~p"/api/v1/openapi.json") |> json_response(200)
+
+    printer_profiles_response =
+      spec["paths"]["/api/v1/printer_profiles"]["get"]["responses"]["200"]
+      |> get_in(["content", "application/json", "schema", "$ref"])
+
+    assert printer_profiles_response == "#/components/schemas/PrinterProfilesResponse"
+
+    assert spec["components"]["schemas"]["PrinterProfilesResponse"]["required"] == [
+             "printer_profiles"
+           ]
+
+    assert spec["components"]["schemas"]["PrinterProfile"]["required"] == [
+             "id",
+             "ink_type",
+             "paper_type",
+             "printer_make_model"
+           ]
+  end
+
   defp assert_error_responses(spec, path) do
     responses = spec["paths"][path]["get"]["responses"]
 

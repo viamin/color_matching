@@ -4,7 +4,13 @@ defmodule ColorMatchingWeb.IlluminantMeasurementController do
 
   alias ColorMatching.Persistence
   alias ColorMatching.Persistence.IlluminantMeasurement
-  alias ColorMatchingWeb.ApiSchemas.JsonObject
+  alias ColorMatchingWeb.ApiSchemas.{
+    BulkMeasurementRequest,
+    BulkMeasurementResponse,
+    ErrorResponse,
+    MeasurementRequest,
+    MeasurementResponse
+  }
 
   plug OpenApiSpex.Plug.CastAndValidate, json_render_error_v2: true, replace_params: false
 
@@ -12,18 +18,18 @@ defmodule ColorMatchingWeb.IlluminantMeasurementController do
 
   operation :create,
     summary: "Create an illuminant measurement",
-    request_body: {"Measurement attributes", "application/json", JsonObject},
+    request_body: {"Measurement attributes", "application/json", MeasurementRequest},
     responses: [
-      created: {"Measurement created", "application/json", JsonObject},
-      unprocessable_entity: {"Invalid measurement attributes", "application/json", JsonObject}
+      created: {"Measurement created", "application/json", MeasurementResponse},
+      unprocessable_entity: {"Invalid measurement attributes", "application/json", ErrorResponse}
     ]
 
   operation :bulk_create,
     summary: "Create illuminant measurements in bulk",
-    request_body: {"Bulk measurement attributes", "application/json", JsonObject},
+    request_body: {"Bulk measurement attributes", "application/json", BulkMeasurementRequest},
     responses: [
-      created: {"Measurements created", "application/json", JsonObject},
-      unprocessable_entity: {"Invalid measurement attributes", "application/json", JsonObject}
+      created: {"Measurements created", "application/json", BulkMeasurementResponse},
+      unprocessable_entity: {"Invalid measurement attributes", "application/json", ErrorResponse}
     ]
 
   def create(conn, params) do

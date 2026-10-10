@@ -45,7 +45,7 @@ defmodule ColorMatchingWeb.MultiImageMappingController do
   use OpenApiSpex.ControllerSpecs
 
   alias ColorMatching.{MultiImagePaletteMapper, Persistence, PNG, ResponseVector}
-  alias ColorMatchingWeb.ApiSchemas.{JsonObject, MappingRequest}
+  alias ColorMatchingWeb.ApiSchemas.{ErrorResponse, MappingRequest}
 
   plug OpenApiSpex.Plug.CastAndValidate, json_render_error_v2: true, replace_params: false
 
@@ -56,8 +56,8 @@ defmodule ColorMatchingWeb.MultiImageMappingController do
     request_body: {"Mapping inputs", "application/json", MappingRequest},
     responses: [
       ok: {"Mapped PNG", "image/png", nil},
-      not_found: {"Palette or printer profile not found", "application/json", JsonObject},
-      unprocessable_entity: {"Invalid mapping request", "application/json", JsonObject}
+      not_found: {"Palette or printer profile not found", "application/json", ErrorResponse},
+      unprocessable_entity: {"Invalid mapping request", "application/json", ErrorResponse}
     ]
 
   @max_image_base64_bytes 8_000_000
