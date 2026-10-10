@@ -4,7 +4,9 @@ defmodule ColorMatchingWeb.OpenApiController do
   use ColorMatchingWeb, :controller
   use OpenApiSpex.ControllerSpecs
 
+  alias OpenApiSpex.Plug.RenderSpec
+
   operation :show, false
 
-  def show(conn, _params), do: OpenApiSpex.Plug.RenderSpec.call(conn, [])
+  def show(conn, _params), do: RenderSpec.call(conn, [])
 end

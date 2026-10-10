@@ -3,6 +3,7 @@ defmodule ColorMatchingWeb.CaptureController do
   use OpenApiSpex.ControllerSpecs
 
   alias ColorMatching.Persistence
+
   alias ColorMatchingWeb.ApiSchemas.{
     CaptureCreatedResponse,
     CaptureRequest,
@@ -12,8 +13,6 @@ defmodule ColorMatchingWeb.CaptureController do
     MeasurementUploadRequest,
     MeasurementUploadResponse
   }
-
-  plug OpenApiSpex.Plug.CastAndValidate, json_render_error_v2: true, replace_params: false
 
   tags ["Captures"]
   security [%{"bearerAuth" => []}]

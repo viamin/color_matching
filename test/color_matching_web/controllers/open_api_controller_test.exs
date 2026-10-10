@@ -64,7 +64,7 @@ defmodule ColorMatchingWeb.OpenApiControllerTest do
              "printer_profiles"
            ]
 
-    assert spec["components"]["schemas"]["PrinterProfile"]["required"] == [
+    assert Enum.sort(spec["components"]["schemas"]["PrinterProfile"]["required"]) == [
              "id",
              "ink_type",
              "paper_type",
@@ -91,7 +91,7 @@ defmodule ColorMatchingWeb.OpenApiControllerTest do
     schemas = spec["components"]["schemas"]
 
     assert length(schemas["CaptureRequest"]["anyOf"]) == 2
-    assert schemas["PairScoreRequest"]["required"] == ["algorithm_version", "pair_id"]
+    assert Enum.sort(schemas["PairScoreRequest"]["required"]) == ["algorithm_version", "pair_id"]
     assert length(schemas["PairScoreRequest"]["anyOf"]) == 3
 
     assert length(schemas["RgbPayload"]["anyOf"]) == 3
@@ -102,7 +102,7 @@ defmodule ColorMatchingWeb.OpenApiControllerTest do
 
     assert bulk_request == "#/components/schemas/BulkIlluminantMeasurementRequest"
 
-    assert schemas["BulkIlluminantMeasurementRequest"]["required"] == [
+    assert Enum.sort(schemas["BulkIlluminantMeasurementRequest"]["required"]) == [
              "light_source",
              "measurements",
              "printer_profile_id"

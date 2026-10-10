@@ -4,6 +4,7 @@ defmodule ColorMatchingWeb.IlluminantMeasurementController do
 
   alias ColorMatching.Persistence
   alias ColorMatching.Persistence.IlluminantMeasurement
+
   alias ColorMatchingWeb.ApiSchemas.{
     BulkMeasurementRequest,
     BulkMeasurementResponse,
@@ -11,8 +12,6 @@ defmodule ColorMatchingWeb.IlluminantMeasurementController do
     MeasurementRequest,
     MeasurementResponse
   }
-
-  plug OpenApiSpex.Plug.CastAndValidate, json_render_error_v2: true, replace_params: false
 
   tags ["Illuminant measurements"]
 

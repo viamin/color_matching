@@ -33,6 +33,7 @@ defmodule ColorMatchingWeb.ColorPaletteController do
 
   alias ColorMatching.{ColorFormat, ColorLabel, Persistence}
   alias ColorMatching.Persistence.{PaletteColor, PrinterProfile}
+
   alias ColorMatchingWeb.ApiSchemas.{
     ColorsResponse,
     ErrorResponse,
@@ -41,6 +42,7 @@ defmodule ColorMatchingWeb.ColorPaletteController do
     PrinterProfilesResponse,
     ProfileColorsResponse
   }
+
   alias OpenApiSpex.Schema
 
   plug OpenApiSpex.Plug.CastAndValidate, json_render_error_v2: true, replace_params: false
