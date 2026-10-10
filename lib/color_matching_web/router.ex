@@ -76,6 +76,27 @@ defmodule ColorMatchingWeb.Router do
     post "/captures/:capture_id/judgments", CaptureController, :upload_judgments
   end
 
+  scope "/api/v1", ColorMatchingWeb do
+    pipe_through [:api, :api_auth]
+
+    match(:*, "/printer_profiles", MethodNotAllowedController, :show)
+
+    match(:*, "/printer_profiles/:printer_profile_id/colors", MethodNotAllowedController, :show)
+
+    match(
+      :*,
+      "/printer_profiles/:printer_profile_id/metamer_pairs",
+      MethodNotAllowedController,
+      :show
+    )
+
+    match(:*, "/palettes", MethodNotAllowedController, :show)
+    match(:*, "/colors", MethodNotAllowedController, :show)
+    match(:*, "/test_sheets/recent", MethodNotAllowedController, :show)
+    match(:*, "/test_sheets/:sheet_id/manifest", MethodNotAllowedController, :show)
+    match(:*, "/test_sheets/:sheet_id/ranked_results", MethodNotAllowedController, :show)
+  end
+
   scope "/api", ColorMatchingWeb do
     pipe_through(:api)
 

@@ -45,6 +45,8 @@ defmodule ColorMatchingWeb.ColorPaletteController do
 
   alias OpenApiSpex.Schema
 
+  @maximum_id 9_223_372_036_854_775_807
+
   plug OpenApiSpex.Plug.CastAndValidate, json_render_error_v2: true, replace_params: false
 
   tags ["Palettes"]
@@ -59,22 +61,34 @@ defmodule ColorMatchingWeb.ColorPaletteController do
 
   operation :profile_colors,
     summary: "List profile colors",
-    parameters: [printer_profile_id: [in: :path, type: :string]],
+    parameters: [
+      printer_profile_id: [
+        in: :path,
+        schema: %Schema{type: :integer, minimum: 1, maximum: @maximum_id}
+      ]
+    ],
     responses: [
       ok: {"Profile colors", "application/json", ProfileColorsResponse},
       bad_request: {"Invalid printer profile ID", "application/json", ErrorResponse},
       unauthorized: {"Unauthorized", "application/json", ErrorResponse},
-      not_found: {"Printer profile not found", "application/json", ErrorResponse}
+      not_found: {"Printer profile not found", "application/json", ErrorResponse},
+      unprocessable_entity: {"Invalid printer profile ID", "application/json", ErrorResponse}
     ]
 
   operation :metamer_pairs,
     summary: "List confirmed metamer pairs",
-    parameters: [printer_profile_id: [in: :path, type: :string]],
+    parameters: [
+      printer_profile_id: [
+        in: :path,
+        schema: %Schema{type: :integer, minimum: 1, maximum: @maximum_id}
+      ]
+    ],
     responses: [
       ok: {"Metamer pairs", "application/json", MetamerPairsResponse},
       bad_request: {"Invalid printer profile ID", "application/json", ErrorResponse},
       unauthorized: {"Unauthorized", "application/json", ErrorResponse},
-      not_found: {"Printer profile not found", "application/json", ErrorResponse}
+      not_found: {"Printer profile not found", "application/json", ErrorResponse},
+      unprocessable_entity: {"Invalid printer profile ID", "application/json", ErrorResponse}
     ]
 
   operation :palettes,
@@ -90,9 +104,12 @@ defmodule ColorMatchingWeb.ColorPaletteController do
       printer_profile_id: [
         in: :query,
         required: true,
-        schema: %Schema{type: :integer, minimum: 1}
+        schema: %Schema{type: :integer, minimum: 1, maximum: @maximum_id}
       ],
-      palette_id: [in: :query, schema: %Schema{type: :integer, minimum: 1}]
+      palette_id: [
+        in: :query,
+        schema: %Schema{type: :integer, minimum: 1, maximum: @maximum_id}
+      ]
     ],
     responses: [
       ok: {"Colors", "application/json", ColorsResponse},
@@ -231,14 +248,14 @@ defmodule ColorMatchingWeb.ColorPaletteController do
 
   defp parse_integer(value, key) when is_binary(value) do
     case Integer.parse(String.trim(value)) do
-      {parsed, ""} when parsed > 0 -> {:ok, parsed}
+      {parsed, ""} when parsed in 1..@maximum_id -> {:ok, parsed}
       _ -> {:error, :invalid_param, key}
     end
   end
 
   defp parse_integer(_value, key), do: {:error, :invalid_param, key}
 
-  defp positive_integer?(value), do: value > 0
+  defp positive_integer?(value), do: value in 1..@maximum_id
 
   # ---------------------------------------------------------------------------
   # JSON rendering
