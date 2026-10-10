@@ -22,6 +22,20 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
              }
     end
 
+    test "returns 422 when the request body is not JSON", %{conn: conn} do
+      response =
+        conn
+        |> post(~p"/api/multi_image_mapping", %{"palette_id" => "1"})
+        |> json_response(422)
+
+      assert [
+               %{
+                 "detail" => "Invalid value for header: content-type",
+                 "source" => %{"pointer" => "/"}
+               }
+             ] = response["errors"]
+    end
+
     test "returns a mapped PNG on success", %{conn: conn} do
       %{palette: palette, printer_profile: printer_profile} = full_mapping_fixture()
 
@@ -32,7 +46,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
       response =
         conn
         |> put_req_header("accept", "image/png")
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           printer_profile_id: printer_profile.id,
           weights: %{white: 1.0, red: 1.0},
@@ -58,7 +72,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
       response =
         conn
         |> put_req_header("accept", "image/png")
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           "palette_id" => Integer.to_string(palette.id),
           "printer_profile_id" => Integer.to_string(printer_profile.id),
           "weights" => %{"white" => 1.0, "red" => 1.0},
@@ -81,7 +95,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
       response =
         conn
         |> put_req_header("accept", "image/png")
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           printer_profile_id: printer_profile.id,
           weights: %{white: 1.0, red: 1.0},
@@ -106,7 +120,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
       response =
         conn
         |> put_req_header("accept", "image/png")
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           printer_profile_id: printer_profile.id,
           weights: %{white: 1.0, red: 1.0},
@@ -131,7 +145,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
       response =
         conn
         |> put_req_header("accept", "image/png")
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           printer_profile_id: printer_profile.id,
           weights: %{" White " => 1.0, "rEd" => 1.0},
@@ -151,7 +165,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       response =
         conn
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           printer_profile_id: printer_profile.id,
           weights: %{white: "not_a_number"},
@@ -159,8 +173,12 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
         })
         |> json_response(422)
 
-      assert %{"errors" => %{"base" => [message]}} = response
-      assert message =~ "finite number"
+      assert [
+               %{
+                 "detail" => "Invalid number. Got: string",
+                 "source" => %{"pointer" => "/weights/white"}
+               }
+             ] = response["errors"]
     end
 
     test "returns 422 when all weights are zero", %{conn: conn} do
@@ -169,7 +187,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       response =
         conn
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           printer_profile_id: printer_profile.id,
           weights: %{white: 0.0, red: 0.0},
@@ -189,7 +207,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       response =
         conn
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           printer_profile_id: printer_profile.id,
           weights: %{white: 1.0},
@@ -209,7 +227,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       response =
         conn
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           printer_profile_id: printer_profile.id,
           weights: %{white: 1.0, red: 1.0},
@@ -230,7 +248,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       response =
         conn
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: 999_999,
           printer_profile_id: printer_profile.id,
           weights: %{white: 1.0},
@@ -248,7 +266,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       response =
         conn
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           printer_profile_id: 999_999,
           weights: %{white: 1.0},
@@ -266,14 +284,19 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       response =
         conn
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           printer_profile_id: printer_profile.id,
           weights: %{white: 1.0},
           images: %{white: Base.encode64(white_png)}
         })
         |> json_response(422)
 
-      assert %{"errors" => %{"base" => ["palette_id is required"]}} = response
+      assert [
+               %{
+                 "detail" => "Missing field: palette_id",
+                 "source" => %{"pointer" => "/palette_id"}
+               }
+             ] = response["errors"]
     end
 
     test "returns 422 when printer_profile_id is missing", %{conn: conn} do
@@ -282,14 +305,19 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       response =
         conn
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           weights: %{white: 1.0},
           images: %{white: Base.encode64(white_png)}
         })
         |> json_response(422)
 
-      assert %{"errors" => %{"base" => ["printer_profile_id is required"]}} = response
+      assert [
+               %{
+                 "detail" => "Missing field: printer_profile_id",
+                 "source" => %{"pointer" => "/printer_profile_id"}
+               }
+             ] = response["errors"]
     end
 
     test "returns 422 when palette_id is not an integer", %{conn: conn} do
@@ -298,7 +326,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       response =
         conn
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: "not-an-integer",
           printer_profile_id: printer_profile.id,
           weights: %{white: 1.0},
@@ -306,7 +334,12 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
         })
         |> json_response(422)
 
-      assert %{"errors" => %{"base" => ["palette_id must be an integer"]}} = response
+      assert [
+               %{
+                 "detail" => "Invalid integer. Got: string",
+                 "source" => %{"pointer" => "/palette_id"}
+               }
+             ] = response["errors"]
     end
 
     test "returns 422 when printer_profile_id is not an integer", %{conn: conn} do
@@ -315,7 +348,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       response =
         conn
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           printer_profile_id: "not-an-integer",
           weights: %{white: 1.0},
@@ -323,7 +356,12 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
         })
         |> json_response(422)
 
-      assert %{"errors" => %{"base" => ["printer_profile_id must be an integer"]}} = response
+      assert [
+               %{
+                 "detail" => "Invalid integer. Got: string",
+                 "source" => %{"pointer" => "/printer_profile_id"}
+               }
+             ] = response["errors"]
     end
 
     test "returns 422 when weights are missing", %{conn: conn} do
@@ -332,14 +370,19 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       response =
         conn
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           printer_profile_id: printer_profile.id,
           images: %{white: Base.encode64(white_png)}
         })
         |> json_response(422)
 
-      assert %{"errors" => %{"base" => ["weights is required"]}} = response
+      assert [
+               %{
+                 "detail" => "Missing field: weights",
+                 "source" => %{"pointer" => "/weights"}
+               }
+             ] = response["errors"]
     end
 
     test "returns 422 when weights is not a JSON object", %{conn: conn} do
@@ -348,7 +391,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       response =
         conn
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           printer_profile_id: printer_profile.id,
           weights: ["white"],
@@ -356,7 +399,12 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
         })
         |> json_response(422)
 
-      assert %{"errors" => %{"base" => ["weights must be a JSON object"]}} = response
+      assert [
+               %{
+                 "detail" => "Invalid object. Got: array",
+                 "source" => %{"pointer" => "/weights"}
+               }
+             ] = response["errors"]
     end
 
     test "returns 422 when images are missing", %{conn: conn} do
@@ -364,14 +412,19 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       response =
         conn
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           printer_profile_id: printer_profile.id,
           weights: %{white: 1.0}
         })
         |> json_response(422)
 
-      assert %{"errors" => %{"base" => ["images is required"]}} = response
+      assert [
+               %{
+                 "detail" => "Missing field: images",
+                 "source" => %{"pointer" => "/images"}
+               }
+             ] = response["errors"]
     end
 
     test "returns 422 when images is not a JSON object", %{conn: conn} do
@@ -379,7 +432,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       response =
         conn
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           printer_profile_id: printer_profile.id,
           weights: %{white: 1.0},
@@ -387,7 +440,12 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
         })
         |> json_response(422)
 
-      assert %{"errors" => %{"base" => ["images must be a JSON object"]}} = response
+      assert [
+               %{
+                 "detail" => "Invalid object. Got: array",
+                 "source" => %{"pointer" => "/images"}
+               }
+             ] = response["errors"]
     end
 
     test "returns 422 when images contain invalid base64", %{conn: conn} do
@@ -395,7 +453,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       response =
         conn
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           printer_profile_id: printer_profile.id,
           weights: %{white: 1.0},
@@ -412,7 +470,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       response =
         conn
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           printer_profile_id: printer_profile.id,
           weights: %{white: 1.0},
@@ -420,8 +478,12 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
         })
         |> json_response(422)
 
-      assert %{"errors" => %{"base" => ["images[white] must be a base64-encoded string"]}} =
-               response
+      assert [
+               %{
+                 "detail" => "Invalid string. Got: integer",
+                 "source" => %{"pointer" => "/images/white"}
+               }
+             ] = response["errors"]
     end
 
     test "returns 422 when an image is not a PNG", %{conn: conn} do
@@ -429,7 +491,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       response =
         conn
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           printer_profile_id: printer_profile.id,
           weights: %{white: 1.0},
@@ -447,7 +509,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       response =
         conn
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           printer_profile_id: printer_profile.id,
           weights: %{white: 1.0},
@@ -466,7 +528,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       response =
         conn
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           printer_profile_id: printer_profile.id,
           weights: %{white: 1.0},
@@ -485,7 +547,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       response =
         conn
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           printer_profile_id: printer_profile.id,
           weights: %{white: 1.0},
@@ -503,7 +565,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       response =
         conn
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           printer_profile_id: printer_profile.id,
           weights: %{white: 1.0, red: 1.0},
@@ -522,7 +584,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       response =
         conn
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           printer_profile_id: printer_profile.id,
           weights: %{ultraviolet: 1.0},
@@ -540,7 +602,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       response =
         conn
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           printer_profile_id: printer_profile.id,
           weights: %{white: 1.0},
@@ -558,7 +620,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       response =
         conn
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           printer_profile_id: printer_profile.id,
           weights: %{"white" => 1.0, " White " => 0.5},
@@ -577,7 +639,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       response =
         conn
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           printer_profile_id: printer_profile.id,
           weights: %{white: 1.0},
@@ -599,7 +661,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       response =
         conn
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           printer_profile_id: printer_profile.id,
           weights: %{},
@@ -616,7 +678,7 @@ defmodule ColorMatchingWeb.MultiImageMappingControllerTest do
 
       response =
         conn
-        |> post(~p"/api/multi_image_mapping", %{
+        |> post_json(~p"/api/multi_image_mapping", %{
           palette_id: palette.id,
           printer_profile_id: printer_profile.id,
           weights: %{white: 1.0},

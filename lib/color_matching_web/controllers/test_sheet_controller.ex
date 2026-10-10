@@ -1,8 +1,41 @@
 defmodule ColorMatchingWeb.TestSheetController do
   use ColorMatchingWeb, :controller
+  use OpenApiSpex.ControllerSpecs
 
   alias ColorMatching.Persistence
   alias ColorMatching.RankedResults
+  alias ColorMatchingWeb.ApiSchemas.{ErrorResponse, Manifest, RecentSheetsResponse}
+  alias ColorMatchingWeb.ApiSchemas.RankedResults, as: RankedResultsSchema
+
+  plug OpenApiSpex.Plug.CastAndValidate, json_render_error_v2: true, replace_params: false
+
+  tags ["Test sheets"]
+  security [%{"bearerAuth" => []}]
+
+  operation :manifest,
+    summary: "Fetch a test sheet manifest",
+    parameters: [sheet_id: [in: :path, type: :string]],
+    responses: [
+      ok: {"Sheet manifest", "application/json", Manifest},
+      unauthorized: {"Unauthorized", "application/json", ErrorResponse},
+      not_found: {"Test sheet not found", "application/json", ErrorResponse}
+    ]
+
+  operation :recent,
+    summary: "List recent test sheets",
+    responses: [
+      ok: {"Recent sheets", "application/json", RecentSheetsResponse},
+      unauthorized: {"Unauthorized", "application/json", ErrorResponse}
+    ]
+
+  operation :ranked_results,
+    summary: "Fetch ranked results for a test sheet",
+    parameters: [sheet_id: [in: :path, type: :string]],
+    responses: [
+      ok: {"Ranked results", "application/json", RankedResultsSchema},
+      unauthorized: {"Unauthorized", "application/json", ErrorResponse},
+      not_found: {"Test sheet not found", "application/json", ErrorResponse}
+    ]
 
   @spec manifest(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def manifest(conn, %{"sheet_id" => sheet_id}) do

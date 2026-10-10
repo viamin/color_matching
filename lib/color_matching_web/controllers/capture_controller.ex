@@ -1,7 +1,54 @@
 defmodule ColorMatchingWeb.CaptureController do
   use ColorMatchingWeb, :controller
+  use OpenApiSpex.ControllerSpecs
 
   alias ColorMatching.Persistence
+
+  alias ColorMatchingWeb.ApiSchemas.{
+    CaptureCreatedResponse,
+    CaptureRequest,
+    ErrorResponse,
+    JudgmentUploadRequest,
+    JudgmentUploadResponse,
+    MeasurementUploadRequest,
+    MeasurementUploadResponse
+  }
+
+  tags ["Captures"]
+  security [%{"bearerAuth" => []}]
+
+  operation :create,
+    summary: "Create a capture for a test sheet",
+    parameters: [sheet_id: [in: :path, type: :string]],
+    request_body: {"Capture attributes", "application/json", CaptureRequest},
+    responses: [
+      created: {"Capture created", "application/json", CaptureCreatedResponse},
+      unauthorized: {"Unauthorized", "application/json", ErrorResponse},
+      not_found: {"Test sheet not found", "application/json", ErrorResponse},
+      unprocessable_entity: {"Invalid capture attributes", "application/json", ErrorResponse}
+    ]
+
+  operation :upload_measurements,
+    summary: "Upload capture measurements",
+    parameters: [capture_id: [in: :path, type: :string]],
+    request_body: {"Measurement upload", "application/json", MeasurementUploadRequest},
+    responses: [
+      ok: {"Measurements accepted", "application/json", MeasurementUploadResponse},
+      unauthorized: {"Unauthorized", "application/json", ErrorResponse},
+      not_found: {"Capture not found", "application/json", ErrorResponse},
+      unprocessable_entity: {"Invalid measurement upload", "application/json", ErrorResponse}
+    ]
+
+  operation :upload_judgments,
+    summary: "Upload capture judgments",
+    parameters: [capture_id: [in: :path, type: :string]],
+    request_body: {"Judgment upload", "application/json", JudgmentUploadRequest},
+    responses: [
+      ok: {"Judgments accepted", "application/json", JudgmentUploadResponse},
+      unauthorized: {"Unauthorized", "application/json", ErrorResponse},
+      not_found: {"Capture not found", "application/json", ErrorResponse},
+      unprocessable_entity: {"Invalid judgment upload", "application/json", ErrorResponse}
+    ]
 
   @spec create(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def create(conn, %{"sheet_id" => sheet_id} = params) do

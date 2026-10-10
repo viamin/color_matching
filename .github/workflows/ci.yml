@@ -124,3 +124,95 @@ jobs:
 
       - name: Run Sobelow security analysis
         run: mix sobelow --config
+
+  schemathesis:
+    name: OpenAPI read-only fuzzing
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup toolchain
+        uses: jdx/mise-action@v5
+
+      - name: Install Hex and dependencies
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
+          mix deps.get
+
+      - name: Create disposable API database
+        run: |
+          SCHEMATHESIS=true mix ecto.create
+          SCHEMATHESIS=true mix ecto.migrate
+          SCHEMATHESIS=true mix run priv/repo/seeds.exs
+
+      - name: Start API with a CI API key
+        env:
+          LPSM_API_TOKEN: schemathesis-ci-token
+          PHX_SERVER: "true"
+        run: |
+          SCHEMATHESIS=true mix phx.server > /tmp/color-matching-api.log 2>&1 &
+          echo $! > /tmp/color-matching-api.pid
+          for attempt in {1..30}; do
+            curl --fail --silent http://127.0.0.1:4002/api/v1/openapi.json && exit 0
+            sleep 1
+          done
+          cat /tmp/color-matching-api.log
+          exit 1
+
+      - name: Fuzz documented read-only endpoints
+        run: |
+          pipx run schemathesis run http://127.0.0.1:4002/api/v1/openapi.json \
+            --url=http://127.0.0.1:4002 \
+            --include-method=GET \
+            --header='Authorization: Bearer schemathesis-ci-token' \
+            --max-examples=10
+
+      - name: Stop API
+        if: always()
+        run: kill "$(cat /tmp/color-matching-api.pid)" || true
+
+  oasdiff:
+    name: OpenAPI breaking-change gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code and main baseline
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup toolchain
+        uses: jdx/mise-action@v5
+
+      - name: Generate current spec
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
+          mix deps.get
+          MIX_ENV=test mix openapi.spec.json --spec ColorMatchingWeb.ApiSpec --start-app=false --filename openapi-current.json
+
+      - name: Generate main baseline spec
+        run: |
+          if git cat-file -e origin/main:lib/color_matching_web/api_spec.ex; then
+            git worktree add --detach ../color-matching-main origin/main
+            cd ../color-matching-main
+            mix deps.get
+            MIX_ENV=test mix openapi.spec.json --spec ColorMatchingWeb.ApiSpec --start-app=false --filename "$GITHUB_WORKSPACE/openapi-main.json"
+          else
+            # The initial OpenAPI PR has no main-branch contract to compare.
+            cp openapi-current.json openapi-main.json
+          fi
+
+      - name: Reject breaking changes from main
+        run: docker run --rm -v "$PWD:/work" tufin/oasdiff:latest breaking /work/openapi-main.json /work/openapi-current.json --fail-on ERR
+
+      - name: Prove removed response fields fail the gate
+        run: |
+          jq 'del(.components.schemas.TestSheetManifest.properties.schema_version) | .components.schemas.TestSheetManifest.required -= ["schema_version"]' openapi-current.json > openapi-breaking.json
+          if docker run --rm -v "$PWD:/work" tufin/oasdiff:latest breaking /work/openapi-current.json /work/openapi-breaking.json --fail-on ERR; then
+            echo 'oasdiff did not detect the removed required response field'
+            exit 1
+          fi
