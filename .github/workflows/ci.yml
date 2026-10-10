@@ -144,15 +144,15 @@ jobs:
 
       - name: Create disposable API database
         run: |
-          MIX_ENV=test mix ecto.create
-          MIX_ENV=test mix ecto.migrate
-          MIX_ENV=test mix run priv/repo/seeds.exs
+          MIX_ENV=schemathesis mix ecto.create
+          MIX_ENV=schemathesis mix ecto.migrate
+          MIX_ENV=schemathesis mix run priv/repo/seeds.exs
 
       - name: Start API with a CI API key
         env:
           LPSM_API_TOKEN: schemathesis-ci-token
         run: |
-          MIX_ENV=test mix phx.server > /tmp/color-matching-api.log 2>&1 &
+          MIX_ENV=schemathesis mix phx.server > /tmp/color-matching-api.log 2>&1 &
           echo $! > /tmp/color-matching-api.pid
           for attempt in {1..30}; do
             curl --fail --silent http://127.0.0.1:4002/api/v1/openapi.json && exit 0
