@@ -144,15 +144,15 @@ jobs:
 
       - name: Create disposable API database
         run: |
-          MIX_ENV=schemathesis mix ecto.create
-          MIX_ENV=schemathesis mix ecto.migrate
-          MIX_ENV=schemathesis mix run priv/repo/seeds.exs
+          MIX_ENV=test mix ecto.create
+          MIX_ENV=test mix ecto.migrate
+          MIX_ENV=test mix run priv/repo/seeds.exs
 
       - name: Start API with a CI API key
         env:
           LPSM_API_TOKEN: schemathesis-ci-token
         run: |
-          MIX_ENV=schemathesis mix phx.server > /tmp/color-matching-api.log 2>&1 &
+          MIX_ENV=test mix phx.server > /tmp/color-matching-api.log 2>&1 &
           echo $! > /tmp/color-matching-api.pid
           for attempt in {1..30}; do
             curl --fail --silent http://127.0.0.1:4002/api/v1/openapi.json && exit 0
@@ -205,12 +205,12 @@ jobs:
           fi
 
       - name: Reject breaking changes from main
-        run: docker run --rm -v "$PWD:/work" tufin/oasdiff:latest breaking /work/openapi-main.json /work/openapi-current.json --fail-on ERRORS
+        run: docker run --rm -v "$PWD:/work" tufin/oasdiff:latest breaking /work/openapi-main.json /work/openapi-current.json --fail-on ERR
 
       - name: Prove removed response fields fail the gate
         run: |
           jq 'del(.components.schemas.TestSheetManifest.properties.schema_version) | .components.schemas.TestSheetManifest.required -= ["schema_version"]' openapi-current.json > openapi-breaking.json
-          if docker run --rm -v "$PWD:/work" tufin/oasdiff:latest breaking /work/openapi-current.json /work/openapi-breaking.json --fail-on ERRORS; then
+          if docker run --rm -v "$PWD:/work" tufin/oasdiff:latest breaking /work/openapi-current.json /work/openapi-breaking.json --fail-on ERR; then
             echo 'oasdiff did not detect the removed required response field'
             exit 1
           fi
