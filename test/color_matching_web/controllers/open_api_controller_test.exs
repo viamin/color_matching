@@ -117,6 +117,30 @@ defmodule ColorMatchingWeb.OpenApiControllerTest do
            ]) == "#/components/schemas/BulkIlluminantMeasurementRow"
   end
 
+  test "uses OpenAPI 3.0-compatible exclusive lower bounds", %{conn: conn} do
+    spec = conn |> get(~p"/api/v1/openapi.json") |> json_response(200)
+
+    for property <- ["exposure_duration_seconds", "iso", "image_width", "image_height"] do
+      assert get_in(spec, [
+               "components",
+               "schemas",
+               "CaptureMetadata",
+               "properties",
+               property,
+               "minimum"
+             ]) == 0
+
+      assert get_in(spec, [
+               "components",
+               "schemas",
+               "CaptureMetadata",
+               "properties",
+               property,
+               "exclusiveMinimum"
+             ])
+    end
+  end
+
   defp assert_error_responses(spec, path) do
     responses = spec["paths"][path]["get"]["responses"]
 
