@@ -9,5 +9,6 @@ defmodule ColorMatching.SchemathesisWorkflowTest do
       |> File.read!()
 
     assert workflow =~ "PHX_SERVER: \"true\""
+    assert workflow =~ "--url=http://127.0.0.1:4002"
   end
 end
