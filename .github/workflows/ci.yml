@@ -151,6 +151,7 @@ jobs:
       - name: Start API with a CI API key
         env:
           LPSM_API_TOKEN: schemathesis-ci-token
+          PHX_SERVER: "true"
         run: |
           SCHEMATHESIS=true mix phx.server > /tmp/color-matching-api.log 2>&1 &
           echo $! > /tmp/color-matching-api.pid
