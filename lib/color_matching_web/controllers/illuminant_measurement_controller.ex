@@ -1,8 +1,24 @@
 defmodule ColorMatchingWeb.IlluminantMeasurementController do
   use ColorMatchingWeb, :controller
+  use OpenApiSpex.ControllerSpecs
 
   alias ColorMatching.Persistence
   alias ColorMatching.Persistence.IlluminantMeasurement
+  alias ColorMatchingWeb.ApiSchemas.JsonObject
+
+  plug OpenApiSpex.Plug.CastAndValidate, json_render_error_v2: true, replace_params: false
+
+  tags ["Illuminant measurements"]
+
+  operation :create,
+    summary: "Create an illuminant measurement",
+    request_body: {"Measurement attributes", "application/json", JsonObject},
+    responses: [created: {"Measurement created", "application/json", JsonObject}]
+
+  operation :bulk_create,
+    summary: "Create illuminant measurements in bulk",
+    request_body: {"Bulk measurement attributes", "application/json", JsonObject},
+    responses: [created: {"Measurements created", "application/json", JsonObject}]
 
   def create(conn, params) do
     case Persistence.create_illuminant_measurement(params) do

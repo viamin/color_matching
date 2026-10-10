@@ -12,10 +12,9 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       {:ok, _zed} = profile_fixture("ZedJet", "Matte", "Dye")
       {:ok, alpha} = profile_fixture("AlphaPrint", "Glossy", "Pigment")
 
-      body =
-        conn
-        |> get(~p"/api/v1/printer_profiles")
-        |> json_response(200)
+      conn = get(conn, ~p"/api/v1/printer_profiles")
+      OpenApiSpex.TestAssertions.assert_operation_response(conn)
+      body = json_response(conn, 200)
 
       names = Enum.map(body["printer_profiles"], & &1["printer_make_model"])
       assert names == ["AlphaPrint", "ZedJet"]

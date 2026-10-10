@@ -35,8 +35,22 @@ defmodule ColorMatchingWeb.MultiImageMappingController do
   """
 
   use ColorMatchingWeb, :controller
+  use OpenApiSpex.ControllerSpecs
 
   alias ColorMatching.{MultiImagePaletteMapper, Persistence, PNG, ResponseVector}
+  alias ColorMatchingWeb.ApiSchemas.JsonObject
+
+  plug OpenApiSpex.Plug.CastAndValidate, json_render_error_v2: true, replace_params: false
+
+  tags ["Image mapping"]
+
+  operation :create,
+    summary: "Map grayscale images to a palette-colored PNG",
+    request_body: {"Mapping inputs", "application/json", JsonObject},
+    responses: [
+      ok: {"Mapped PNG", "image/png", nil},
+      unprocessable_entity: {"Invalid mapping request", "application/json", JsonObject}
+    ]
 
   @max_image_base64_bytes 8_000_000
   def create(conn, params) do

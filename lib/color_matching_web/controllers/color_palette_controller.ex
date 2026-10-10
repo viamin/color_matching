@@ -29,9 +29,42 @@ defmodule ColorMatchingWeb.ColorPaletteController do
   """
 
   use ColorMatchingWeb, :controller
+  use OpenApiSpex.ControllerSpecs
 
   alias ColorMatching.{ColorFormat, ColorLabel, Persistence}
   alias ColorMatching.Persistence.{PaletteColor, PrinterProfile}
+  alias ColorMatchingWeb.ApiSchemas.JsonObject
+
+  plug OpenApiSpex.Plug.CastAndValidate, json_render_error_v2: true, replace_params: false
+
+  tags ["Palettes"]
+  security [%{"bearerAuth" => []}]
+
+  operation :printer_profiles,
+    summary: "List printer profiles",
+    responses: [ok: {"Printer profiles", "application/json", JsonObject}]
+
+  operation :profile_colors,
+    summary: "List profile colors",
+    parameters: [printer_profile_id: [in: :path, type: :string]],
+    responses: [ok: {"Profile colors", "application/json", JsonObject}]
+
+  operation :metamer_pairs,
+    summary: "List confirmed metamer pairs",
+    parameters: [printer_profile_id: [in: :path, type: :string]],
+    responses: [ok: {"Metamer pairs", "application/json", JsonObject}]
+
+  operation :palettes,
+    summary: "List palettes",
+    responses: [ok: {"Palettes", "application/json", JsonObject}]
+
+  operation :colors,
+    summary: "List palette colors and illuminant responses",
+    parameters: [
+      printer_profile_id: [in: :query, type: :string],
+      palette_id: [in: :query, type: :string]
+    ],
+    responses: [ok: {"Colors", "application/json", JsonObject}]
 
   @doc """
   `GET /api/v1/printer_profiles`

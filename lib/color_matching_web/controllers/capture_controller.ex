@@ -1,7 +1,32 @@
 defmodule ColorMatchingWeb.CaptureController do
   use ColorMatchingWeb, :controller
+  use OpenApiSpex.ControllerSpecs
 
   alias ColorMatching.Persistence
+  alias ColorMatchingWeb.ApiSchemas.JsonObject
+
+  plug OpenApiSpex.Plug.CastAndValidate, json_render_error_v2: true, replace_params: false
+
+  tags ["Captures"]
+  security [%{"bearerAuth" => []}]
+
+  operation :create,
+    summary: "Create a capture for a test sheet",
+    parameters: [sheet_id: [in: :path, type: :string]],
+    request_body: {"Capture attributes", "application/json", JsonObject},
+    responses: [created: {"Capture created", "application/json", JsonObject}]
+
+  operation :upload_measurements,
+    summary: "Upload capture measurements",
+    parameters: [capture_id: [in: :path, type: :string]],
+    request_body: {"Measurement upload", "application/json", JsonObject},
+    responses: [ok: {"Measurements accepted", "application/json", JsonObject}]
+
+  operation :upload_judgments,
+    summary: "Upload capture judgments",
+    parameters: [capture_id: [in: :path, type: :string]],
+    request_body: {"Judgment upload", "application/json", JsonObject},
+    responses: [ok: {"Judgments accepted", "application/json", JsonObject}]
 
   @spec create(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def create(conn, %{"sheet_id" => sheet_id} = params) do
