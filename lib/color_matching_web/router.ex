@@ -17,10 +17,18 @@ defmodule ColorMatchingWeb.Router do
 
   pipeline :api do
     plug(:accepts, ["json"])
+    plug(OpenApiSpex.Plug.PutApiSpec, module: ColorMatchingWeb.ApiSpec)
   end
 
   pipeline :api_auth do
     plug ColorMatchingWeb.Plugs.ApiAuth
+  end
+
+  # Like :api, but the multi-image mapping endpoint answers PNG bodies, so
+  # clients may send "Accept: image/png" and the spec plug must still run.
+  pipeline :api_mapping do
+    plug(:accepts, ["json", "png"])
+    plug(OpenApiSpex.Plug.PutApiSpec, module: ColorMatchingWeb.ApiSpec)
   end
 
   scope "/", ColorMatchingWeb do
@@ -39,6 +47,12 @@ defmodule ColorMatchingWeb.Router do
     live("/printed-pairs", PrintedPairBrowserLive)
     live("/pair", ColorPairLive)
     get("/home", PageController, :home)
+  end
+
+  scope "/api/v1", ColorMatchingWeb do
+    pipe_through(:api)
+
+    get "/openapi.json", OpenApiController, :show
   end
 
   scope "/api/v1", ColorMatchingWeb do
@@ -62,6 +76,27 @@ defmodule ColorMatchingWeb.Router do
     post "/captures/:capture_id/judgments", CaptureController, :upload_judgments
   end
 
+  scope "/api/v1", ColorMatchingWeb do
+    pipe_through [:api, :api_auth]
+
+    match(:*, "/printer_profiles", MethodNotAllowedController, :show)
+
+    match(:*, "/printer_profiles/:printer_profile_id/colors", MethodNotAllowedController, :show)
+
+    match(
+      :*,
+      "/printer_profiles/:printer_profile_id/metamer_pairs",
+      MethodNotAllowedController,
+      :show
+    )
+
+    match(:*, "/palettes", MethodNotAllowedController, :show)
+    match(:*, "/colors", MethodNotAllowedController, :show)
+    match(:*, "/test_sheets/recent", MethodNotAllowedController, :show)
+    match(:*, "/test_sheets/:sheet_id/manifest", MethodNotAllowedController, :show)
+    match(:*, "/test_sheets/:sheet_id/ranked_results", MethodNotAllowedController, :show)
+  end
+
   scope "/api", ColorMatchingWeb do
     pipe_through(:api)
 
@@ -70,6 +105,8 @@ defmodule ColorMatchingWeb.Router do
   end
 
   scope "/api", ColorMatchingWeb do
+    pipe_through(:api_mapping)
+
     post("/multi_image_mapping", MultiImageMappingController, :create)
   end
 

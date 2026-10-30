@@ -1,8 +1,15 @@
 import Config
 
+schemathesis? = System.get_env("SCHEMATHESIS") == "true"
+
+database =
+  if schemathesis?, do: "color_matching_schemathesis.db", else: "color_matching_test.db"
+
+pool = if schemathesis?, do: DBConnection.ConnectionPool, else: Ecto.Adapters.SQL.Sandbox
+
 config :color_matching, ColorMatching.Repo,
-  database: Path.expand("../color_matching_test.db", __DIR__),
-  pool: Ecto.Adapters.SQL.Sandbox,
+  database: Path.expand("../#{database}", __DIR__),
+  pool: pool,
   pool_size: 10
 
 # We don't run a server during test. If one is required,

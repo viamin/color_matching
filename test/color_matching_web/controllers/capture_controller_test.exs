@@ -131,7 +131,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
 
       response =
         conn
-        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> post_json(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
         |> json_response(201)
 
       capture_id = response["capture_id"]
@@ -142,7 +142,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
     test "returns structured 404 JSON for an unknown sheet", %{conn: conn} do
       response =
         conn
-        |> post(~p"/api/v1/test_sheets/UNKN-2345/captures", capture_payload())
+        |> post_json(~p"/api/v1/test_sheets/UNKN-2345/captures", capture_payload())
         |> json_response(404)
 
       assert response == %{"errors" => %{"detail" => "Sheet not found"}}
@@ -153,7 +153,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
 
       response =
         conn
-        |> post(
+        |> post_json(
           ~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures",
           capture_payload()
           |> Map.merge(%{
@@ -178,7 +178,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
 
       capture_id =
         conn
-        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> post_json(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
         |> json_response(201)
         |> Map.fetch!("capture_id")
 
@@ -186,14 +186,14 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
 
       first_response =
         conn
-        |> post(~p"/api/v1/captures/#{capture_id}/measurements", measurement_payload(sheet))
+        |> post_json(~p"/api/v1/captures/#{capture_id}/measurements", measurement_payload(sheet))
         |> json_response(200)
 
       conn = recycle(conn)
 
       second_response =
         conn
-        |> post(~p"/api/v1/captures/#{capture_id}/measurements", measurement_payload(sheet))
+        |> post_json(~p"/api/v1/captures/#{capture_id}/measurements", measurement_payload(sheet))
         |> json_response(200)
 
       assert first_response == %{
@@ -210,7 +210,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
     test "returns structured 404 JSON for an unknown capture", %{conn: conn} do
       response =
         conn
-        |> post(~p"/api/v1/captures/999999/measurements", %{measurements: []})
+        |> post_json(~p"/api/v1/captures/999999/measurements", %{measurements: []})
         |> json_response(404)
 
       assert response == %{"errors" => %{"detail" => "Capture not found"}}
@@ -221,7 +221,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
 
       capture_id =
         conn
-        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> post_json(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
         |> json_response(201)
         |> Map.fetch!("capture_id")
 
@@ -229,7 +229,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
 
       response =
         conn
-        |> post(~p"/api/v1/captures/#{capture_id}/measurements", %{
+        |> post_json(~p"/api/v1/captures/#{capture_id}/measurements", %{
           measurements: [
             %{
               patch_id: "pair-missing",
@@ -272,7 +272,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
 
       capture_id =
         conn
-        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> post_json(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
         |> json_response(201)
         |> Map.fetch!("capture_id")
 
@@ -282,7 +282,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
 
       response =
         conn
-        |> post(~p"/api/v1/captures/#{capture_id}/measurements", %{
+        |> post_json(~p"/api/v1/captures/#{capture_id}/measurements", %{
           measurements: [
             %{
               patch_id: invalid_patch_id,
@@ -316,7 +316,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
 
       capture_id =
         conn
-        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> post_json(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
         |> json_response(201)
         |> Map.fetch!("capture_id")
 
@@ -326,7 +326,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
 
       response =
         conn
-        |> post(~p"/api/v1/captures/#{capture_id}/measurements", %{
+        |> post_json(~p"/api/v1/captures/#{capture_id}/measurements", %{
           measurements: [
             %{
               patch_id: patch_id,
@@ -363,7 +363,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
 
       capture_id =
         conn
-        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> post_json(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
         |> json_response(201)
         |> Map.fetch!("capture_id")
 
@@ -373,7 +373,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
 
       response =
         conn
-        |> post(~p"/api/v1/captures/#{capture_id}/measurements", %{
+        |> post_json(~p"/api/v1/captures/#{capture_id}/measurements", %{
           measurements: [
             %{
               patch_id: first_pair.pair_id,
@@ -411,7 +411,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
 
       capture_id =
         conn
-        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> post_json(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
         |> json_response(201)
         |> Map.fetch!("capture_id")
 
@@ -419,7 +419,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
 
       response =
         conn
-        |> post(~p"/api/v1/captures/#{capture_id}/judgments", judgment_payload(sheet))
+        |> post_json(~p"/api/v1/captures/#{capture_id}/judgments", judgment_payload(sheet))
         |> json_response(200)
 
       pair_id = hd(sheet.pairs).pair_id
@@ -442,21 +442,21 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
 
       first_capture_id =
         conn
-        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> post_json(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
         |> json_response(201)
         |> Map.fetch!("capture_id")
 
       conn = recycle(conn)
 
       conn
-      |> post(~p"/api/v1/captures/#{first_capture_id}/judgments", judgment_payload(sheet))
+      |> post_json(~p"/api/v1/captures/#{first_capture_id}/judgments", judgment_payload(sheet))
       |> json_response(200)
 
       conn = recycle(conn)
 
       second_capture_id =
         conn
-        |> post(
+        |> post_json(
           ~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures",
           Map.put(capture_payload(), :timestamp, "2026-07-28T12:35:56.123456Z")
         )
@@ -467,7 +467,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
 
       response =
         conn
-        |> post(
+        |> post_json(
           ~p"/api/v1/captures/#{second_capture_id}/judgments",
           judgment_payload(sheet, "match")
         )
@@ -490,7 +490,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
     test "returns structured 404 JSON for an unknown capture", %{conn: conn} do
       response =
         conn
-        |> post(~p"/api/v1/captures/999999/judgments", %{
+        |> post_json(~p"/api/v1/captures/999999/judgments", %{
           judgments: [%{pair_id: "pair-1", judgment: "match"}]
         })
         |> json_response(404)
@@ -503,7 +503,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
 
       capture_id =
         conn
-        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> post_json(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
         |> json_response(201)
         |> Map.fetch!("capture_id")
 
@@ -511,7 +511,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
 
       response =
         conn
-        |> post(~p"/api/v1/captures/#{capture_id}/judgments", %{
+        |> post_json(~p"/api/v1/captures/#{capture_id}/judgments", %{
           judgments: [%{pair_id: "pair-missing", judgment: "near_match"}]
         })
         |> json_response(422)
@@ -534,7 +534,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
 
       capture_id =
         conn
-        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> post_json(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
         |> json_response(201)
         |> Map.fetch!("capture_id")
 
@@ -543,7 +543,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
 
       response =
         conn
-        |> post(~p"/api/v1/captures/#{capture_id}/judgments", %{
+        |> post_json(~p"/api/v1/captures/#{capture_id}/judgments", %{
           judgments: [%{pair_id: pair_id, judgment: "close_enough"}]
         })
         |> json_response(422)
@@ -568,7 +568,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
 
       response =
         conn
-        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", %{
+        |> post_json(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", %{
           metadata: %{
             device_model: "iPhone16,2",
             lens: "built_in_wide_angle",
@@ -597,7 +597,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
 
       capture_id =
         conn
-        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> post_json(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
         |> json_response(201)
         |> Map.fetch!("capture_id")
 
@@ -606,7 +606,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
 
       response =
         conn
-        |> post(~p"/api/v1/captures/#{capture_id}/measurements", %{
+        |> post_json(~p"/api/v1/captures/#{capture_id}/measurements", %{
           scoring_algorithm_version: "lps-distance-v1",
           measurements: [
             %{
@@ -645,7 +645,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
 
       capture_id =
         conn
-        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> post_json(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
         |> json_response(201)
         |> Map.fetch!("capture_id")
 
@@ -654,7 +654,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
 
       response =
         conn
-        |> post(~p"/api/v1/captures/#{capture_id}/measurements", %{
+        |> post_json(~p"/api/v1/captures/#{capture_id}/measurements", %{
           scoring_algorithm_version: "lps-distance-v1",
           pair_scores: [
             %{
@@ -687,7 +687,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
 
       capture_id =
         conn
-        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> post_json(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
         |> json_response(201)
         |> Map.fetch!("capture_id")
 
@@ -695,7 +695,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
       [pair | _] = sheet.pairs
 
       conn
-      |> post(~p"/api/v1/captures/#{capture_id}/measurements", %{
+      |> post_json(~p"/api/v1/captures/#{capture_id}/measurements", %{
         scoring_algorithm_version: "lps-distance-v1",
         pair_scores: [
           %{
@@ -718,7 +718,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
 
       capture_id =
         conn
-        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> post_json(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
         |> json_response(201)
         |> Map.fetch!("capture_id")
 
@@ -726,7 +726,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
       [pair | _] = sheet.pairs
 
       conn
-      |> post(~p"/api/v1/captures/#{capture_id}/measurements", %{
+      |> post_json(~p"/api/v1/captures/#{capture_id}/measurements", %{
         pair_scores: [
           %{
             pair_id: pair.pair_id,
@@ -746,7 +746,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
 
       capture_id =
         conn
-        |> post(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
+        |> post_json(~p"/api/v1/test_sheets/#{sheet.lookup_code}/captures", capture_payload())
         |> json_response(201)
         |> Map.fetch!("capture_id")
 
@@ -754,7 +754,7 @@ defmodule ColorMatchingWeb.CaptureControllerTest do
       [pair | _] = sheet.pairs
 
       conn
-      |> post(~p"/api/v1/captures/#{capture_id}/measurements", %{
+      |> post_json(~p"/api/v1/captures/#{capture_id}/measurements", %{
         pair_scores: [
           %{
             pair_id: pair.pair_id,

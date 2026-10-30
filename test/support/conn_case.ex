@@ -30,6 +30,12 @@ defmodule ColorMatchingWeb.ConnCase do
       import Plug.Conn
       import Phoenix.ConnTest
       import ColorMatchingWeb.ConnCase
+
+      def post_json(conn, path, params) do
+        conn
+        |> put_req_header("content-type", "application/json")
+        |> post(path, Jason.encode!(params))
+      end
     end
   end
 

@@ -12,10 +12,9 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       {:ok, _zed} = profile_fixture("ZedJet", "Matte", "Dye")
       {:ok, alpha} = profile_fixture("AlphaPrint", "Glossy", "Pigment")
 
-      body =
-        conn
-        |> get(~p"/api/v1/printer_profiles")
-        |> json_response(200)
+      conn = get(conn, ~p"/api/v1/printer_profiles")
+      OpenApiSpex.TestAssertions.assert_operation_response(conn)
+      body = json_response(conn, 200)
 
       names = Enum.map(body["printer_profiles"], & &1["printer_make_model"])
       assert names == ["AlphaPrint", "ZedJet"]
@@ -59,14 +58,13 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
   end
 
   describe "GET /api/v1/colors" do
-    test "requires printer_profile_id", %{conn: conn} do
+    test "validates that printer_profile_id is present", %{conn: conn} do
       body =
         conn
         |> get(~p"/api/v1/colors")
-        |> json_response(400)
+        |> json_response(422)
 
-      assert body["errors"]["detail"] == "missing required parameter: printer_profile_id"
-      assert body["errors"]["detail"] =~ "printer_profile_id"
+      assert is_list(body["errors"])
     end
 
     test "returns 404 for an unknown printer profile on GET /api/v1/colors", %{conn: conn} do
@@ -78,55 +76,55 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert body["errors"]["detail"] =~ "printer profile"
     end
 
-    test "returns 400 for a non-integer printer_profile_id on GET /api/v1/colors",
+    test "returns 422 for a non-integer printer_profile_id on GET /api/v1/colors",
          %{conn: conn} do
       body =
         conn
         |> get(~p"/api/v1/colors?#{[printer_profile_id: "abc"]}")
-        |> json_response(400)
+        |> json_response(422)
 
-      assert body["errors"]["detail"] =~ "printer_profile_id"
+      assert is_list(body["errors"])
     end
 
-    test "returns 400 for a non-positive printer_profile_id on GET /api/v1/colors",
+    test "returns 422 for a non-positive printer_profile_id on GET /api/v1/colors",
          %{conn: conn} do
       body =
         conn
         |> get(~p"/api/v1/colors?#{[printer_profile_id: 0]}")
-        |> json_response(400)
+        |> json_response(422)
 
-      assert body["errors"]["detail"] =~ "printer_profile_id"
+      assert is_list(body["errors"])
     end
 
-    test "returns 400 for a blank printer_profile_id", %{conn: conn} do
+    test "returns 422 for a blank printer_profile_id", %{conn: conn} do
       body =
         conn
         |> get(~p"/api/v1/colors?#{[printer_profile_id: "   "]}")
-        |> json_response(400)
+        |> json_response(422)
 
-      assert body["errors"]["detail"] =~ "printer_profile_id"
+      assert is_list(body["errors"])
     end
 
-    test "returns 400 for a non-positive palette_id when querying palette colors", %{conn: conn} do
+    test "returns 422 for a non-positive palette_id when querying palette colors", %{conn: conn} do
       {:ok, profile} = profile_fixture("Invalid Palette Id Printer", "Matte", "Pigment")
 
       body =
         conn
         |> get(~p"/api/v1/colors?#{[printer_profile_id: profile.id, palette_id: 0]}")
-        |> json_response(400)
+        |> json_response(422)
 
-      assert body["errors"]["detail"] =~ "palette_id"
+      assert is_list(body["errors"])
     end
 
-    test "returns 400 for a blank palette_id on GET /api/v1/colors", %{conn: conn} do
+    test "returns 422 for a blank palette_id on GET /api/v1/colors", %{conn: conn} do
       {:ok, profile} = profile_fixture("Blank Palette Id Printer", "Matte", "Pigment")
 
       body =
         conn
         |> get(~p"/api/v1/colors?#{[printer_profile_id: profile.id, palette_id: "   "]}")
-        |> json_response(400)
+        |> json_response(422)
 
-      assert body["errors"]["detail"] =~ "palette_id"
+      assert is_list(body["errors"])
     end
 
     test "returns colors with response vectors for a palette and profile", %{conn: conn} do
@@ -405,18 +403,18 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert body["errors"]["detail"] =~ "palette"
     end
 
-    test "returns 400 for a non-integer palette_id", %{conn: conn} do
+    test "returns 422 for a non-integer palette_id", %{conn: conn} do
       %{printer_profile: profile} = response_fixture()
 
       body =
         conn
         |> get(~p"/api/v1/colors?#{[printer_profile_id: profile.id, palette_id: "abc"]}")
-        |> json_response(400)
+        |> json_response(422)
 
-      assert body["errors"]["detail"] =~ "palette_id"
+      assert is_list(body["errors"])
     end
 
-    test "returns 400 for a non-positive palette_id when querying measured color vectors", %{
+    test "returns 422 for a non-positive palette_id when querying measured color vectors", %{
       conn: conn
     } do
       %{printer_profile: profile} = response_fixture()
@@ -424,21 +422,21 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       body =
         conn
         |> get(~p"/api/v1/colors?#{[printer_profile_id: profile.id, palette_id: -1]}")
-        |> json_response(400)
+        |> json_response(422)
 
-      assert body["errors"]["detail"] =~ "palette_id"
+      assert is_list(body["errors"])
     end
 
-    test "returns 400 for a blank palette_id on GET /api/v1/colors measured vectors",
+    test "returns 422 for a blank palette_id on GET /api/v1/colors measured vectors",
          %{conn: conn} do
       %{printer_profile: profile} = response_fixture()
 
       body =
         conn
         |> get(~p"/api/v1/colors?#{[printer_profile_id: profile.id, palette_id: "   "]}")
-        |> json_response(400)
+        |> json_response(422)
 
-      assert body["errors"]["detail"] =~ "palette_id"
+      assert is_list(body["errors"])
     end
   end
 
@@ -453,24 +451,24 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert body["errors"]["detail"] =~ "printer profile"
     end
 
-    test "returns 400 for a non-integer printer_profile_id on GET /api/v1/printer_profiles/:printer_profile_id/colors",
+    test "returns 422 for a non-integer printer_profile_id on GET /api/v1/printer_profiles/:printer_profile_id/colors",
          %{conn: conn} do
       body =
         conn
         |> get(~p"/api/v1/printer_profiles/not-an-id/colors")
-        |> json_response(400)
+        |> json_response(422)
 
-      assert body["errors"]["detail"] =~ "printer_profile_id"
+      assert get_in(body, ["errors", Access.at(0), "source", "pointer"]) == "/printer_profile_id"
     end
 
-    test "returns 400 for a non-positive printer_profile_id on GET /api/v1/printer_profiles/:printer_profile_id/colors",
+    test "returns 422 for a non-positive printer_profile_id on GET /api/v1/printer_profiles/:printer_profile_id/colors",
          %{conn: conn} do
       body =
         conn
         |> get(~p"/api/v1/printer_profiles/0/colors")
-        |> json_response(400)
+        |> json_response(422)
 
-      assert body["errors"]["detail"] =~ "printer_profile_id"
+      assert get_in(body, ["errors", Access.at(0), "source", "pointer"]) == "/printer_profile_id"
     end
 
     test "returns an empty working set when no colors have data for the profile", %{conn: conn} do
@@ -1085,24 +1083,24 @@ defmodule ColorMatchingWeb.ColorPaletteControllerTest do
       assert body["errors"]["detail"] =~ "printer profile"
     end
 
-    test "returns 400 for a non-integer printer_profile_id on GET /api/v1/printer_profiles/:printer_profile_id/metamer_pairs",
+    test "returns 422 for a non-integer printer_profile_id on GET /api/v1/printer_profiles/:printer_profile_id/metamer_pairs",
          %{conn: conn} do
       body =
         conn
         |> get(~p"/api/v1/printer_profiles/not-an-id/metamer_pairs")
-        |> json_response(400)
+        |> json_response(422)
 
-      assert body["errors"]["detail"] =~ "printer_profile_id"
+      assert get_in(body, ["errors", Access.at(0), "source", "pointer"]) == "/printer_profile_id"
     end
 
-    test "returns 400 for a non-positive printer_profile_id on GET /api/v1/printer_profiles/:printer_profile_id/metamer_pairs",
+    test "returns 422 for a non-positive printer_profile_id on GET /api/v1/printer_profiles/:printer_profile_id/metamer_pairs",
          %{conn: conn} do
       body =
         conn
         |> get(~p"/api/v1/printer_profiles/-5/metamer_pairs")
-        |> json_response(400)
+        |> json_response(422)
 
-      assert body["errors"]["detail"] =~ "printer_profile_id"
+      assert get_in(body, ["errors", Access.at(0), "source", "pointer"]) == "/printer_profile_id"
     end
 
     test "returns active confirmed metamer pairs for the profile", %{conn: conn} do

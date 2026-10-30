@@ -15,7 +15,7 @@ defmodule ColorMatchingWeb.IlluminantMeasurementControllerTest do
 
       response =
         conn
-        |> post(~p"/api/illuminant_measurements", %{
+        |> post_json(~p"/api/illuminant_measurements", %{
           color_id: color_id,
           printer_profile_id: printer_profile_id,
           light_source: "white",
@@ -50,7 +50,7 @@ defmodule ColorMatchingWeb.IlluminantMeasurementControllerTest do
 
       response =
         conn
-        |> post(~p"/api/illuminant_measurements", %{
+        |> post_json(~p"/api/illuminant_measurements", %{
           color_id: color.id,
           printer_profile_id: printer_profile.id,
           light_source: "red",
@@ -74,7 +74,7 @@ defmodule ColorMatchingWeb.IlluminantMeasurementControllerTest do
 
       response =
         conn
-        |> post(~p"/api/illuminant_measurements/bulk", %{
+        |> post_json(~p"/api/illuminant_measurements/bulk", %{
           printer_profile_id: printer_profile_id,
           light_source: "red",
           test_run_id: "sheet-2026-07-26-a",
@@ -119,7 +119,7 @@ defmodule ColorMatchingWeb.IlluminantMeasurementControllerTest do
 
       response =
         conn
-        |> post(~p"/api/illuminant_measurements/bulk", %{
+        |> post_json(~p"/api/illuminant_measurements/bulk", %{
           printer_profile_id: printer_profile.id,
           light_source: "blue",
           measurements: [
